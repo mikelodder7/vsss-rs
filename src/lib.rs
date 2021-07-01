@@ -38,6 +38,8 @@ extern crate std;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "curve25519")]
+mod curve25519;
 mod error;
 mod feldman;
 mod pedersen;
@@ -50,6 +52,8 @@ mod verifier;
 use polynomial::*;
 use util::*;
 
+#[cfg(feature = "curve25519")]
+pub use curve25519::*;
 pub use error::*;
 pub use feldman::*;
 pub use pedersen::*;

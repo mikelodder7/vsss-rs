@@ -36,14 +36,14 @@ impl<const T: usize, const N: usize> Feldman<T, N> {
 
         let (shares, polynomial) = Shamir::<T, N>::get_shares_and_polynomial(secret, rng);
 
-        let g = generator.unwrap_or_else(|| G::generator());
+        let g = generator.unwrap_or_else(G::generator);
 
         // Generate the verifiable commitments to the polynomial for the shares
         // Each share is multiple of the polynomial and the specified generator point.
         // {g^p0, g^p1, g^p2, ..., g^pn}
         let mut vs = [G::default(); T];
-        for i in 0..T {
-            vs[i] = g * polynomial.coefficients[i];
+        for (i, p) in vs.iter_mut().enumerate() {
+            *p = g * polynomial.coefficients[i];
         }
 
         Ok((

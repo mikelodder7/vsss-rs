@@ -77,14 +77,14 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 {
     /// Check whether the share is valid according this verifier set
     pub fn verify<const S: usize>(&self, share: &Share<S>, blind_share: &Share<S>) -> bool {
-        let s = bytes_to_field::<F>(&share.value());
-        let t = bytes_to_field::<F>(&blind_share.value());
-        if s.is_none() || t.is_none() {
+        let secret = bytes_to_field::<F>(&share.value());
+        let blinding = bytes_to_field::<F>(&blind_share.value());
+        if secret.is_none() || blinding.is_none() {
             return false;
         }
 
-        let s = s.unwrap();
-        let t = t.unwrap();
+        let secret = secret.unwrap();
+        let blinding = blinding.unwrap();
 
         let x = F::from(share.identifier() as u64);
         let mut i = F::one();
@@ -105,8 +105,8 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
             rhs += *v * i;
         }
 
-        let g: G = (-self.feldman_verifier.generator) * s;
-        let h: G = (-self.generator) * t;
+        let g: G = (-self.feldman_verifier.generator) * secret;
+        let h: G = (-self.generator) * blinding;
 
         let res: G = rhs + g + h;
 

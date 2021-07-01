@@ -3,11 +3,12 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use crate::{bytes_to_field, Error, FeldmanVerifier, PedersenVerifier, Shamir, Share};
+use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir, Share};
 use core::marker::PhantomData;
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
-use rand_core::{CryptoRng, RngCore};
+use rand_chacha::ChaChaRng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
@@ -64,23 +65,19 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
     {
         Shamir::<T, N>::check_params(Some(secret))?;
 
-        let g = share_generator.unwrap_or_else(|| G::generator());
-        let h = blind_factor_generator.unwrap_or_else(|| {
-            let mut b = [0u8; S];
-            rng.fill_bytes(&mut b);
-            let b: F = bytes_to_field(&b[1..]).unwrap();
-            G::generator() * b
-        });
+        let mut seed = [0u8; 32];
+        rng.fill_bytes(&mut seed);
+        let mut crng = ChaChaRng::from_seed(seed);
 
-        let blinding = blinding.unwrap_or_else(|| {
-            let mut b = [0u8; S];
-            rng.fill_bytes(&mut b);
-            bytes_to_field(&b[1..]).unwrap()
-        });
+        let g = share_generator.unwrap_or_else(G::generator);
+        let t = F::random(&mut crng);
+        let h = blind_factor_generator.unwrap_or_else(|| G::generator() * t);
+
+        let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
         let (secret_shares, secret_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(secret, rng);
+            Shamir::<T, N>::get_shares_and_polynomial(secret, &mut crng);
         let (blind_shares, blinding_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(blinding, rng);
+            Shamir::<T, N>::get_shares_and_polynomial(blinding, &mut crng);
 
         let mut feldman_commitments = [G::default(); T];
         let mut pedersen_commitments = [G::default(); T];

@@ -4,7 +4,7 @@
 */
 use super::invalid::*;
 use super::valid::*;
-use p256::{ProjectivePoint, Scalar};
+use k256::{ProjectivePoint, Scalar};
 
 #[test]
 fn invalid_tests() {

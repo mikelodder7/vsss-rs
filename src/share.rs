@@ -79,8 +79,8 @@ impl<'de, const N: usize> Deserialize<'de> for Share<N> {
                 A: SeqAccess<'de>,
             {
                 let mut arr = [0u8; N];
-                for i in 0..N {
-                    arr[i] = s
+                for (i, p) in arr.iter_mut().enumerate() {
+                    *p = s
                         .next_element()?
                         .ok_or_else(|| de::Error::invalid_length(i, &self))?;
                 }
