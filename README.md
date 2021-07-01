@@ -1,6 +1,17 @@
 # Verifiable Secret Sharing Schemes
 
+[![Crate][crate-image]][crate-link]
+[![Docs][docs-image]][docs-link]
+![Apache 2.0][license-image]
+
 This crate provides various cryptography verifiable secret sharing schemes.
+
+* **This implementation has not been reviewed or audited. Use at your own risk.**
+* This implementation targets Rust `1.51` or later.
+* This implementation does not require the Rust standard library.
+* All operations are constant time unless explicitly noted.
+
+## [Documentation](https://docs.rs/vsss-rs)
 
 Verifiable Secret Sharing Schemes are using to split secrets into
 multiple shares and distribute them among different entities,
@@ -32,6 +43,8 @@ and everything else is the actual value of the share (y-coordinate).
 
 When specifying share sizes, use the field size in bytes + 1 for the identifier.
 
+### P-256
+
 To split a p256 secret using Shamir
 
 ```rust
@@ -57,6 +70,8 @@ fn main() {
 }
 ```
 
+### Secp256k1
+
 To split a k256 secret using Shamir
 
 ```rust
@@ -81,6 +96,8 @@ fn main() {
 }
 ```
 
+### BLS12-381
+
 Feldman or Pedersen return extra information for verification using their respective verifiers
 
 ```rust
@@ -104,6 +121,8 @@ fn main() {
     assert_eq!(secret, secret_1);
 }
 ```
+
+### Curve25519
 
 Curve25519 is not a prime field but this crate does support it using
 `features=["curve25519"]` which is enabled by default. This feature
@@ -137,8 +156,29 @@ fn main() {
 }
 ```
 
+# License
+
+Licensed under 
+
+* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+
+# Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be licensed as above, without any additional terms or
+conditions.
+
 # References
 
 1. [How to share a secret, Shamir, A. Nov, 1979](https://dl.acm.org/doi/pdf/10.1145/359168.359176)
 1. [A Practical Scheme for Non-interactive Verifiable Secret Sharing, Feldman, P. 1987](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf)
 1. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing, Pedersen, T. 1991](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
+
+[//]: # (badges)
+
+[crate-image]: https://img.shields.io/crates/v/vsss-rs.svg
+[crate-link]: https://crates.io/crates/vsss-rs
+[docs-image]: https://docs.rs/vsss-rs/badge.svg
+[docs-link]: https://docs.rs/vsss-rs/
+[license-image]: https://img.shields.io/badge/license-Apache2.0-blue.svg
