@@ -103,4 +103,28 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
             },
         })
     }
+
+    /// Reconstruct a secret from shares created from `split_secret`.
+    /// The X-coordinates operate in `F`
+    /// The Y-coordinates operate in `F`
+    pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
+    where
+        F: PrimeField,
+    {
+        Shamir::<T, N>::combine_shares::<F, S>(shares)
+    }
+
+    /// Reconstruct a secret from shares created from `split_secret`.
+    /// The X-coordinates operate in `F`
+    /// The Y-coordinates operate in `G`
+    ///
+    /// Exists to support operations like threshold BLS where the shares
+    /// operate in `F` but the partial signatures operate in `G`.
+    pub fn combine_shares_group<F, G, const S: usize>(shares: &[Share<S>]) -> Result<G, Error>
+    where
+        F: PrimeField,
+        G: Group + GroupEncoding + ScalarMul<F> + Default,
+    {
+        Shamir::<T, N>::combine_shares_group::<F, G, S>(shares)
+    }
 }

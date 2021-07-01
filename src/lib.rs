@@ -17,6 +17,10 @@
 //! <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.134.6445&rep=rep1&type=pdf>.
 //!
 //! Feldman reveals the public value of the verifier whereas Pedersen's hides it.
+//!
+//! Feldman and Pedersen are different from Shamir when splitting the secret.
+//! Combining shares back into the original secret is identical across all methods
+//! and is available for each scheme for convenience.
 #![no_std]
 #![deny(
     missing_docs,
