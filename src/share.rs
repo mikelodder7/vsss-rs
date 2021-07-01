@@ -1,3 +1,8 @@
+/*
+    Copyright Michael Lodder. All Rights Reserved.
+    SPDX-License-Identifier: Apache-2.0
+*/
+
 use core::{
     array::TryFromSliceError,
     convert::TryFrom,
@@ -9,16 +14,11 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use zeroize::Zeroize;
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
 /// A Shamir simple secret share
 /// provides no integrity checking
 /// The first byte is the X-coordinate or identifier
 /// The remaining bytes are the Y-coordinate
-#[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
+#[derive(Copy, Clone, Debug, Zeroize)]
 pub struct Share<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Default for Share<N> {
@@ -89,5 +89,26 @@ impl<'de, const N: usize> Deserialize<'de> for Share<N> {
         }
 
         deserializer.deserialize_tuple(N, ShareVisitor)
+    }
+}
+
+impl<const N: usize> Share<N> {
+    /// True if all value bytes are zero in constant time
+    pub fn is_zero(&self) -> bool {
+        let mut v = 0u8;
+        for b in &self.0[1..] {
+            v |= b;
+        }
+        v == 0
+    }
+
+    /// The identifier for this share
+    pub fn identifier(&self) -> u8 {
+        self.0[0]
+    }
+
+    /// The raw byte value of the share
+    pub fn value(&self) -> &[u8] {
+        &self.0[1..]
     }
 }

@@ -15,4 +15,6 @@ pub enum Error {
     SharingDuplicateIdentifier,
     /// An invalid share was supplied for verification or combine
     InvalidShare,
+    /// An invalid secret was supplied for split
+    InvalidSecret,
 }

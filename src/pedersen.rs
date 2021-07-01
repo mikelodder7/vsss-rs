@@ -11,7 +11,13 @@ use rand_core::{CryptoRng, RngCore};
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
-pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const S: usize, const T: usize, const N: usize> {
+pub struct PedersenResult<
+    F: PrimeField,
+    G: Group + GroupEncoding + ScalarMul<F>,
+    const S: usize,
+    const T: usize,
+    const N: usize,
+> {
     /// The random blinding factor randomly generated or supplied
     pub blinding: F,
     /// The blinding shares
@@ -44,34 +50,37 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
     /// If [`None`], the default generator is used.
     /// `blind_factor_generator` is the generator point to use for blinding factor shares.
     /// If [`None`], a random generator is used
-    pub fn split_secret<F, G, const S: usize>(
+    pub fn split_secret<F, G, R, const S: usize>(
         secret: F,
         blinding: Option<F>,
         share_generator: Option<G>,
         blind_factor_generator: Option<G>,
-        mut rng: impl RngCore + CryptoRng,
+        rng: &mut R,
     ) -> Result<PedersenResult<F, G, S, T, N>, Error>
     where
         F: PrimeField,
         G: Group + GroupEncoding + Default + ScalarMul<F>,
+        R: RngCore + CryptoRng,
     {
+        Shamir::<T, N>::check_params(Some(secret))?;
+
         let g = share_generator.unwrap_or_else(|| G::generator());
         let h = blind_factor_generator.unwrap_or_else(|| {
-            let mut s = [0u8; S];
-            rng.fill_bytes(&mut s);
-            let s: F = bytes_to_field(&s).unwrap();
-            G::generator() * s
+            let mut b = [0u8; S];
+            rng.fill_bytes(&mut b);
+            let b: F = bytes_to_field(&b[1..]).unwrap();
+            G::generator() * b
         });
 
         let blinding = blinding.unwrap_or_else(|| {
             let mut b = [0u8; S];
             rng.fill_bytes(&mut b);
-            bytes_to_field(&b).unwrap()
+            bytes_to_field(&b[1..]).unwrap()
         });
         let (secret_shares, secret_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(secret, &mut rng);
+            Shamir::<T, N>::get_shares_and_polynomial(secret, rng);
         let (blind_shares, blinding_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(blinding, &mut rng);
+            Shamir::<T, N>::get_shares_and_polynomial(blinding, rng);
 
         let mut feldman_commitments = [G::default(); T];
         let mut pedersen_commitments = [G::default(); T];

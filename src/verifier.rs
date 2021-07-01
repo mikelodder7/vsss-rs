@@ -3,6 +3,7 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
+use crate::util::bytes_to_field;
 use crate::Share;
 use core::marker::PhantomData;
 use ff::PrimeField;
@@ -25,16 +26,13 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 {
     /// Check whether the share is valid according this verifier set
     pub fn verify<const S: usize>(&self, share: &Share<S>) -> bool {
-        let mut s_repr = F::Repr::default();
-        s_repr.as_mut().copy_from_slice(&share.0[1..]);
-
-        let s = F::from_repr(s_repr);
+        let s = bytes_to_field::<F>(share.value());
         if s.is_none() {
             return false;
         }
 
         let s = s.unwrap();
-        let x = F::from(share.0[0] as u64);
+        let x = F::from(share.identifier() as u64);
         let mut i = F::one();
 
         // FUTURE: execute this sum of products
@@ -46,7 +44,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 
         // c_0
         let mut rhs = self.commitments[0];
-        for v in &self.commitments {
+        for v in &self.commitments[1..] {
             i *= x;
 
             // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
@@ -79,15 +77,8 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 {
     /// Check whether the share is valid according this verifier set
     pub fn verify<const S: usize>(&self, share: &Share<S>, blind_share: &Share<S>) -> bool {
-        let mut s_repr = F::Repr::default();
-        s_repr.as_mut().copy_from_slice(&share.0[1..]);
-
-        let s = F::from_repr(s_repr);
-
-        let mut t_repr = F::Repr::default();
-        t_repr.as_mut().copy_from_slice(&blind_share.0[1..]);
-
-        let t = F::from_repr(t_repr);
+        let s = bytes_to_field::<F>(&share.value());
+        let t = bytes_to_field::<F>(&blind_share.value());
         if s.is_none() || t.is_none() {
             return false;
         }
@@ -95,7 +86,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
         let s = s.unwrap();
         let t = t.unwrap();
 
-        let x = F::from(share.0[0] as u64);
+        let x = F::from(share.identifier() as u64);
         let mut i = F::one();
 
         // FUTURE: execute this sum of products
@@ -107,15 +98,15 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 
         // c_0
         let mut rhs = self.commitments[0];
-        for v in &self.commitments {
+        for v in &self.commitments[1..] {
             i *= x;
 
             // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
             rhs += *v * i;
         }
 
-        let g: G = -self.feldman_verifier.generator * s;
-        let h: G = -self.generator * t;
+        let g: G = (-self.feldman_verifier.generator) * s;
+        let h: G = (-self.generator) * t;
 
         let res: G = rhs + g + h;
 

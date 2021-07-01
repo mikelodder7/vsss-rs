@@ -22,27 +22,28 @@ impl<const T: usize, const N: usize> Feldman<T, N> {
     /// S is the number of bytes used to represent F.
     /// `generator` is the generator point to use for computing feldman verifiers.
     /// If [`None`], the default generator is used.
-    pub fn split_secret<F, G, const S: usize>(
+    pub fn split_secret<F, G, R, const S: usize>(
         secret: F,
         generator: Option<G>,
-        rng: impl RngCore + CryptoRng,
+        rng: &mut R,
     ) -> Result<([Share<S>; N], FeldmanVerifier<F, G, T>), Error>
     where
         F: PrimeField,
         G: Group + GroupEncoding + Default + ScalarMul<F>,
+        R: RngCore + CryptoRng,
     {
-        Shamir::<T, N>::check_params()?;
+        Shamir::<T, N>::check_params(Some(secret))?;
 
         let (shares, polynomial) = Shamir::<T, N>::get_shares_and_polynomial(secret, rng);
 
-        let g = generator.unwrap_or_else(|| G::default());
+        let g = generator.unwrap_or_else(|| G::generator());
 
         // Generate the verifiable commitments to the polynomial for the shares
         // Each share is multiple of the polynomial and the specified generator point.
         // {g^p0, g^p1, g^p2, ..., g^pn}
         let mut vs = [G::default(); T];
-        for (i, c) in polynomial.coefficients.iter().enumerate() {
-            vs[i] = g * *c;
+        for i in 0..T {
+            vs[i] = g * polynomial.coefficients[i];
         }
 
         Ok((

@@ -2,6 +2,7 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
+use crate::util::bytes_to_group;
 use crate::{bytes_to_field, Error, Polynomial, Share};
 use core::{
     mem::MaybeUninit,
@@ -21,14 +22,15 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     /// Create shares from a secret.
     /// F is the prime field
     /// S is the number of bytes used to represent F
-    pub fn split_secret<F, const S: usize>(
+    pub fn split_secret<F, R, const S: usize>(
         secret: F,
-        rng: impl RngCore + CryptoRng,
+        rng: &mut R,
     ) -> Result<[Share<S>; N], Error>
     where
         F: PrimeField,
+        R: RngCore + CryptoRng,
     {
-        Self::check_params()?;
+        Self::check_params(Some(secret))?;
 
         let (shares, _) = Self::get_shares_and_polynomial(secret, rng);
         Ok(shares)
@@ -37,34 +39,11 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     /// Reconstruct a secret from shares created from `split_secret`.
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
-    pub fn combine_shares<F: PrimeField, const S: usize>(shares: &[Share<S>]) -> Result<F, Error> {
-        Self::check_params()?;
-
-        if shares.len() < T {
-            return Err(Error::SharingMinThreshold);
-        }
-        let mut dups = [false; N];
-        let mut x_coordinates = [F::default(); T];
-        let mut y_coordinates = [F::default(); T];
-
-        for i in 0..T {
-            if shares[i].0[0] == 0 {
-                return Err(Error::SharingInvalidIdentifier);
-            }
-            if dups[shares[i].0[0] as usize - 1] {
-                return Err(Error::SharingDuplicateIdentifier);
-            }
-            dups[shares[i].0[0] as usize - 1] = true;
-
-            let y = bytes_to_field(&shares[i].0[1..]);
-            if y.is_none() {
-                return Err(Error::InvalidShare);
-            }
-            x_coordinates[i] = F::from(shares[i].0[0] as u64);
-            y_coordinates[i] = y.unwrap();
-        }
-        let secret = Self::interpolate(&x_coordinates, &y_coordinates);
-        Ok(secret)
+    pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
+    where
+        F: PrimeField,
+    {
+        Self::combine::<F, F, S>(shares, bytes_to_field)
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
@@ -78,45 +57,57 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         F: PrimeField,
         G: Group + GroupEncoding + ScalarMul<F> + Default,
     {
-        Self::check_params()?;
+        Self::combine::<F, G, S>(shares, bytes_to_group)
+    }
+
+    fn combine<F, S, const SS: usize>(
+        shares: &[Share<SS>],
+        f: fn(&[u8]) -> Option<S>,
+    ) -> Result<S, Error>
+    where
+        F: PrimeField,
+        S: Default + Copy + AddAssign + Mul<F, Output = S>,
+    {
+        Self::check_params::<F>(None)?;
 
         if shares.len() < T {
             return Err(Error::SharingMinThreshold);
         }
-
         let mut dups = [false; N];
         let mut x_coordinates = [F::default(); T];
-        let mut y_coordinates = [G::default(); T];
+        let mut y_coordinates = [S::default(); T];
 
         for i in 0..T {
-            if shares[i].0[0] == 0 {
+            let identifier = shares[i].identifier();
+            if identifier == 0 {
                 return Err(Error::SharingInvalidIdentifier);
             }
-            if dups[shares[i].0[0] as usize - 1] {
+            if dups[identifier as usize - 1] {
                 return Err(Error::SharingDuplicateIdentifier);
             }
-            dups[shares[i].0[0] as usize - 1] = true;
-
-            let mut y_repr = <G as GroupEncoding>::Repr::default();
-            y_repr.as_mut().copy_from_slice(&shares[i].0[1..]);
-
-            let y = G::from_bytes(&y_repr);
-            if y.is_none().unwrap_u8() == 1 {
+            if shares[i].is_zero() {
                 return Err(Error::InvalidShare);
             }
-            x_coordinates[i] = F::from(shares[i].0[0] as u64);
+            dups[identifier as usize - 1] = true;
+
+            let y = f(shares[i].value());
+            if y.is_none() {
+                return Err(Error::InvalidShare);
+            }
+            x_coordinates[i] = F::from(identifier as u64);
             y_coordinates[i] = y.unwrap();
         }
         let secret = Self::interpolate(&x_coordinates, &y_coordinates);
         Ok(secret)
     }
 
-    pub(crate) fn get_shares_and_polynomial<F, const S: usize>(
+    pub(crate) fn get_shares_and_polynomial<F, R, const S: usize>(
         secret: F,
-        rng: impl RngCore + CryptoRng,
+        rng: &mut R,
     ) -> ([Share<S>; N], Polynomial<F, T>)
     where
         F: PrimeField,
+        R: RngCore + CryptoRng,
     {
         let polynomial = Polynomial::<F, T>::new(secret, rng);
         // Generate the shares of (x, y) coordinates
@@ -126,7 +117,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         for i in 0..N {
             let y = polynomial.evaluate(x);
             let mut t = [0u8; S];
-            t[0] = i as u8;
+            t[0] = (i + 1) as u8;
             t[1..].copy_from_slice(y.to_repr().as_ref());
 
             let p = (shares.as_mut_ptr() as *mut Share<S>).wrapping_add(i);
@@ -166,12 +157,18 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         result
     }
 
-    pub(crate) fn check_params() -> Result<(), Error> {
+    pub(crate) fn check_params<F>(secret: Option<F>) -> Result<(), Error>
+    where
+        F: PrimeField,
+    {
         if N < T {
             return Err(Error::SharingLimitLessThanThreshold);
         }
         if T < 2 {
             return Err(Error::SharingMinThreshold);
+        }
+        if secret.is_some() && secret.unwrap().is_zero() {
+            return Err(Error::InvalidShare);
         }
         Ok(())
     }
