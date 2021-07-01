@@ -272,8 +272,14 @@ impl From<WrappedPoint> for RistrettoPoint {
     }
 }
 
+impl From<RistrettoPoint> for WrappedPoint {
+    fn from(p: RistrettoPoint) -> Self {
+        Self(p)
+    }
+}
+
 /// Wraps a curve25519 scalar
-#[derive(Copy, Clone, Debug, Hash, Eq)]
+#[derive(Copy, Clone, Debug, Eq)]
 pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
@@ -538,5 +544,11 @@ impl Neg for WrappedScalar {
 impl From<WrappedScalar> for Scalar {
     fn from(s: WrappedScalar) -> Scalar {
         s.0
+    }
+}
+
+impl From<Scalar> for WrappedScalar {
+    fn from(s: Scalar) -> WrappedScalar {
+        Self(s)
     }
 }

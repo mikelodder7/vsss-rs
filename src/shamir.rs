@@ -77,20 +77,20 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         let mut x_coordinates = [F::default(); T];
         let mut y_coordinates = [S::default(); T];
 
-        for i in 0..T {
-            let identifier = shares[i].identifier();
+        for (i, s) in shares.iter().enumerate().take(T) {
+            let identifier = s.identifier();
             if identifier == 0 {
                 return Err(Error::SharingInvalidIdentifier);
             }
             if dups[identifier as usize - 1] {
                 return Err(Error::SharingDuplicateIdentifier);
             }
-            if shares[i].is_zero() {
+            if s.is_zero() {
                 return Err(Error::InvalidShare);
             }
             dups[identifier as usize - 1] = true;
 
-            let y = f(shares[i].value());
+            let y = f(s.value());
             if y.is_none() {
                 return Err(Error::InvalidShare);
             }
@@ -166,6 +166,9 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         }
         if T < 2 {
             return Err(Error::SharingMinThreshold);
+        }
+        if N > 255 {
+            return Err(Error::SharingMaxRequest);
         }
         if secret.is_some() && secret.unwrap().is_zero() {
             return Err(Error::InvalidShare);

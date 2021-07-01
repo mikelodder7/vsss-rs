@@ -58,8 +58,8 @@ pub fn combine_all<
 >() {
     use rand::rngs::OsRng;
 
-    let secret: F = bytes_to_field(b"hello").unwrap();
     let mut rng = OsRng::default();
+    let secret: F = F::random(&mut rng);
 
     let res = Shamir::<3, 5>::split_secret::<F, OsRng, S>(secret, &mut rng);
     assert!(res.is_ok());
@@ -105,7 +105,7 @@ pub fn combine_all<
 
                 let parts = &[feldman_shares[i], feldman_shares[j], feldman_shares[k]];
 
-                let res = Shamir::<3, 5>::combine_shares(parts);
+                let res = Feldman::<3, 5>::combine_shares(parts);
                 assert!(res.is_ok());
                 let secret_1 = res.unwrap();
                 assert_eq!(secret, secret_1);
@@ -116,7 +116,7 @@ pub fn combine_all<
                     ped_res.secret_shares[k],
                 ];
 
-                let res = Shamir::<3, 5>::combine_shares(parts);
+                let res = Pedersen::<3, 5>::combine_shares(parts);
                 assert!(res.is_ok());
                 let secret_1 = res.unwrap();
                 assert_eq!(secret, secret_1);

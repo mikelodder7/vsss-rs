@@ -13,6 +13,8 @@ pub enum Error {
     SharingInvalidIdentifier,
     /// Duplicate identifier when combining
     SharingDuplicateIdentifier,
+    /// The maximum number of shares to be made when splitting
+    SharingMaxRequest,
     /// An invalid share was supplied for verification or combine
     InvalidShare,
     /// An invalid secret was supplied for split

@@ -21,8 +21,8 @@ impl<F: PrimeField + Copy + Default, const N: usize> Polynomial<F, N> {
 
         // Assign random coefficients to polynomial
         // Start at 1 since 0 is the intercept and not chosen at random
-        for i in 1..N {
-            coefficients[i] = F::random(&mut rng);
+        for c in coefficients.iter_mut().skip(1) {
+            *c = F::random(&mut rng);
         }
         Self { coefficients }
     }
