@@ -3,6 +3,7 @@
 [![Crate][crate-image]][crate-link]
 [![Docs][docs-image]][docs-link]
 ![Apache 2.0][license-image]
+[![Build status](https://ci.appveyor.com/api/projects/status/cxxv4bng7ss5f09d?svg=true)](https://ci.appveyor.com/project/mikelodder7/vsss-rs)
 
 This crate provides various cryptography verifiable secret sharing schemes.
 
