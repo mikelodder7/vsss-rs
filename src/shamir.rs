@@ -11,6 +11,7 @@ use core::{
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_core::{CryptoRng, RngCore};
+use subtle::CtOption;
 
 /// Shamir's simple secret sharing scheme
 /// T is the threshold
@@ -62,7 +63,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
 
     fn combine<F, S, const SS: usize>(
         shares: &[Share<SS>],
-        f: fn(&[u8]) -> Option<S>,
+        f: fn(&[u8]) -> CtOption<S>,
     ) -> Result<S, Error>
     where
         F: PrimeField,
@@ -91,7 +92,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
             dups[identifier as usize - 1] = true;
 
             let y = f(s.value());
-            if y.is_none() {
+            if y.is_none().unwrap_u8() == 1 {
                 return Err(Error::InvalidShare);
             }
             x_coordinates[i] = F::from(identifier as u64);
@@ -170,7 +171,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         if N > 255 {
             return Err(Error::SharingMaxRequest);
         }
-        if secret.is_some() && secret.unwrap().is_zero() {
+        if secret.is_some() && secret.unwrap().is_zero().unwrap_u8() == 1 {
             return Err(Error::InvalidShare);
         }
         Ok(())

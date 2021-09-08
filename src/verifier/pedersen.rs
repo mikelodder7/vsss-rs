@@ -164,7 +164,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
     pub fn verify<const S: usize>(&self, share: &Share<S>, blind_share: &Share<S>) -> bool {
         let secret = bytes_to_field::<F>(&share.value());
         let blinding = bytes_to_field::<F>(&blind_share.value());
-        if secret.is_none() || blinding.is_none() {
+        if (secret.is_none() | blinding.is_none()).unwrap_u8() == 1 {
             return false;
         }
 

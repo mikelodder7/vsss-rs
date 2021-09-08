@@ -24,7 +24,7 @@ use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
-use subtle::{Choice, ConditionallySelectable, CtOption};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a curve25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -298,10 +298,6 @@ impl Field for WrappedScalar {
         Self(Scalar::one())
     }
 
-    fn is_zero(&self) -> bool {
-        self.0 == Scalar::zero()
-    }
-
     fn square(&self) -> Self {
         Self(self.0 * self.0)
     }
@@ -323,16 +319,16 @@ impl Field for WrappedScalar {
 impl PrimeField for WrappedScalar {
     type Repr = [u8; 32];
 
-    fn from_repr(bytes: Self::Repr) -> Option<Self> {
-        Some(Self(Scalar::from_bits(bytes)))
+    fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
+        CtOption::new(Self(Scalar::from_bits(bytes)), Choice::from(1u8))
     }
 
     fn to_repr(&self) -> Self::Repr {
         self.0.to_bytes()
     }
 
-    fn is_odd(&self) -> bool {
-        self.0[0] & 1 == 1
+    fn is_odd(&self) -> Choice {
+        Choice::from(self.0[0] & 1)
     }
 
     const NUM_BITS: u32 = 255;
@@ -352,6 +348,12 @@ impl PrimeField for WrappedScalar {
 impl From<u64> for WrappedScalar {
     fn from(d: u64) -> WrappedScalar {
         Self(Scalar::from(d))
+    }
+}
+
+impl ConstantTimeEq for WrappedScalar {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
     }
 }
 
