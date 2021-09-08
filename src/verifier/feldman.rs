@@ -139,7 +139,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
     /// Check whether the share is valid according this verifier set
     pub fn verify<const S: usize>(&self, share: &Share<S>) -> bool {
         let s = bytes_to_field::<F>(share.value());
-        if s.is_none().unwrap_u8() == 1 {
+        if s.is_none() {
             return false;
         }
 
