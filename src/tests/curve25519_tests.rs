@@ -5,7 +5,7 @@
 
 use super::invalid::*;
 use super::valid::*;
-use crate::{Shamir, WrappedPoint, WrappedScalar};
+use crate::{Feldman, FeldmanVerifier, Shamir, WrappedPoint, WrappedScalar};
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
 use rand::rngs::OsRng;
@@ -40,4 +40,43 @@ fn key_tests() {
     let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
     assert_eq!(sk2.to_bytes(), sk1.to_bytes());
     assert_eq!(ske1.to_bytes(), ske2.to_bytes());
+}
+
+#[test]
+fn verifier_serde_test() {
+    let mut osrng = OsRng::default();
+    let sk = Scalar::random(&mut osrng);
+    let res = Feldman::<2, 3>::split_secret::<WrappedScalar, WrappedPoint, OsRng, 33>(
+        sk.into(),
+        None,
+        &mut osrng,
+    );
+    assert!(res.is_ok());
+    let (shares, verifier) = res.unwrap();
+    for s in &shares {
+        assert!(verifier.verify(s));
+    }
+    let res = serde_cbor::to_vec(&verifier);
+    assert!(res.is_ok());
+    let v_bytes = res.unwrap();
+    let res = serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedPoint, 2>>(&v_bytes);
+    assert!(res.is_ok());
+    let verifier2 = res.unwrap();
+    assert_eq!(verifier.generator, verifier2.generator);
+
+    let res = serde_json::to_string(&verifier);
+    assert!(res.is_ok());
+    let v_str = res.unwrap();
+    let res = serde_json::from_str::<FeldmanVerifier<WrappedScalar, WrappedPoint, 2>>(&v_str);
+    assert!(res.is_ok());
+    let verifier2 = res.unwrap();
+    assert_eq!(verifier.generator, verifier2.generator);
+
+    let res = serde_bare::to_vec(&verifier);
+    assert!(res.is_ok());
+    let v_bytes = res.unwrap();
+    let res = serde_bare::from_slice::<FeldmanVerifier<WrappedScalar, WrappedPoint, 2>>(&v_bytes);
+    assert!(res.is_ok());
+    let verifier2 = res.unwrap();
+    assert_eq!(verifier.generator, verifier2.generator);
 }

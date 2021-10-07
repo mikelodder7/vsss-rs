@@ -95,7 +95,7 @@ impl<'a, 'b> Add<&'b WrappedPoint> for &'a WrappedPoint {
 
     #[inline]
     fn add(self, rhs: &'b WrappedPoint) -> Self::Output {
-        WrappedPoint(self.0 + rhs.0)
+        *self + *rhs
     }
 }
 
@@ -104,7 +104,7 @@ impl<'b> Add<&'b WrappedPoint> for WrappedPoint {
 
     #[inline]
     fn add(self, rhs: &'b WrappedPoint) -> Self::Output {
-        &self + rhs
+        self + *rhs
     }
 }
 
@@ -113,7 +113,7 @@ impl<'a> Add<WrappedPoint> for &'a WrappedPoint {
 
     #[inline]
     fn add(self, rhs: WrappedPoint) -> Self::Output {
-        self + &rhs
+        *self + rhs
     }
 }
 
@@ -122,21 +122,21 @@ impl Add for WrappedPoint {
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        WrappedPoint(self.0 + rhs.0)
     }
 }
 
 impl AddAssign for WrappedPoint {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
-        *self = &*self + &rhs;
+        *self = *self + rhs;
     }
 }
 
 impl<'b> AddAssign<&'b WrappedPoint> for WrappedPoint {
     #[inline]
     fn add_assign(&mut self, rhs: &'b WrappedPoint) {
-        *self = &*self + rhs;
+        *self = *self + *rhs;
     }
 }
 
@@ -145,7 +145,7 @@ impl<'a, 'b> Sub<&'b WrappedPoint> for &'a WrappedPoint {
 
     #[inline]
     fn sub(self, rhs: &'b WrappedPoint) -> Self::Output {
-        WrappedPoint(self.0 - rhs.0)
+        *self - *rhs
     }
 }
 
@@ -154,7 +154,7 @@ impl<'b> Sub<&'b WrappedPoint> for WrappedPoint {
 
     #[inline]
     fn sub(self, rhs: &'b WrappedPoint) -> Self::Output {
-        &self - rhs
+        self - *rhs
     }
 }
 
@@ -163,7 +163,7 @@ impl<'a> Sub<WrappedPoint> for &'a WrappedPoint {
 
     #[inline]
     fn sub(self, rhs: WrappedPoint) -> Self::Output {
-        self - &rhs
+        *self - rhs
     }
 }
 
@@ -172,21 +172,21 @@ impl Sub for WrappedPoint {
 
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
-        &self - &rhs
+        WrappedPoint(self.0 - rhs.0)
     }
 }
 
 impl SubAssign for WrappedPoint {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
-        *self = &*self - &rhs;
+        *self = *self - rhs;
     }
 }
 
 impl<'b> SubAssign<&'b WrappedPoint> for WrappedPoint {
     #[inline]
     fn sub_assign(&mut self, rhs: &'b WrappedPoint) {
-        *self = &*self - rhs;
+        *self = *self - *rhs;
     }
 }
 
@@ -195,7 +195,7 @@ impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedPoint {
 
     #[inline]
     fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
-        WrappedPoint(self.0 * rhs.0)
+        *self * *rhs
     }
 }
 
@@ -204,7 +204,7 @@ impl<'b> Mul<&'b WrappedScalar> for WrappedPoint {
 
     #[inline]
     fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
-        &self * rhs
+        self * *rhs
     }
 }
 
@@ -213,7 +213,7 @@ impl<'a> Mul<WrappedScalar> for &'a WrappedPoint {
 
     #[inline]
     fn mul(self, rhs: WrappedScalar) -> Self::Output {
-        self * &rhs
+        *self * rhs
     }
 }
 
@@ -222,21 +222,21 @@ impl Mul<WrappedScalar> for WrappedPoint {
 
     #[inline]
     fn mul(self, rhs: WrappedScalar) -> Self::Output {
-        &self * &rhs
+        WrappedPoint(self.0 * rhs.0)
     }
 }
 
 impl MulAssign<WrappedScalar> for WrappedPoint {
     #[inline]
     fn mul_assign(&mut self, rhs: WrappedScalar) {
-        *self = &*self * &rhs;
+        *self = *self * rhs;
     }
 }
 
 impl<'b> MulAssign<&'b WrappedScalar> for WrappedPoint {
     #[inline]
     fn mul_assign(&mut self, rhs: &'b WrappedScalar) {
-        *self = &*self * rhs;
+        *self = *self * *rhs;
     }
 }
 
@@ -378,7 +378,7 @@ impl<'a, 'b> Add<&'b WrappedScalar> for &'a WrappedScalar {
 
     #[inline]
     fn add(self, rhs: &'b WrappedScalar) -> Self::Output {
-        WrappedScalar(self.0 + rhs.0)
+        *self + *rhs
     }
 }
 
@@ -387,7 +387,7 @@ impl<'b> Add<&'b WrappedScalar> for WrappedScalar {
 
     #[inline]
     fn add(self, rhs: &'b WrappedScalar) -> Self::Output {
-        &self + rhs
+        self + *rhs
     }
 }
 
@@ -396,7 +396,7 @@ impl<'a> Add<WrappedScalar> for &'a WrappedScalar {
 
     #[inline]
     fn add(self, rhs: WrappedScalar) -> Self::Output {
-        self + &rhs
+        *self + rhs
     }
 }
 
@@ -405,21 +405,21 @@ impl Add for WrappedScalar {
 
     #[inline]
     fn add(self, rhs: WrappedScalar) -> Self::Output {
-        &self + &rhs
+        WrappedScalar(self.0 + rhs.0)
     }
 }
 
 impl AddAssign for WrappedScalar {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
-        *self = &*self + &rhs;
+        *self = *self + rhs;
     }
 }
 
 impl<'b> AddAssign<&'b WrappedScalar> for WrappedScalar {
     #[inline]
     fn add_assign(&mut self, rhs: &'b WrappedScalar) {
-        *self = &*self + rhs;
+        *self = *self + rhs;
     }
 }
 
@@ -428,7 +428,7 @@ impl<'a, 'b> Sub<&'b WrappedScalar> for &'a WrappedScalar {
 
     #[inline]
     fn sub(self, rhs: &'b WrappedScalar) -> Self::Output {
-        WrappedScalar(self.0 - rhs.0)
+        *self - *rhs
     }
 }
 
@@ -437,7 +437,7 @@ impl<'b> Sub<&'b WrappedScalar> for WrappedScalar {
 
     #[inline]
     fn sub(self, rhs: &'b WrappedScalar) -> Self::Output {
-        &self - rhs
+        self - *rhs
     }
 }
 
@@ -446,7 +446,7 @@ impl<'a> Sub<WrappedScalar> for &'a WrappedScalar {
 
     #[inline]
     fn sub(self, rhs: WrappedScalar) -> Self::Output {
-        self - &rhs
+        *self - rhs
     }
 }
 
@@ -455,21 +455,21 @@ impl Sub for WrappedScalar {
 
     #[inline]
     fn sub(self, rhs: WrappedScalar) -> Self::Output {
-        &self - &rhs
+        WrappedScalar(self.0 - rhs.0)
     }
 }
 
 impl SubAssign for WrappedScalar {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
-        *self = &*self - &rhs;
+        *self = *self - rhs;
     }
 }
 
 impl<'b> SubAssign<&'b WrappedScalar> for WrappedScalar {
     #[inline]
     fn sub_assign(&mut self, rhs: &'b WrappedScalar) {
-        *self = &*self - rhs;
+        *self = *self - rhs;
     }
 }
 
@@ -478,7 +478,7 @@ impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedScalar {
 
     #[inline]
     fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
-        WrappedScalar(self.0 * rhs.0)
+        *self * *rhs
     }
 }
 
@@ -487,7 +487,7 @@ impl<'b> Mul<&'b WrappedScalar> for WrappedScalar {
 
     #[inline]
     fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
-        &self * rhs
+        self * *rhs
     }
 }
 
@@ -496,7 +496,7 @@ impl<'a> Mul<WrappedScalar> for &'a WrappedScalar {
 
     #[inline]
     fn mul(self, rhs: WrappedScalar) -> Self::Output {
-        self * &rhs
+        *self * rhs
     }
 }
 
@@ -505,21 +505,21 @@ impl Mul for WrappedScalar {
 
     #[inline]
     fn mul(self, rhs: WrappedScalar) -> Self::Output {
-        &self * &rhs
+        WrappedScalar(self.0 * rhs.0)
     }
 }
 
 impl MulAssign for WrappedScalar {
     #[inline]
     fn mul_assign(&mut self, rhs: Self) {
-        *self = &*self * &rhs;
+        *self = *self * rhs;
     }
 }
 
 impl<'b> MulAssign<&'b WrappedScalar> for WrappedScalar {
     #[inline]
     fn mul_assign(&mut self, rhs: &'b WrappedScalar) {
-        *self = &*self * rhs;
+        *self = *self * rhs;
     }
 }
 

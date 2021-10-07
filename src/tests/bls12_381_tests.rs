@@ -5,13 +5,14 @@
 use super::invalid::*;
 use super::utils::MockRng;
 use super::valid::*;
-use crate::{Shamir, Share};
+use crate::{Feldman, FeldmanVerifier, Shamir, Share};
 use bls12_381_plus::{
     multi_miller_loop, ExpandMsgXmd, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
     Scalar,
 };
 use ff::Field;
 use group::{Curve, Group};
+use rand::rngs::OsRng;
 
 #[test]
 fn invalid_tests() {
@@ -96,4 +97,40 @@ fn group_combine() {
             .unwrap_u8(),
         1
     );
+}
+
+#[test]
+fn verifier_serde_test() {
+    let mut osrng = OsRng::default();
+    let sk = Scalar::random(&mut osrng);
+    let res =
+        Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(sk, None, &mut osrng);
+    assert!(res.is_ok());
+    let (shares, verifier) = res.unwrap();
+    for s in &shares {
+        assert!(verifier.verify(s));
+    }
+    let res = serde_cbor::to_vec(&verifier);
+    assert!(res.is_ok());
+    let v_bytes = res.unwrap();
+    let res = serde_cbor::from_slice::<FeldmanVerifier<Scalar, G1Projective, 2>>(&v_bytes);
+    assert!(res.is_ok());
+    let verifier2 = res.unwrap();
+    assert_eq!(verifier.generator, verifier2.generator);
+
+    let res = serde_json::to_string(&verifier);
+    assert!(res.is_ok());
+    let v_str = res.unwrap();
+    let res = serde_json::from_str::<FeldmanVerifier<Scalar, G1Projective, 2>>(&v_str);
+    assert!(res.is_ok());
+    let verifier2 = res.unwrap();
+    assert_eq!(verifier.generator, verifier2.generator);
+
+    let res = serde_bare::to_vec(&verifier);
+    assert!(res.is_ok());
+    let v_bytes = res.unwrap();
+    let res = serde_bare::from_slice::<FeldmanVerifier<Scalar, G1Projective, 2>>(&v_bytes);
+    assert!(res.is_ok());
+    let verifier2 = res.unwrap();
+    assert_eq!(verifier.generator, verifier2.generator);
 }
