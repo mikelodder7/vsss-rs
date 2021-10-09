@@ -157,6 +157,8 @@ fn main() {
 }
 ```
 
+Either `RistrettoPoint` or `EdwardsPoint` may be used when using Feldman and Pedersen VSSS.
+
 # License
 
 ## License

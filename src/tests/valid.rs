@@ -5,13 +5,14 @@
 use crate::{tests::utils::MockRng, util::bytes_to_field, Feldman, Pedersen, Shamir};
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
+use zeroize::Zeroize;
 
 type Shamir23 = Shamir<2, 3>;
 type Feldman23 = Feldman<2, 3>;
 type Pedersen23 = Pedersen<2, 3>;
 
 pub fn combine_single<
-    F: PrimeField,
+    F: PrimeField + Zeroize,
     G: Group + GroupEncoding + Default + ScalarMul<F>,
     const S: usize,
 >() {
@@ -52,7 +53,7 @@ pub fn combine_single<
 }
 
 pub fn combine_all<
-    F: PrimeField,
+    F: PrimeField + Zeroize,
     G: Group + GroupEncoding + Default + ScalarMul<F>,
     const S: usize,
 >() {

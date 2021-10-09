@@ -6,9 +6,10 @@ use super::utils::MockRng;
 use crate::{Feldman, Pedersen, Shamir, Share};
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
+use zeroize::Zeroize;
 
 pub fn split_invalid_args<
-    F: PrimeField,
+    F: PrimeField + Zeroize,
     G: Group + GroupEncoding + Default + ScalarMul<F>,
     const S: usize,
 >() {

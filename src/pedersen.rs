@@ -9,6 +9,7 @@ use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use zeroize::Zeroize;
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
@@ -59,7 +60,7 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
         rng: &mut R,
     ) -> Result<PedersenResult<F, G, S, T, N>, Error>
     where
-        F: PrimeField,
+        F: PrimeField + Zeroize,
         G: Group + GroupEncoding + Default + ScalarMul<F>,
         R: RngCore + CryptoRng,
     {
@@ -70,8 +71,9 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
         let mut crng = ChaChaRng::from_seed(seed);
 
         let g = share_generator.unwrap_or_else(G::generator);
-        let t = F::random(&mut crng);
+        let mut t = F::random(&mut crng);
         let h = blind_factor_generator.unwrap_or_else(|| G::generator() * t);
+        t.zeroize();
 
         let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
         let (secret_shares, secret_polynomial) =

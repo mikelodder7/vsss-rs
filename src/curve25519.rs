@@ -15,7 +15,8 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
+    constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
+    edwards::{CompressedEdwardsY, EdwardsPoint},
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
     traits::{Identity, IsIdentity},
@@ -26,11 +27,11 @@ use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use subtle::{Choice, ConditionallySelectable, CtOption};
 
-/// Wraps a curve25519 point
+/// Wraps a ristretto25519 point
 #[derive(Copy, Clone, Debug, Eq)]
-pub struct WrappedPoint(pub RistrettoPoint);
+pub struct WrappedRistretto(pub RistrettoPoint);
 
-impl Group for WrappedPoint {
+impl Group for WrappedRistretto {
     type Scalar = WrappedScalar;
 
     fn random(mut rng: impl RngCore) -> Self {
@@ -57,26 +58,26 @@ impl Group for WrappedPoint {
     }
 }
 
-impl<T> Sum<T> for WrappedPoint
+impl<T> Sum<T> for WrappedRistretto
 where
-    T: Borrow<WrappedPoint>,
+    T: Borrow<WrappedRistretto>,
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
     }
 }
 
-impl<'a> Neg for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a> Neg for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
     fn neg(self) -> Self::Output {
-        WrappedPoint(self.0.neg())
+        WrappedRistretto(self.0.neg())
     }
 }
 
-impl Neg for WrappedPoint {
-    type Output = WrappedPoint;
+impl Neg for WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -84,114 +85,114 @@ impl Neg for WrappedPoint {
     }
 }
 
-impl PartialEq for WrappedPoint {
+impl PartialEq for WrappedRistretto {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<'a, 'b> Add<&'b WrappedPoint> for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a, 'b> Add<&'b WrappedRistretto> for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
-    fn add(self, rhs: &'b WrappedPoint) -> Self::Output {
+    fn add(self, rhs: &'b WrappedRistretto) -> Self::Output {
         *self + *rhs
     }
 }
 
-impl<'b> Add<&'b WrappedPoint> for WrappedPoint {
+impl<'b> Add<&'b WrappedRistretto> for WrappedRistretto {
     type Output = Self;
 
     #[inline]
-    fn add(self, rhs: &'b WrappedPoint) -> Self::Output {
+    fn add(self, rhs: &'b WrappedRistretto) -> Self::Output {
         self + *rhs
     }
 }
 
-impl<'a> Add<WrappedPoint> for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a> Add<WrappedRistretto> for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
-    fn add(self, rhs: WrappedPoint) -> Self::Output {
+    fn add(self, rhs: WrappedRistretto) -> Self::Output {
         *self + rhs
     }
 }
 
-impl Add for WrappedPoint {
+impl Add for WrappedRistretto {
     type Output = Self;
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        WrappedPoint(self.0 + rhs.0)
+        WrappedRistretto(self.0 + rhs.0)
     }
 }
 
-impl AddAssign for WrappedPoint {
+impl AddAssign for WrappedRistretto {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
     }
 }
 
-impl<'b> AddAssign<&'b WrappedPoint> for WrappedPoint {
+impl<'b> AddAssign<&'b WrappedRistretto> for WrappedRistretto {
     #[inline]
-    fn add_assign(&mut self, rhs: &'b WrappedPoint) {
+    fn add_assign(&mut self, rhs: &'b WrappedRistretto) {
         *self = *self + *rhs;
     }
 }
 
-impl<'a, 'b> Sub<&'b WrappedPoint> for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a, 'b> Sub<&'b WrappedRistretto> for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
-    fn sub(self, rhs: &'b WrappedPoint) -> Self::Output {
+    fn sub(self, rhs: &'b WrappedRistretto) -> Self::Output {
         *self - *rhs
     }
 }
 
-impl<'b> Sub<&'b WrappedPoint> for WrappedPoint {
+impl<'b> Sub<&'b WrappedRistretto> for WrappedRistretto {
     type Output = Self;
 
     #[inline]
-    fn sub(self, rhs: &'b WrappedPoint) -> Self::Output {
+    fn sub(self, rhs: &'b WrappedRistretto) -> Self::Output {
         self - *rhs
     }
 }
 
-impl<'a> Sub<WrappedPoint> for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a> Sub<WrappedRistretto> for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
-    fn sub(self, rhs: WrappedPoint) -> Self::Output {
+    fn sub(self, rhs: WrappedRistretto) -> Self::Output {
         *self - rhs
     }
 }
 
-impl Sub for WrappedPoint {
+impl Sub for WrappedRistretto {
     type Output = Self;
 
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
-        WrappedPoint(self.0 - rhs.0)
+        WrappedRistretto(self.0 - rhs.0)
     }
 }
 
-impl SubAssign for WrappedPoint {
+impl SubAssign for WrappedRistretto {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
     }
 }
 
-impl<'b> SubAssign<&'b WrappedPoint> for WrappedPoint {
+impl<'b> SubAssign<&'b WrappedRistretto> for WrappedRistretto {
     #[inline]
-    fn sub_assign(&mut self, rhs: &'b WrappedPoint) {
+    fn sub_assign(&mut self, rhs: &'b WrappedRistretto) {
         *self = *self - *rhs;
     }
 }
 
-impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
     fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
@@ -199,7 +200,7 @@ impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedPoint {
     }
 }
 
-impl<'b> Mul<&'b WrappedScalar> for WrappedPoint {
+impl<'b> Mul<&'b WrappedScalar> for WrappedRistretto {
     type Output = Self;
 
     #[inline]
@@ -208,8 +209,8 @@ impl<'b> Mul<&'b WrappedScalar> for WrappedPoint {
     }
 }
 
-impl<'a> Mul<WrappedScalar> for &'a WrappedPoint {
-    type Output = WrappedPoint;
+impl<'a> Mul<WrappedScalar> for &'a WrappedRistretto {
+    type Output = WrappedRistretto;
 
     #[inline]
     fn mul(self, rhs: WrappedScalar) -> Self::Output {
@@ -217,30 +218,30 @@ impl<'a> Mul<WrappedScalar> for &'a WrappedPoint {
     }
 }
 
-impl Mul<WrappedScalar> for WrappedPoint {
+impl Mul<WrappedScalar> for WrappedRistretto {
     type Output = Self;
 
     #[inline]
     fn mul(self, rhs: WrappedScalar) -> Self::Output {
-        WrappedPoint(self.0 * rhs.0)
+        WrappedRistretto(self.0 * rhs.0)
     }
 }
 
-impl MulAssign<WrappedScalar> for WrappedPoint {
+impl MulAssign<WrappedScalar> for WrappedRistretto {
     #[inline]
     fn mul_assign(&mut self, rhs: WrappedScalar) {
         *self = *self * rhs;
     }
 }
 
-impl<'b> MulAssign<&'b WrappedScalar> for WrappedPoint {
+impl<'b> MulAssign<&'b WrappedScalar> for WrappedRistretto {
     #[inline]
     fn mul_assign(&mut self, rhs: &'b WrappedScalar) {
         *self = *self * *rhs;
     }
 }
 
-impl GroupEncoding for WrappedPoint {
+impl GroupEncoding for WrappedRistretto {
     type Repr = [u8; 32];
 
     fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
@@ -260,21 +261,291 @@ impl GroupEncoding for WrappedPoint {
     }
 }
 
-impl Default for WrappedPoint {
+impl Default for WrappedRistretto {
     fn default() -> Self {
         Self(RistrettoPoint::identity())
     }
 }
 
-impl From<WrappedPoint> for RistrettoPoint {
-    fn from(p: WrappedPoint) -> RistrettoPoint {
+impl From<WrappedRistretto> for RistrettoPoint {
+    fn from(p: WrappedRistretto) -> RistrettoPoint {
         p.0
     }
 }
 
-impl From<RistrettoPoint> for WrappedPoint {
+impl From<RistrettoPoint> for WrappedRistretto {
     fn from(p: RistrettoPoint) -> Self {
         Self(p)
+    }
+}
+
+/// Wraps an ed25519 point
+#[derive(Copy, Clone, Debug, Eq)]
+pub struct WrappedEdwards(pub EdwardsPoint);
+
+impl Group for WrappedEdwards {
+    type Scalar = WrappedScalar;
+
+    fn random(mut rng: impl RngCore) -> Self {
+        let mut seed = [0u8; 32];
+        rng.fill_bytes(&mut seed);
+        Self(EdwardsPoint::hash_from_bytes::<sha2::Sha512>(&seed))
+    }
+
+    fn identity() -> Self {
+        Self(EdwardsPoint::identity())
+    }
+
+    fn generator() -> Self {
+        Self(ED25519_BASEPOINT_POINT)
+    }
+
+    fn is_identity(&self) -> Choice {
+        Choice::from(u8::from(self.0.is_identity()))
+    }
+
+    fn double(&self) -> Self {
+        Self(self.0 + self.0)
+    }
+}
+
+impl<T> Sum<T> for WrappedEdwards
+where
+    T: Borrow<WrappedEdwards>,
+{
+    fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
+        iter.fold(Self::identity(), |acc, item| acc + item.borrow())
+    }
+}
+
+impl<'a> Neg for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        WrappedEdwards(self.0.neg())
+    }
+}
+
+impl Neg for WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        -&self
+    }
+}
+
+impl PartialEq for WrappedEdwards {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<'a, 'b> Add<&'b WrappedEdwards> for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn add(self, rhs: &'b WrappedEdwards) -> Self::Output {
+        *self + *rhs
+    }
+}
+
+impl<'b> Add<&'b WrappedEdwards> for WrappedEdwards {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: &'b WrappedEdwards) -> Self::Output {
+        self + *rhs
+    }
+}
+
+impl<'a> Add<WrappedEdwards> for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn add(self, rhs: WrappedEdwards) -> Self::Output {
+        *self + rhs
+    }
+}
+
+impl Add for WrappedEdwards {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        WrappedEdwards(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for WrappedEdwards {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl<'b> AddAssign<&'b WrappedEdwards> for WrappedEdwards {
+    #[inline]
+    fn add_assign(&mut self, rhs: &'b WrappedEdwards) {
+        *self = *self + *rhs;
+    }
+}
+
+impl<'a, 'b> Sub<&'b WrappedEdwards> for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn sub(self, rhs: &'b WrappedEdwards) -> Self::Output {
+        *self - *rhs
+    }
+}
+
+impl<'b> Sub<&'b WrappedEdwards> for WrappedEdwards {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: &'b WrappedEdwards) -> Self::Output {
+        self - *rhs
+    }
+}
+
+impl<'a> Sub<WrappedEdwards> for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn sub(self, rhs: WrappedEdwards) -> Self::Output {
+        *self - rhs
+    }
+}
+
+impl Sub for WrappedEdwards {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        WrappedEdwards(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign for WrappedEdwards {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+impl<'b> SubAssign<&'b WrappedEdwards> for WrappedEdwards {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &'b WrappedEdwards) {
+        *self = *self - *rhs;
+    }
+}
+
+impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
+        *self * *rhs
+    }
+}
+
+impl<'b> Mul<&'b WrappedScalar> for WrappedEdwards {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: &'b WrappedScalar) -> Self::Output {
+        self * *rhs
+    }
+}
+
+impl<'a> Mul<WrappedScalar> for &'a WrappedEdwards {
+    type Output = WrappedEdwards;
+
+    #[inline]
+    fn mul(self, rhs: WrappedScalar) -> Self::Output {
+        *self * rhs
+    }
+}
+
+impl Mul<WrappedScalar> for WrappedEdwards {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: WrappedScalar) -> Self::Output {
+        WrappedEdwards(self.0 * rhs.0)
+    }
+}
+
+impl MulAssign<WrappedScalar> for WrappedEdwards {
+    #[inline]
+    fn mul_assign(&mut self, rhs: WrappedScalar) {
+        *self = *self * rhs;
+    }
+}
+
+impl<'b> MulAssign<&'b WrappedScalar> for WrappedEdwards {
+    #[inline]
+    fn mul_assign(&mut self, rhs: &'b WrappedScalar) {
+        *self = *self * *rhs;
+    }
+}
+
+impl GroupEncoding for WrappedEdwards {
+    type Repr = [u8; 32];
+
+    fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
+        let p = CompressedEdwardsY(*bytes);
+        match p.decompress() {
+            None => CtOption::new(Self(EdwardsPoint::identity()), Choice::from(0u8)),
+            Some(rp) => CtOption::new(Self(rp), Choice::from(1u8)),
+        }
+    }
+
+    fn from_bytes_unchecked(bytes: &Self::Repr) -> CtOption<Self> {
+        Self::from_bytes(bytes)
+    }
+
+    fn to_bytes(&self) -> Self::Repr {
+        self.0.compress().0
+    }
+}
+
+impl Default for WrappedEdwards {
+    fn default() -> Self {
+        Self(EdwardsPoint::identity())
+    }
+}
+
+impl From<WrappedEdwards> for EdwardsPoint {
+    fn from(p: WrappedEdwards) -> EdwardsPoint {
+        p.0
+    }
+}
+
+impl From<EdwardsPoint> for WrappedEdwards {
+    fn from(p: EdwardsPoint) -> Self {
+        Self(p)
+    }
+}
+
+impl From<WrappedRistretto> for WrappedEdwards {
+    fn from(p: WrappedRistretto) -> Self {
+        struct Ed25519(EdwardsPoint);
+
+        // can't just return the inner underlying point, since it may not be of order 8.
+        // compute [8^{-1}][8]P to clear any cofactor
+        // this is the byte representation of 8^{-1} mod q
+        let eight_inv = Scalar::from_canonical_bytes([
+            121, 47, 220, 226, 41, 229, 6, 97, 208, 218, 28, 125, 179, 157, 211, 7, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6,
+        ])
+        .unwrap();
+
+        let r = unsafe { core::mem::transmute::<RistrettoPoint, Ed25519>(p.0) };
+
+        WrappedEdwards(r.0.mul_by_cofactor() * eight_inv)
     }
 }
 
@@ -551,4 +822,15 @@ impl From<Scalar> for WrappedScalar {
     fn from(s: Scalar) -> WrappedScalar {
         Self(s)
     }
+}
+
+impl zeroize::DefaultIsZeroes for WrappedScalar {}
+
+#[test]
+fn ristretto_to_edwards() {
+    let mut osrng = rand::rngs::OsRng::default();
+    let sk = Scalar::random(&mut osrng);
+    let pk = RISTRETTO_BASEPOINT_POINT * sk;
+    let ek = WrappedEdwards::from(WrappedRistretto(pk));
+    assert!(ek.0.is_torsion_free());
 }
