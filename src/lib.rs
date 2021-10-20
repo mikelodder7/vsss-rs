@@ -61,19 +61,19 @@
 //! To split a k256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs::Shamir;
+//! use vsss_rs::{Shamir, secp256k1::WrappedScalar};
 //! use ff::PrimeField;
-//! use k256::{NonZeroScalar, Scalar, SecretKey};
+//! use k256::{NonZeroScalar, SecretKey};
 //! use rand::rngs::OsRng;
 //!
 //! fn main() {
 //!     let mut osrng = OsRng::default();
 //!     let sk = SecretKey::random(&mut osrng);
-//!     let nzs = sk.to_secret_scalar();
-//!     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
+//!     let secret = WrappedScalar(*sk.to_secret_scalar());
+//!     let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(secret, &mut osrng);
 //!     assert!(res.is_ok());
 //!     let shares = res.unwrap();
-//!     let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//!     let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
 //!     assert!(res.is_ok());
 //!     let scalar = res.unwrap();
 //!     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -115,7 +115,7 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use ed25519_dalek::SecretKey;
-//! use vsss_rs::{Shamir, WrappedScalar};
+//! use vsss_rs::{Shamir, curve25519::WrappedScalar};
 //! use rand::rngs::OsRng;
 //! use x25519_dalek::StaticSecret;
 //!
@@ -159,11 +159,15 @@ extern crate std;
 mod tests;
 
 #[cfg(feature = "curve25519")]
-mod curve25519;
+#[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
+pub mod curve25519;
 mod error;
 mod feldman;
 mod pedersen;
 mod polynomial;
+#[cfg(feature = "secp256k1")]
+#[cfg_attr(docsrs, doc(cfg(feature = "secp256k1")))]
+pub mod secp256k1;
 mod shamir;
 mod share;
 mod util;
@@ -172,9 +176,6 @@ mod verifier;
 use polynomial::*;
 use util::*;
 
-#[cfg(feature = "curve25519")]
-#[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
-pub use curve25519::*;
 pub use error::*;
 pub use feldman::*;
 pub use pedersen::*;

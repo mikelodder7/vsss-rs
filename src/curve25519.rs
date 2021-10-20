@@ -2,15 +2,16 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-/// Curve25519 is not a prime order curve
-/// Since this crate relies on the ff::PrimeField
-/// and Curve25519 does work with secret sharing schemes
-/// This code wraps the Ristretto points and scalars in a facade
-/// to be compliant to work with this library.
-/// The intent is the consumer will not have to use these directly since
-/// the wrappers implement the [`From`] and [`Into`] traits.
+//! Curve25519 is not a prime order curve
+//! Since this crate relies on the ff::PrimeField
+//! and Curve25519 does work with secret sharing schemes
+//! This code wraps the Ristretto points and scalars in a facade
+//! to be compliant to work with this library.
+//! The intent is the consumer will not have to use these directly since
+//! the wrappers implement the [`From`] and [`Into`] traits.
 use core::{
     borrow::Borrow,
+    fmt,
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
@@ -25,7 +26,9 @@ use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
+use serde::{ Deserialize, Deserializer, Serialize, Serializer, de::{self, Visitor} };
 use subtle::{Choice, ConditionallySelectable, CtOption};
+
 
 /// Wraps a ristretto25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -278,6 +281,47 @@ impl From<RistrettoPoint> for WrappedRistretto {
         Self(p)
     }
 }
+
+impl Serialize for WrappedRistretto {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        // convert to compressed ristretto format, then serialize
+        serializer.serialize_bytes(self.0.compress().as_bytes())
+    }
+}
+
+struct WrappedRistrettoVisitor;
+
+impl<'de> Visitor<'de> for WrappedRistrettoVisitor {
+    type Value = WrappedRistretto;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "an array of bytes")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: de::Error
+    {
+        // deserialize compressed ristretto, then decompress
+        if let Some(ep) = CompressedRistretto::from_slice(v).decompress() {
+            return Ok(WrappedRistretto(ep));
+        }
+        Err(de::Error::custom("failed to deserialize CompressedRistretto"))
+    }
+}
+
+impl<'de> Deserialize<'de> for WrappedRistretto {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        deserializer.deserialize_bytes(WrappedRistrettoVisitor)
+    }
+}
+
 
 /// Wraps an ed25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -548,6 +592,47 @@ impl From<WrappedRistretto> for WrappedEdwards {
         WrappedEdwards(r.0.mul_by_cofactor() * eight_inv)
     }
 }
+
+impl Serialize for WrappedEdwards {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        // convert to compressed edwards y format, then serialize
+        serializer.serialize_bytes(self.0.compress().as_bytes())
+    }
+}
+
+struct WrappedEdwardsVisitor;
+
+impl<'de> Visitor<'de> for WrappedEdwardsVisitor {
+    type Value = WrappedEdwards;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "an array of bytes")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: de::Error
+    {
+        // deserialize compressed edwards y, then decompress
+        if let Some(ep) = CompressedEdwardsY::from_slice(v).decompress() {
+            return Ok(WrappedEdwards(ep));
+        }
+        Err(de::Error::custom("failed to deserialize CompressedEdwardsY"))
+    }
+}
+
+impl<'de> Deserialize<'de> for WrappedEdwards {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        deserializer.deserialize_bytes(WrappedEdwardsVisitor)
+    }
+}
+
 
 /// Wraps a curve25519 scalar
 #[derive(Copy, Clone, Debug, Eq)]
@@ -826,6 +911,43 @@ impl From<Scalar> for WrappedScalar {
 
 impl zeroize::DefaultIsZeroes for WrappedScalar {}
 
+impl Serialize for WrappedScalar {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        serializer.serialize_bytes(self.0.as_bytes())
+    }
+}
+
+struct WrappedScalarVisitor;
+
+impl<'de> Visitor<'de> for WrappedScalarVisitor {
+    type Value = WrappedScalar;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "an array of bytes")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: de::Error
+    {
+        let mut buf: [u8; 32] = Default::default();
+        buf.copy_from_slice(v);
+        Ok(WrappedScalar(Scalar::from_bits(buf)))
+    }
+}
+
+impl<'de> Deserialize<'de> for WrappedScalar {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        deserializer.deserialize_bytes(WrappedScalarVisitor)
+    }
+}
+
 #[test]
 fn ristretto_to_edwards() {
     let mut osrng = rand::rngs::OsRng::default();
@@ -833,4 +955,34 @@ fn ristretto_to_edwards() {
     let pk = RISTRETTO_BASEPOINT_POINT * sk;
     let ek = WrappedEdwards::from(WrappedRistretto(pk));
     assert!(ek.0.is_torsion_free());
+}
+
+#[test]
+fn serde_scalar() {
+    let rng = rand::rngs::OsRng::default();
+    let ws1 = WrappedScalar::random(rng);
+    // serialize
+    let res = serde_bare::to_vec(&ws1);
+    assert!(res.is_ok());
+    let wsvec = res.unwrap();
+    // deserialize
+    let res = serde_bare::from_slice(&wsvec);
+    assert!(res.is_ok());
+    let ws2: WrappedScalar = res.unwrap();
+    assert_eq!(ws1, ws2);
+}
+
+#[test]
+fn serde_edwards() {
+    let rng = rand::rngs::OsRng::default();
+    let ed1 = WrappedEdwards::random(rng);
+    // serialize
+    let res = serde_bare::to_vec(&ed1);
+    assert!(res.is_ok());
+    let edvec = res.unwrap();
+    // deserialize
+    let res = serde_bare::from_slice(&edvec);
+    assert!(res.is_ok());
+    let ed2: WrappedEdwards = res.unwrap();
+    assert_eq!(ed1, ed2);
 }
