@@ -5,8 +5,8 @@
 use super::invalid::*;
 use super::valid::*;
 use crate::{
+    secp256k1::{WrappedProjectivePoint, WrappedScalar},
     Feldman, FeldmanVerifier, Shamir,
-    secp256k1::{ WrappedProjectivePoint, WrappedScalar }
 };
 use ff::PrimeField;
 use k256::{NonZeroScalar, SecretKey};
@@ -46,9 +46,7 @@ fn verifier_serde_test() {
     let sk = SecretKey::random(&mut osrng);
     let secret = WrappedScalar(*sk.to_secret_scalar());
     let res = Feldman::<2, 3>::split_secret::<WrappedScalar, WrappedProjectivePoint, OsRng, 33>(
-        secret,
-        None,
-        &mut osrng,
+        secret, None, &mut osrng,
     );
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
@@ -58,7 +56,9 @@ fn verifier_serde_test() {
     let res = serde_cbor::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res = serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint, 2>>(&v_bytes);
+    let res = serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint, 2>>(
+        &v_bytes,
+    );
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
@@ -66,7 +66,8 @@ fn verifier_serde_test() {
     let res = serde_json::to_string(&verifier);
     assert!(res.is_ok());
     let v_str = res.unwrap();
-    let res = serde_json::from_str::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint, 2>>(&v_str);
+    let res =
+        serde_json::from_str::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint, 2>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
@@ -74,7 +75,9 @@ fn verifier_serde_test() {
     let res = serde_bare::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res = serde_bare::from_slice::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint, 2>>(&v_bytes);
+    let res = serde_bare::from_slice::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint, 2>>(
+        &v_bytes,
+    );
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);

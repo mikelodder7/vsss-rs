@@ -26,9 +26,11 @@ use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
-use serde::{ Deserialize, Deserializer, Serialize, Serializer, de::{self, Visitor} };
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use subtle::{Choice, ConditionallySelectable, CtOption};
-
 
 /// Wraps a ristretto25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -285,7 +287,7 @@ impl From<RistrettoPoint> for WrappedRistretto {
 impl Serialize for WrappedRistretto {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         // convert to compressed ristretto format, then serialize
         serializer.serialize_bytes(self.0.compress().as_bytes())
@@ -303,25 +305,26 @@ impl<'de> Visitor<'de> for WrappedRistrettoVisitor {
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where
-        E: de::Error
+        E: de::Error,
     {
         // deserialize compressed ristretto, then decompress
         if let Some(ep) = CompressedRistretto::from_slice(v).decompress() {
             return Ok(WrappedRistretto(ep));
         }
-        Err(de::Error::custom("failed to deserialize CompressedRistretto"))
+        Err(de::Error::custom(
+            "failed to deserialize CompressedRistretto",
+        ))
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedRistretto {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(WrappedRistrettoVisitor)
     }
 }
-
 
 /// Wraps an ed25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -596,7 +599,7 @@ impl From<WrappedRistretto> for WrappedEdwards {
 impl Serialize for WrappedEdwards {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         // convert to compressed edwards y format, then serialize
         serializer.serialize_bytes(self.0.compress().as_bytes())
@@ -614,25 +617,26 @@ impl<'de> Visitor<'de> for WrappedEdwardsVisitor {
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where
-        E: de::Error
+        E: de::Error,
     {
         // deserialize compressed edwards y, then decompress
         if let Some(ep) = CompressedEdwardsY::from_slice(v).decompress() {
             return Ok(WrappedEdwards(ep));
         }
-        Err(de::Error::custom("failed to deserialize CompressedEdwardsY"))
+        Err(de::Error::custom(
+            "failed to deserialize CompressedEdwardsY",
+        ))
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedEdwards {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(WrappedEdwardsVisitor)
     }
 }
-
 
 /// Wraps a curve25519 scalar
 #[derive(Copy, Clone, Debug, Eq)]
@@ -914,7 +918,7 @@ impl zeroize::DefaultIsZeroes for WrappedScalar {}
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         serializer.serialize_bytes(self.0.as_bytes())
     }
@@ -931,7 +935,7 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where
-        E: de::Error
+        E: de::Error,
     {
         let mut buf: [u8; 32] = Default::default();
         buf.copy_from_slice(v);
@@ -942,7 +946,7 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(WrappedScalarVisitor)
     }

@@ -1,5 +1,5 @@
 /*
-    Copyright Dave Huseby. All Rights Reserved.
+    Copyright. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
 //! These are convenience wrappers for the k256::Scalar and
@@ -13,12 +13,17 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use elliptic_curve::sec1::{ FromEncodedPoint, ToEncodedPoint };
+use elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
-use k256::{ AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, ScalarBytes, Scalar };
+use k256::{
+    AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar, ScalarBytes,
+};
 use rand_core::RngCore;
-use serde::{ Deserialize, Deserializer, Serialize, Serializer, de::{self, Visitor} };
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use subtle::{Choice, ConditionallySelectable, CtOption};
 
 /// Wrapper around secp256k1 ProjectivePoint that handles serialization
@@ -282,7 +287,7 @@ impl From<ProjectivePoint> for WrappedProjectivePoint {
 impl Serialize for WrappedProjectivePoint {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         let ep = self.0.to_encoded_point(false);
         serializer.serialize_bytes(ep.as_bytes())
@@ -300,21 +305,23 @@ impl<'de> Visitor<'de> for WrappedProjectivePointVisitor {
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where
-        E: de::Error
+        E: de::Error,
     {
         if let Ok(ep) = EncodedPoint::from_bytes(v) {
             if let Some(pp) = ProjectivePoint::from_encoded_point(&ep) {
                 return Ok(WrappedProjectivePoint(pp));
             }
         }
-        Err(de::Error::custom("failed to deserialize K256 ProjectivePoint"))
+        Err(de::Error::custom(
+            "failed to deserialize K256 ProjectivePoint",
+        ))
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedProjectivePoint {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(WrappedProjectivePointVisitor)
     }
@@ -608,7 +615,7 @@ impl zeroize::DefaultIsZeroes for WrappedScalar {}
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         let sb = ScalarBytes::from_scalar(&self.0);
         serializer.serialize_bytes(sb.as_bytes())
@@ -626,7 +633,7 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where
-        E: de::Error
+        E: de::Error,
     {
         if let Ok(sb) = ScalarBytes::try_from(v) {
             return Ok(WrappedScalar(sb.into_scalar()));
@@ -638,7 +645,7 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(WrappedScalarVisitor)
     }
@@ -677,5 +684,3 @@ fn serde_projective_point() {
     let wpp2: WrappedProjectivePoint = res.unwrap();
     assert_eq!(wpp1, wpp2);
 }
-
-

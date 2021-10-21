@@ -15,7 +15,7 @@ version = "1.4.0"
 [features]
 default = ["curve25519", "secp256k1" ]
 curve25519 = ["curve25519-dalek", "subtle"]
-secp256k1 = ["k256", "elliptic-curve"]
+secp256k1 = ["k256", "elliptic-curve", "subtle"]
 
 [dependencies]
 curve25519-dalek = { version = "4.0.0-pre.1", optional = true }

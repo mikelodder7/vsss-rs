@@ -6,8 +6,8 @@
 use super::invalid::*;
 use super::valid::*;
 use crate::{
+    curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
     Feldman, FeldmanVerifier, Pedersen, PedersenResult, PedersenVerifier, Shamir,
-    curve25519::{ WrappedEdwards, WrappedRistretto, WrappedScalar }
 };
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
