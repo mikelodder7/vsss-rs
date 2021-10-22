@@ -2,8 +2,8 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
+use super::super::utils::MockRng;
 use super::invalid::*;
-use super::utils::MockRng;
 use super::valid::*;
 use crate::{Feldman, FeldmanVerifier, Shamir, Share};
 use bls12_381_plus::{

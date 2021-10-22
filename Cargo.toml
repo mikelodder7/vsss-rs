@@ -10,12 +10,14 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "1.4.0"
+version = "2.0.0-pre0"
 
 [features]
-default = ["curve25519", "secp256k1" ]
+default = ["curve25519", "secp256k1"]
+alloc = ["serde_cbor"]
 curve25519 = ["curve25519-dalek", "subtle"]
 secp256k1 = ["k256", "elliptic-curve", "subtle"]
+std = ["alloc"]
 
 [dependencies]
 curve25519-dalek = { version = "4.0.0-pre.1", optional = true }
@@ -27,6 +29,7 @@ rand_chacha = { version = "0.3", default-features = false }
 rand_core = "0.6"
 serde = { version = "1.0", default-features = false, features = ["serde_derive"] }
 serde-big-array = { version = "0.3", features = ["const-generics"] }
+serde_cbor = { version = "0.11", optional = true }
 sha2 = { version = "0.9", default-features = false }
 subtle = { version = "2.4", optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"] }

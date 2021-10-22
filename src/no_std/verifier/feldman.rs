@@ -3,10 +3,8 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use crate::{
-    util::{bytes_to_field, get_group_size},
-    Share,
-};
+use super::super::share::Share;
+use crate::util::{bytes_to_field, get_group_size};
 use core::fmt;
 use core::marker::PhantomData;
 use ff::PrimeField;

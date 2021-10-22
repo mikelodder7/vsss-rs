@@ -22,7 +22,7 @@
 //! Combining shares back into the original secret is identical across all methods
 //! and is available for each scheme for convenience.
 //!
-//! This crate is no-std compliant and uses const generics to specify sizes.
+//! This crate is no-standard compliant and uses const generics to specify sizes.
 //!
 //! This crate supports 255 as the maximum number of shares to be requested.
 //! Anything higher is pretty ridiculous but if such a use case exists please let me know.
@@ -151,9 +151,23 @@
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-#[cfg(test)]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+extern crate alloc;
+
+#[cfg(any(feature = "std", test))]
 #[macro_use]
 extern crate std;
+
+mod lib {
+    #[cfg(all(feature = "alloc", not(feature = "std")))]
+    pub use alloc::collections::BTreeSet;
+    #[cfg(all(feature = "alloc", not(feature = "std")))]
+    pub use alloc::vec::Vec;
+    #[cfg(feature = "std")]
+    pub use std::collections::BTreeSet;
+    #[cfg(feature = "std")]
+    pub use std::vec::Vec;
+}
 
 #[cfg(test)]
 mod tests;
@@ -162,23 +176,30 @@ mod tests;
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
 mod error;
-mod feldman;
-mod pedersen;
-mod polynomial;
+#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
+mod no_std;
 #[cfg(feature = "secp256k1")]
 #[cfg_attr(docsrs, doc(cfg(feature = "secp256k1")))]
 pub mod secp256k1;
-mod shamir;
-mod share;
+#[cfg(any(feature = "std", feature = "alloc"))]
+mod standard;
 mod util;
-mod verifier;
 
-use polynomial::*;
 use util::*;
 
 pub use error::*;
-pub use feldman::*;
-pub use pedersen::*;
-pub use shamir::*;
-pub use share::*;
-pub use verifier::*;
+#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
+pub use no_std::*;
+#[cfg(any(feature = "std", feature = "alloc"))]
+pub use standard::*;
+
+/// Use shamir split regardless of no-std or std used
+#[macro_export]
+macro_rules! shamir_split {
+    ($threshold:expr, $limit:expr, $secret:expr, $rng:expr) => {
+        #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
+        Shamir::<$threshold, $limit>::split_secret($secret, $rng)
+        #[cfg(any(feature = "std", feature = "alloc"))]
+        Shamir::split_secret($secret, $rng, $threshold, $limit)
+    };
+}

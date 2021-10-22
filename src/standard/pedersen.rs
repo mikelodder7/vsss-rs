@@ -3,7 +3,9 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir, Share};
+use super::{FeldmanVerifier, PedersenVerifier, Shamir, Share};
+use crate::lib::*;
+use crate::Error;
 use core::marker::PhantomData;
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
@@ -13,21 +15,15 @@ use zeroize::Zeroize;
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
-pub struct PedersenResult<
-    F: PrimeField,
-    G: Group + GroupEncoding + ScalarMul<F>,
-    const S: usize,
-    const T: usize,
-    const N: usize,
-> {
+pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The random blinding factor randomly generated or supplied
     pub blinding: F,
     /// The blinding shares
-    pub blind_shares: [Share<S>; N],
+    pub blind_shares: Vec<Share>,
     /// The secret shares
-    pub secret_shares: [Share<S>; N],
+    pub secret_shares: Vec<Share>,
     /// The verifier for validating shares
-    pub verifier: PedersenVerifier<F, G, T>,
+    pub verifier: PedersenVerifier<F, G>,
 }
 
 /// Pedersen's Verifiable secret sharing scheme.
@@ -40,9 +36,14 @@ pub struct PedersenResult<
 /// that both may be needed for other protocols like Gennaro's DKG. Otherwise,
 /// the Feldman verifiers may be discarded.
 #[derive(Copy, Clone, Debug)]
-pub struct Pedersen<const T: usize, const N: usize>;
+pub struct Pedersen {
+    /// The threshold necessary for combine
+    pub t: usize,
+    /// The number of shares to allocate
+    pub n: usize,
+}
 
-impl<const T: usize, const N: usize> Pedersen<T, N> {
+impl Pedersen {
     /// Create shares from a secret.
     /// F is the prime field
     /// S is the number of bytes used to represent F.
@@ -52,19 +53,24 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
     /// If [`None`], the default generator is used.
     /// `blind_factor_generator` is the generator point to use for blinding factor shares.
     /// If [`None`], a random generator is used
-    pub fn split_secret<F, G, R, const S: usize>(
+    pub fn split_secret<F, G, R>(
+        &self,
         secret: F,
         blinding: Option<F>,
         share_generator: Option<G>,
         blind_factor_generator: Option<G>,
         rng: &mut R,
-    ) -> Result<PedersenResult<F, G, S, T, N>, Error>
+    ) -> Result<PedersenResult<F, G>, Error>
     where
         F: PrimeField + Zeroize,
         G: Group + GroupEncoding + Default + ScalarMul<F>,
         R: RngCore + CryptoRng,
     {
-        Shamir::<T, N>::check_params(Some(secret))?;
+        let shamir = Shamir {
+            t: self.t,
+            n: self.n,
+        };
+        shamir.check_params(Some(secret))?;
 
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
@@ -77,18 +83,18 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
 
         let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
         let (secret_shares, secret_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(secret, &mut crng);
+            shamir.get_shares_and_polynomial(secret, &mut crng);
         let (blind_shares, blinding_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(blinding, &mut crng);
+            shamir.get_shares_and_polynomial(blinding, &mut crng);
 
-        let mut feldman_commitments = [G::default(); T];
-        let mut pedersen_commitments = [G::default(); T];
+        let mut feldman_commitments = Vec::with_capacity(self.t);
+        let mut pedersen_commitments = Vec::with_capacity(self.t);
         // {(g^p0 h^r0), (g^p1, h^r1), ..., (g^pn, h^rn)}
-        for i in 0..T {
+        for i in 0..self.t {
             let g_i = g * secret_polynomial.coefficients[i];
             let h_i = h * blinding_polynomial.coefficients[i];
-            feldman_commitments[i] = g_i;
-            pedersen_commitments[i] = g_i + h_i;
+            feldman_commitments.push(g_i);
+            pedersen_commitments.push(g_i + h_i);
         }
         Ok(PedersenResult {
             blinding,
@@ -109,11 +115,15 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
     /// Reconstruct a secret from shares created from `split_secret`.
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
-    pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
+    pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
     where
         F: PrimeField,
     {
-        Shamir::<T, N>::combine_shares::<F, S>(shares)
+        Shamir {
+            t: self.t,
+            n: self.n,
+        }
+        .combine_shares::<F>(shares)
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
@@ -122,11 +132,15 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
     ///
     /// Exists to support operations like threshold BLS where the shares
     /// operate in `F` but the partial signatures operate in `G`.
-    pub fn combine_shares_group<F, G, const S: usize>(shares: &[Share<S>]) -> Result<G, Error>
+    pub fn combine_shares_group<F, G>(&self, shares: &[Share]) -> Result<G, Error>
     where
         F: PrimeField,
         G: Group + GroupEncoding + ScalarMul<F> + Default,
     {
-        Shamir::<T, N>::combine_shares_group::<F, G, S>(shares)
+        Shamir {
+            t: self.t,
+            n: self.n,
+        }
+        .combine_shares_group::<F, G>(shares)
     }
 }

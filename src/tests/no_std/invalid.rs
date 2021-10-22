@@ -2,7 +2,7 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-use super::utils::MockRng;
+use super::super::utils::MockRng;
 use crate::{Feldman, Pedersen, Shamir, Share};
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};

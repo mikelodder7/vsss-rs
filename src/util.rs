@@ -24,6 +24,7 @@ pub fn bytes_to_group<G: Group + GroupEncoding>(bytes: &[u8]) -> Option<G> {
     }
 }
 
+#[cfg(all(not(feature = "alloc"), not(feature = "std")))]
 pub fn get_group_size<G: GroupEncoding>() -> usize {
     let g = G::Repr::default();
     g.as_ref().len()
