@@ -3,14 +3,14 @@ authors = ["Michael Lodder <redmike7@gmail.com>", "Dave Huseby <dave@linuxprogra
 categories = ["cryptography", "no-std", "algorithms"]
 description = "Verifiable Secret Sharing Schemes for splitting, combining and verifying secret shares"
 documentation = "https://docs.rs/vsss-rs"
-edition = "2018"
+edition = "2021"
 homepage = "https://github.com/mikelodder7/vsss-rs"
 keywords = ["crypto", "sharing", "secret", "verifiable"]
 license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "2.0.0-pre0"
+version = "2.0.0-pre2"
 
 [features]
 default = ["curve25519", "secp256k1"]
@@ -20,7 +20,7 @@ secp256k1 = ["k256", "elliptic-curve", "subtle"]
 std = ["alloc"]
 
 [dependencies]
-curve25519-dalek = { version = "4.0.0-pre.1", optional = true }
+curve25519-dalek = { version = "4.0.0-pre.2", optional = true }
 elliptic-curve = { version = "0.10", features = ["ecdh"], optional = true }
 ff = "0.10"
 group = "0.10"
@@ -30,13 +30,13 @@ rand_core = "0.6"
 serde = { version = "1.0", default-features = false, features = ["serde_derive"] }
 serde-big-array = { version = "0.3", features = ["const-generics"] }
 serde_cbor = { version = "0.11", optional = true }
-sha2 = { version = "0.9", default-features = false }
+sha2 = { version = "0.10", default-features = false }
 subtle = { version = "2.4", optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
 bls12_381_plus = "0.5"
-curve25519-dalek = "4.0.0-pre.1"
+curve25519-dalek = "4.0.0-pre.2"
 ed25519-dalek = "1.0"
 k256 = { version = "0.9", features = ["arithmetic", "bits"] }
 p256 = { version = "0.9", features = ["arithmetic", "bits"] }
@@ -46,5 +46,5 @@ rand_xorshift = "0.3"
 serde_json = "1.0"
 serde_cbor = "0.11"
 serde_bare = "0.5"
-sha2 = "0.9"
+sha2 = "0.10"
 x25519-dalek = "1.1"
