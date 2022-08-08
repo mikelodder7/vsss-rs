@@ -5,7 +5,13 @@ All notable changes to this crate will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v1.4.0 - 20201-10-21
+## v2.0.0 - 2022-08-08
+
+- Add both standard and non-standard modes
+- Update dependencies
+- Add wrapper for curve25519-dalek
+
+## v1.4.0 - 2021-10-21
 
 - Namespace Wrappers
 - Add Wrapper for k256
