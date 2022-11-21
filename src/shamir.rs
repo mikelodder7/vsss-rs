@@ -170,7 +170,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         if N > 255 {
             return Err(Error::SharingMaxRequest);
         }
-        if secret.is_some() && secret.unwrap().is_zero() {
+        if secret.is_some() && secret.unwrap().is_zero().unwrap_u8() == 1u8 {
             return Err(Error::InvalidShare);
         }
         Ok(())
