@@ -8,23 +8,27 @@
 //! the wrappers implement the [`From`] and [`Into`] traits.
 use core::{
     borrow::Borrow,
-    convert::TryFrom,
     fmt,
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
+use elliptic_curve::{
+    bigint::{U512, ArrayEncoding},
+    generic_array::GenericArray,
+    ops::Reduce,
+    sec1::{FromEncodedPoint, ToEncodedPoint}
+};
 use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
 use k256::{
-    AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar, ScalarBytes,
+    AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar
 };
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use subtle::{Choice, ConditionallySelectable, CtOption};
+use subtle::{Choice, ConditionallySelectable, CtOption, ConstantTimeEq};
 
 /// Wrapper around secp256k1 ProjectivePoint that handles serialization
 #[derive(Copy, Clone, Debug, Eq)]
@@ -51,11 +55,11 @@ impl Group for WrappedProjectivePoint {
     }
 
     fn identity() -> Self {
-        Self(ProjectivePoint::identity())
+        Self(ProjectivePoint::IDENTITY)
     }
 
     fn generator() -> Self {
-        Self(ProjectivePoint::generator())
+        Self(ProjectivePoint::GENERATOR)
     }
 
     fn is_identity(&self) -> Choice {
@@ -268,7 +272,7 @@ impl GroupEncoding for WrappedProjectivePoint {
 
 impl Default for WrappedProjectivePoint {
     fn default() -> Self {
-        Self(ProjectivePoint::identity())
+        Self(ProjectivePoint::IDENTITY)
     }
 }
 
@@ -308,8 +312,9 @@ impl<'de> Visitor<'de> for WrappedProjectivePointVisitor {
         E: de::Error,
     {
         if let Ok(ep) = EncodedPoint::from_bytes(v) {
-            if let Some(pp) = ProjectivePoint::from_encoded_point(&ep) {
-                return Ok(WrappedProjectivePoint(pp));
+            let pp = ProjectivePoint::from_encoded_point(&ep);
+            if pp.is_some().unwrap_u8() == 1u8 {
+                return Ok(WrappedProjectivePoint(pp.unwrap()));
             }
         }
         Err(de::Error::custom(
@@ -334,8 +339,16 @@ pub struct WrappedScalar(pub Scalar);
 impl WrappedScalar {
     /// Parses the given byte array as a scalar.
     /// Subtracts the modulus when the byte array is larger than the modulus.
-    pub fn from_bytes_reduced(bytes: &FieldBytes) -> Self {
-        Self(Scalar::from_bytes_reduced(bytes))
+    pub fn from_be_bytes_reduced(bytes: &[u8; 64]) -> Self {
+        let input = U512::from_be_byte_array(*GenericArray::from_slice(bytes));
+        Self(Scalar::from_uint_reduced(input))
+    }
+
+    /// Parses the given byte array as a scalar.
+    /// Subtracts the modulus when the byte array is larger than the modulus.
+    pub fn from_le_bytes_reduced(bytes: &[u8; 64]) -> Self {
+        let input = U512::from_le_byte_array(*GenericArray::from_slice(bytes));
+        Self(Scalar::from_uint_reduced(input))
     }
 }
 
@@ -352,8 +365,8 @@ impl Field for WrappedScalar {
         Self(Scalar::one())
     }
 
-    fn is_zero(&self) -> bool {
-        self.0 == Scalar::zero()
+    fn is_zero(&self) -> Choice {
+        self.0.is_zero()
     }
 
     fn square(&self) -> Self {
@@ -377,18 +390,20 @@ impl Field for WrappedScalar {
 impl PrimeField for WrappedScalar {
     type Repr = FieldBytes;
 
-    fn from_repr(bytes: Self::Repr) -> Option<Self> {
-        if let Some(s) = Scalar::from_repr(bytes) {
-            return Some(Self(s));
+    fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
+        let res = Scalar::from_repr(bytes);
+        if res.is_some().unwrap_u8() == 1u8 {
+            CtOption::new(Self(res.unwrap()), Choice::from(1u8))
+        } else {
+            CtOption::new(Self::default(), Choice::from(0u8))
         }
-        None
     }
 
     fn to_repr(&self) -> Self::Repr {
         self.0.to_repr()
     }
 
-    fn is_odd(&self) -> bool {
+    fn is_odd(&self) -> Choice {
         self.0.is_odd()
     }
 
@@ -415,6 +430,12 @@ impl From<u64> for WrappedScalar {
 impl ConditionallySelectable for WrappedScalar {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         Self(Scalar::conditional_select(&a.0, &b.0, choice))
+    }
+}
+
+impl ConstantTimeEq for WrappedScalar {
+    fn ct_eq(&self, other: &Self) -> Choice {
+       self.0.ct_eq(&other.0)
     }
 }
 
@@ -617,28 +638,7 @@ impl Serialize for WrappedScalar {
     where
         S: Serializer,
     {
-        let sb = ScalarBytes::from_scalar(&self.0);
-        serializer.serialize_bytes(sb.as_bytes())
-    }
-}
-
-struct WrappedScalarVisitor;
-
-impl<'de> Visitor<'de> for WrappedScalarVisitor {
-    type Value = WrappedScalar;
-
-    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "an array of bytes")
-    }
-
-    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        if let Ok(sb) = ScalarBytes::try_from(v) {
-            return Ok(WrappedScalar(sb.into_scalar()));
-        }
-        Err(de::Error::custom("failed to deserialize K256 Scalar"))
+        self.0.serialize(serializer)
     }
 }
 
@@ -647,7 +647,8 @@ impl<'de> Deserialize<'de> for WrappedScalar {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_bytes(WrappedScalarVisitor)
+        let scalar = Scalar::deserialize(deserializer)?;
+        Ok(WrappedScalar(scalar))
     }
 }
 

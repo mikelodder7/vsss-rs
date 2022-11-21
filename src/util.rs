@@ -9,7 +9,12 @@ pub fn bytes_to_field<F: PrimeField>(bytes: &[u8]) -> Option<F> {
     let mut s_repr = F::Repr::default();
     s_repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
 
-    F::from_repr(s_repr)
+    let res = F::from_repr(s_repr);
+    if res.is_some().unwrap_u8() == 1u8 {
+        Some(res.unwrap())
+    } else {
+        None
+    }
 }
 
 pub fn bytes_to_group<G: Group + GroupEncoding>(bytes: &[u8]) -> Option<G> {
