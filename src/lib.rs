@@ -41,21 +41,19 @@
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
 //! use rand::rngs::OsRng;
 //!
-//! fn main() {
-//!     let mut osrng = OsRng::default();
-//!     let sk = SecretKey::random(&mut osrng);
-//!     let nzs = sk.to_secret_scalar();
-//!     // 32 for field size, 1 for identifier = 33
-//!     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
-//!     assert!(res.is_ok());
-//!     let shares = res.unwrap();
-//!     let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
-//!     assert!(res.is_ok());
-//!     let scalar = res.unwrap();
-//!     let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
-//!     let sk_dup = SecretKey::from(nzs_dup);
-//!     assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
-//! }
+//! let mut osrng = OsRng::default();
+//! let sk = SecretKey::random(&mut osrng);
+//! let nzs = sk.to_nonzero_scalar();
+//! // 32 for field size, 1 for identifier = 33
+//! let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
+//! assert!(res.is_ok());
+//! let shares = res.unwrap();
+//! let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//! assert!(res.is_ok());
+//! let scalar = res.unwrap();
+//! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+//! let sk_dup = SecretKey::from(nzs_dup);
+//! assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 //! ```
 //!
 //! To split a k256 secret using Shamir
@@ -66,20 +64,18 @@
 //! use k256::{NonZeroScalar, SecretKey};
 //! use rand::rngs::OsRng;
 //!
-//! fn main() {
-//!     let mut osrng = OsRng::default();
-//!     let sk = SecretKey::random(&mut osrng);
-//!     let secret = WrappedScalar(*sk.to_secret_scalar());
-//!     let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(secret, &mut osrng);
-//!     assert!(res.is_ok());
-//!     let shares = res.unwrap();
-//!     let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
-//!     assert!(res.is_ok());
-//!     let scalar = res.unwrap();
-//!     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
-//!     let sk_dup = SecretKey::from(nzs_dup);
-//!     assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
-//! }
+//! let mut osrng = OsRng::default();
+//! let sk = SecretKey::random(&mut osrng);
+//! let secret = WrappedScalar(*sk.to_nonzero_scalar());
+//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(secret, &mut osrng);
+//! assert!(res.is_ok());
+//! let shares = res.unwrap();
+//! let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
+//! assert!(res.is_ok());
+//! let scalar = res.unwrap();
+//! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+//! let sk_dup = SecretKey::from(nzs_dup);
+//! assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 //! ```
 //!
 //! Feldman or Pedersen return extra information for verification using their respective verifiers
@@ -90,20 +86,18 @@
 //! use ff::Field;
 //! use rand::rngs::OsRng;
 //!
-//! fn main() {
-//!     let mut rng = OsRng::default();
-//!     let secret = Scalar::random(&mut rng);
-//!     let res = Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(secret, None, &mut rng);
-//!     assert!(res.is_ok());
-//!     let (shares, verifier) = res.unwrap();
-//!     for s in &shares {
-//!         assert!(verifier.verify(s));
-//!     }
-//!     let res = Feldman::<2, 3>::combine_shares::<Scalar, 33>(&shares);
-//!     assert!(res.is_ok());
-//!     let secret_1 = res.unwrap();
-//!     assert_eq!(secret, secret_1);
+//! let mut rng = OsRng::default();
+//! let secret = Scalar::random(&mut rng);
+//! let res = Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(secret, None, &mut rng);
+//! assert!(res.is_ok());
+//! let (shares, verifier) = res.unwrap();
+//! for s in &shares {
+//!     assert!(verifier.verify(s));
 //! }
+//! let res = Feldman::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//! assert!(res.is_ok());
+//! let secret_1 = res.unwrap();
+//! assert_eq!(secret, secret_1);
 //! ```
 //!
 //! Curve25519 is not a prime field but this crate does support it using
@@ -119,23 +113,21 @@
 //! use rand::rngs::OsRng;
 //! use x25519_dalek::StaticSecret;
 //!
-//! fn main() {
-//!     let mut osrng = rand::rngs::OsRng::default();
-//!     let sc = Scalar::random(&mut osrng);
-//!     let sk1 = StaticSecret::from(sc.to_bytes());
-//!     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-//!     let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng);
-//!     assert!(res.is_ok());
-//!     let shares = res.unwrap();
-//!     let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
-//!     assert!(res.is_ok());
-//!     let scalar = res.unwrap();
-//!     assert_eq!(scalar.0, sc);
-//!     let sk2 = StaticSecret::from(scalar.0.to_bytes());
-//!     let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
-//!     assert_eq!(sk2.to_bytes(), sk1.to_bytes());
-//!     assert_eq!(ske1.to_bytes(), ske2.to_bytes());
-//! }
+//! let mut osrng = rand::rngs::OsRng::default();
+//! let sc = Scalar::random(&mut osrng);
+//! let sk1 = StaticSecret::from(sc.to_bytes());
+//! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
+//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng);
+//! assert!(res.is_ok());
+//! let shares = res.unwrap();
+//! let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
+//! assert!(res.is_ok());
+//! let scalar = res.unwrap();
+//! assert_eq!(scalar.0, sc);
+//! let sk2 = StaticSecret::from(scalar.0.to_bytes());
+//! let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
+//! assert_eq!(sk2.to_bytes(), sk1.to_bytes());
+//! assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 //! ```
 #![no_std]
 #![deny(

@@ -13,22 +13,20 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use elliptic_curve::{
-    bigint::{U512, ArrayEncoding},
+    bigint::{ArrayEncoding, U512},
     generic_array::GenericArray,
     ops::Reduce,
-    sec1::{FromEncodedPoint, ToEncodedPoint}
+    sec1::{FromEncodedPoint, ToEncodedPoint},
 };
 use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
-use k256::{
-    AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar
-};
+use k256::{AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar};
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use subtle::{Choice, ConditionallySelectable, CtOption, ConstantTimeEq};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wrapper around secp256k1 ProjectivePoint that handles serialization
 #[derive(Copy, Clone, Debug, Eq)]
@@ -333,7 +331,7 @@ impl<'de> Deserialize<'de> for WrappedProjectivePoint {
 }
 
 /// Wrapper around secp256k1 Scalar that handles serialization
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, Eq, Default)]
 pub struct WrappedScalar(pub Scalar);
 
 impl WrappedScalar {
@@ -435,19 +433,13 @@ impl ConditionallySelectable for WrappedScalar {
 
 impl ConstantTimeEq for WrappedScalar {
     fn ct_eq(&self, other: &Self) -> Choice {
-       self.0.ct_eq(&other.0)
+        self.0.ct_eq(&other.0)
     }
 }
 
 impl PartialEq for WrappedScalar {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
-    }
-}
-
-impl Default for WrappedScalar {
-    fn default() -> Self {
-        Self(Scalar::default())
     }
 }
 

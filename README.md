@@ -57,7 +57,7 @@ use rand::rngs::OsRng;
 fn main() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
+    let nzs = sk.to_nonzero_scalar();
     // 32 for field size, 1 for identifier = 33
     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
@@ -67,7 +67,7 @@ fn main() {
     let scalar = res.unwrap();
     let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
     let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+    assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 }
 ```
 
@@ -84,7 +84,7 @@ use rand::rngs::OsRng;
 fn main() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
+    let nzs = sk.to_nonzero_scalar();
     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
@@ -93,7 +93,7 @@ fn main() {
     let scalar = res.unwrap();
     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
     let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+    assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 }
 ```
 

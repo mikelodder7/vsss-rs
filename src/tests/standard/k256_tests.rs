@@ -28,7 +28,7 @@ fn valid_tests() {
 fn key_tests() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let secret = WrappedScalar(*sk.to_secret_scalar());
+    let secret = WrappedScalar(*sk.to_nonzero_scalar());
     let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(secret, &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
@@ -37,14 +37,14 @@ fn key_tests() {
     let scalar = res.unwrap();
     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
     let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+    assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 }
 
 #[test]
 fn verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let secret = WrappedScalar(*sk.to_secret_scalar());
+    let secret = WrappedScalar(*sk.to_nonzero_scalar());
     let res = Feldman { t: 2, n: 3 }
         .split_secret::<WrappedScalar, WrappedProjectivePoint, OsRng>(secret, None, &mut osrng);
     assert!(res.is_ok());

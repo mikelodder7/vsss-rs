@@ -162,8 +162,8 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 {
     /// Check whether the share is valid according this verifier set
     pub fn verify<const S: usize>(&self, share: &Share<S>, blind_share: &Share<S>) -> bool {
-        let secret = bytes_to_field::<F>(&share.value());
-        let blinding = bytes_to_field::<F>(&blind_share.value());
+        let secret = bytes_to_field::<F>(share.value());
+        let blinding = bytes_to_field::<F>(blind_share.value());
         if secret.is_none() || blinding.is_none() {
             return false;
         }
