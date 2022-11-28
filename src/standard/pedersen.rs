@@ -1,17 +1,16 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-use super::{FeldmanVerifier, PedersenVerifier, Shamir, Share};
-use crate::lib::*;
-use crate::Error;
 use core::marker::PhantomData;
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use zeroize::Zeroize;
+
+use super::{FeldmanVerifier, PedersenVerifier, Shamir, Share};
+use crate::{lib::*, Error};
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
@@ -66,10 +65,7 @@ impl Pedersen {
         G: Group + GroupEncoding + Default + ScalarMul<F>,
         R: RngCore + CryptoRng,
     {
-        let shamir = Shamir {
-            t: self.t,
-            n: self.n,
-        };
+        let shamir = Shamir { t: self.t, n: self.n };
         shamir.check_params(Some(secret))?;
 
         let mut seed = [0u8; 32];
@@ -82,10 +78,8 @@ impl Pedersen {
         t.zeroize();
 
         let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
-        let (secret_shares, secret_polynomial) =
-            shamir.get_shares_and_polynomial(secret, &mut crng);
-        let (blind_shares, blinding_polynomial) =
-            shamir.get_shares_and_polynomial(blinding, &mut crng);
+        let (secret_shares, secret_polynomial) = shamir.get_shares_and_polynomial(secret, &mut crng);
+        let (blind_shares, blinding_polynomial) = shamir.get_shares_and_polynomial(blinding, &mut crng);
 
         let mut feldman_commitments = Vec::with_capacity(self.t);
         let mut pedersen_commitments = Vec::with_capacity(self.t);
@@ -116,14 +110,8 @@ impl Pedersen {
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
-    where
-        F: PrimeField,
-    {
-        Shamir {
-            t: self.t,
-            n: self.n,
-        }
-        .combine_shares::<F>(shares)
+    where F: PrimeField {
+        Shamir { t: self.t, n: self.n }.combine_shares::<F>(shares)
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
@@ -137,10 +125,6 @@ impl Pedersen {
         F: PrimeField,
         G: Group + GroupEncoding + ScalarMul<F> + Default,
     {
-        Shamir {
-            t: self.t,
-            n: self.n,
-        }
-        .combine_shares_group::<F, G>(shares)
+        Shamir { t: self.t, n: self.n }.combine_shares_group::<F, G>(shares)
     }
 }

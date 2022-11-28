@@ -1,12 +1,11 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use super::super::utils::MockRng;
-use crate::{Feldman, Pedersen, Shamir, Share};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use zeroize::Zeroize;
+
+use super::super::utils::MockRng;
+use crate::{Feldman, Pedersen, Shamir, Share};
 
 pub fn split_invalid_args<
     F: PrimeField + Zeroize,
@@ -23,26 +22,14 @@ pub fn split_invalid_args<
     assert!(Feldman::<3, 2>::split_secret::<F, G, MockRng, S>(secret, None, &mut rng).is_err());
     assert!(Feldman::<1, 8>::split_secret::<F, G, MockRng, S>(secret, None, &mut rng).is_err());
 
-    assert!(
-        Pedersen::<0, 0>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng)
-            .is_err()
-    );
-    assert!(
-        Pedersen::<3, 2>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng)
-            .is_err()
-    );
-    assert!(
-        Pedersen::<1, 8>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng)
-            .is_err()
-    );
+    assert!(Pedersen::<0, 0>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng).is_err());
+    assert!(Pedersen::<3, 2>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng).is_err());
+    assert!(Pedersen::<1, 8>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng).is_err());
 
     let secret = F::zero();
     assert!(Shamir::<2, 3>::split_secret::<F, MockRng, S>(secret, &mut rng).is_err());
     assert!(Feldman::<2, 3>::split_secret::<F, G, MockRng, S>(secret, None, &mut rng).is_err());
-    assert!(
-        Pedersen::<2, 3>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng)
-            .is_err()
-    );
+    assert!(Pedersen::<2, 3>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng).is_err());
 }
 
 pub fn combine_invalid<F: PrimeField, const S: usize>() {

@@ -1,16 +1,12 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use crate::{tests::utils::MockRng, util::bytes_to_field, Feldman, Pedersen, Shamir};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use zeroize::Zeroize;
 
-pub fn combine_single<
-    F: PrimeField + Zeroize,
-    G: Group + GroupEncoding + Default + ScalarMul<F>,
->() {
+use crate::{tests::utils::MockRng, util::bytes_to_field, Feldman, Pedersen, Shamir};
+
+pub fn combine_single<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default + ScalarMul<F>>() {
     let shamir = Shamir { t: 2, n: 3 };
     let secret: F = bytes_to_field(b"hello").unwrap();
     let mut rng = MockRng::default();
@@ -36,8 +32,7 @@ pub fn combine_single<
     assert_eq!(secret, secret_1);
 
     // Pedersen test
-    let res =
-        Pedersen { t: 2, n: 3 }.split_secret::<F, G, MockRng>(secret, None, None, None, &mut rng);
+    let res = Pedersen { t: 2, n: 3 }.split_secret::<F, G, MockRng>(secret, None, None, None, &mut rng);
     assert!(res.is_ok());
     let p_res = res.unwrap();
     for (i, s) in p_res.secret_shares.iter().enumerate() {
@@ -64,8 +59,7 @@ pub fn combine_all<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default +
     assert!(res.is_ok());
     let (feldman_shares, verifier) = res.unwrap();
 
-    let res =
-        Pedersen { t: 3, n: 5 }.split_secret::<F, G, OsRng>(secret, None, None, None, &mut rng);
+    let res = Pedersen { t: 3, n: 5 }.split_secret::<F, G, OsRng>(secret, None, None, None, &mut rng);
     assert!(res.is_ok());
     let ped_res = res.unwrap();
 

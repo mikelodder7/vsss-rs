@@ -1,0 +1,26 @@
+on: [pull_request]
+name: Clippy
+jobs:
+  clippy_check:
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          components: clippy, rustfmt
+          toolchain: nightly-2022-11-05
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - name: Install cargo-lints
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-lints
+      - name: Clippy lints
+        uses: actions-rs/cargo@v1
+        with:
+          command: lints
+          args: clippy --all-targets

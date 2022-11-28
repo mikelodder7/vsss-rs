@@ -1,7 +1,5 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 /// Errors during secret sharing
 #[derive(Copy, Clone, Debug)]
 pub enum Error {

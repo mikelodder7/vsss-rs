@@ -1,16 +1,15 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use crate::util::bytes_to_group;
-use crate::{bytes_to_field, Error, Polynomial, Share};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use core::{
     mem::MaybeUninit,
     ops::{AddAssign, Mul},
 };
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_core::{CryptoRng, RngCore};
+
+use crate::{bytes_to_field, util::bytes_to_group, Error, Polynomial, Share};
 
 /// Shamir's simple secret sharing scheme
 /// T is the threshold
@@ -22,10 +21,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     /// Create shares from a secret.
     /// F is the prime field
     /// S is the number of bytes used to represent F
-    pub fn split_secret<F, R, const S: usize>(
-        secret: F,
-        rng: &mut R,
-    ) -> Result<[Share<S>; N], Error>
+    pub fn split_secret<F, R, const S: usize>(secret: F, rng: &mut R) -> Result<[Share<S>; N], Error>
     where
         F: PrimeField,
         R: RngCore + CryptoRng,
@@ -40,9 +36,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
-    where
-        F: PrimeField,
-    {
+    where F: PrimeField {
         Self::combine::<F, F, S>(shares, bytes_to_field)
     }
 
@@ -60,10 +54,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
         Self::combine::<F, G, S>(shares, bytes_to_group)
     }
 
-    fn combine<F, S, const SS: usize>(
-        shares: &[Share<SS>],
-        f: fn(&[u8]) -> Option<S>,
-    ) -> Result<S, Error>
+    fn combine<F, S, const SS: usize>(shares: &[Share<SS>], f: fn(&[u8]) -> Option<S>) -> Result<S, Error>
     where
         F: PrimeField,
         S: Default + Copy + AddAssign + Mul<F, Output = S>,
@@ -158,9 +149,7 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     }
 
     pub(crate) fn check_params<F>(secret: Option<F>) -> Result<(), Error>
-    where
-        F: PrimeField,
-    {
+    where F: PrimeField {
         if N < T {
             return Err(Error::SharingLimitLessThanThreshold);
         }

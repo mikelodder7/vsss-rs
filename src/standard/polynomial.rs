@@ -1,11 +1,10 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-use crate::lib::*;
 use ff::PrimeField;
 use rand_core::{CryptoRng, RngCore};
+
+use crate::lib::*;
 
 /// The polynomial used for generating the shares
 pub struct Polynomial<F: PrimeField + Copy + Default> {
@@ -33,12 +32,12 @@ impl<F: PrimeField + Copy + Default> Polynomial<F> {
         // Compute the polynomial value using Horner's Method
         let degree = threshold - 1;
         // b_n = a_n
-        let mut out = self.coefficients[degree].clone();
+        let mut out = self.coefficients[degree];
 
         for i in (0..degree).rev() {
             // b_{n-1} = a_{n-1} + b_n*x
             out *= x;
-            out += self.coefficients[i].clone();
+            out += self.coefficients[i];
         }
         out
     }

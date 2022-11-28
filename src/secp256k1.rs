@@ -1,7 +1,5 @@
-/*
-    Copyright. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 //! These are convenience wrappers for the k256::Scalar and
 //! k256::ProjectivePoint types.
 //! The intent is the consumer will not have to use these directly since
@@ -12,6 +10,7 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
 use elliptic_curve::{
     bigint::{ArrayEncoding, U512},
     generic_array::GenericArray,
@@ -24,7 +23,10 @@ use k256::{AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoi
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
 };
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -70,8 +72,7 @@ impl Group for WrappedProjectivePoint {
 }
 
 impl<T> Sum<T> for WrappedProjectivePoint
-where
-    T: Borrow<WrappedProjectivePoint>,
+where T: Borrow<WrappedProjectivePoint>
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
@@ -288,9 +289,7 @@ impl From<ProjectivePoint> for WrappedProjectivePoint {
 
 impl Serialize for WrappedProjectivePoint {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         let ep = self.0.to_encoded_point(false);
         serializer.serialize_bytes(ep.as_bytes())
     }
@@ -306,26 +305,20 @@ impl<'de> Visitor<'de> for WrappedProjectivePointVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
+    where E: de::Error {
         if let Ok(ep) = EncodedPoint::from_bytes(v) {
             let pp = ProjectivePoint::from_encoded_point(&ep);
             if pp.is_some().unwrap_u8() == 1u8 {
                 return Ok(WrappedProjectivePoint(pp.unwrap()));
             }
         }
-        Err(de::Error::custom(
-            "failed to deserialize K256 ProjectivePoint",
-        ))
+        Err(de::Error::custom("failed to deserialize K256 ProjectivePoint"))
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedProjectivePoint {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         deserializer.deserialize_bytes(WrappedProjectivePointVisitor)
     }
 }
@@ -388,6 +381,10 @@ impl Field for WrappedScalar {
 impl PrimeField for WrappedScalar {
     type Repr = FieldBytes;
 
+    const CAPACITY: u32 = Scalar::CAPACITY;
+    const NUM_BITS: u32 = Scalar::NUM_BITS;
+    const S: u32 = Scalar::S;
+
     fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
         let res = Scalar::from_repr(bytes);
         if res.is_some().unwrap_u8() == 1u8 {
@@ -405,14 +402,9 @@ impl PrimeField for WrappedScalar {
         self.0.is_odd()
     }
 
-    const NUM_BITS: u32 = Scalar::NUM_BITS;
-    const CAPACITY: u32 = Scalar::CAPACITY;
-
     fn multiplicative_generator() -> Self {
         unimplemented!();
     }
-
-    const S: u32 = Scalar::S;
 
     fn root_of_unity() -> Self {
         unimplemented!();
@@ -627,53 +619,56 @@ impl zeroize::DefaultIsZeroes for WrappedScalar {}
 
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         self.0.serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let scalar = Scalar::deserialize(deserializer)?;
         Ok(WrappedScalar(scalar))
     }
 }
 
-#[test]
-fn serde_scalar() {
-    use ff::Field;
+#[cfg(test)]
+mod tests {
+    use k256::{ProjectivePoint, Scalar};
 
-    let rng = rand::rngs::OsRng::default();
-    let ws1 = WrappedScalar::from(Scalar::random(rng));
-    // serialize
-    let res = serde_bare::to_vec(&ws1);
-    assert!(res.is_ok());
-    let wsvec = res.unwrap();
-    // deserialize
-    let res = serde_bare::from_slice(&wsvec);
-    assert!(res.is_ok());
-    let ws2: WrappedScalar = res.unwrap();
-    assert_eq!(ws1, ws2);
-}
+    use crate::secp256k1::{WrappedProjectivePoint, WrappedScalar};
 
-#[test]
-fn serde_projective_point() {
-    use group::Group;
+    #[test]
+    fn serde_scalar() {
+        use ff::Field;
 
-    let rng = rand::rngs::OsRng::default();
-    let wpp1 = WrappedProjectivePoint::from(ProjectivePoint::random(rng));
-    // serialize
-    let res = serde_bare::to_vec(&wpp1);
-    assert!(res.is_ok());
-    let wppvec = res.unwrap();
-    // deserialize
-    let res = serde_bare::from_slice(&wppvec);
-    assert!(res.is_ok());
-    let wpp2: WrappedProjectivePoint = res.unwrap();
-    assert_eq!(wpp1, wpp2);
+        let rng = rand::rngs::OsRng::default();
+        let ws1 = WrappedScalar::from(Scalar::random(rng));
+        // serialize
+        let res = serde_bare::to_vec(&ws1);
+        assert!(res.is_ok());
+        let wsvec = res.unwrap();
+        // deserialize
+        let res = serde_bare::from_slice(&wsvec);
+        assert!(res.is_ok());
+        let ws2: WrappedScalar = res.unwrap();
+        assert_eq!(ws1, ws2);
+    }
+
+    #[test]
+    fn serde_projective_point() {
+        use group::Group;
+
+        let rng = rand::rngs::OsRng::default();
+        let wpp1 = WrappedProjectivePoint::from(ProjectivePoint::random(rng));
+        // serialize
+        let res = serde_bare::to_vec(&wpp1);
+        assert!(res.is_ok());
+        let wppvec = res.unwrap();
+        // deserialize
+        let res = serde_bare::from_slice(&wppvec);
+        assert!(res.is_ok());
+        let wpp2: WrappedProjectivePoint = res.unwrap();
+        assert_eq!(wpp1, wpp2);
+    }
 }

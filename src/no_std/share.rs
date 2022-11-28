@@ -1,17 +1,19 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 use core::{
     array::TryFromSliceError,
     convert::TryFrom,
     fmt::{self, Formatter},
 };
+
 use serde::{
     de::{self, SeqAccess, Visitor},
     ser::SerializeTuple,
-    Deserialize, Deserializer, Serialize, Serializer,
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
 };
 use zeroize::Zeroize;
 /// A Shamir simple secret share
@@ -49,9 +51,7 @@ impl<const N: usize> From<Share<N>> for [u8; N] {
 
 impl<const N: usize> Serialize for Share<N> {
     fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         let mut seq = s.serialize_tuple(N)?;
         for b in &self.0 {
             seq.serialize_element(b)?;
@@ -62,9 +62,7 @@ impl<const N: usize> Serialize for Share<N> {
 
 impl<'de, const N: usize> Deserialize<'de> for Share<N> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         struct ShareVisitor<const N: usize>;
 
         impl<'de, const N: usize> Visitor<'de> for ShareVisitor<N> {
@@ -75,14 +73,10 @@ impl<'de, const N: usize> Deserialize<'de> for Share<N> {
             }
 
             fn visit_seq<A>(self, mut s: A) -> Result<Share<N>, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            where A: SeqAccess<'de> {
                 let mut arr = [0u8; N];
                 for (i, p) in arr.iter_mut().enumerate() {
-                    *p = s
-                        .next_element()?
-                        .ok_or_else(|| de::Error::invalid_length(i, &self))?;
+                    *p = s.next_element()?.ok_or_else(|| de::Error::invalid_length(i, &self))?;
                 }
                 Ok(Share(arr))
             }

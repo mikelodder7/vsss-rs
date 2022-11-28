@@ -1,14 +1,13 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use super::{FeldmanVerifier, Shamir, Share};
-use crate::lib::Vec;
-use crate::Error;
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use core::marker::PhantomData;
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_core::{CryptoRng, RngCore};
+
+use super::{FeldmanVerifier, Shamir, Share};
+use crate::{lib::Vec, Error};
 
 /// Feldman's Verifiable secret sharing scheme.
 /// (see <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
@@ -40,10 +39,7 @@ impl Feldman {
         G: Group + GroupEncoding + Default + ScalarMul<F>,
         R: RngCore + CryptoRng,
     {
-        let shamir = Shamir {
-            t: self.t,
-            n: self.n,
-        };
+        let shamir = Shamir { t: self.t, n: self.n };
         shamir.check_params(Some(secret))?;
 
         let (shares, polynomial) = shamir.get_shares_and_polynomial(secret, rng);
@@ -58,28 +54,19 @@ impl Feldman {
             vs.push(g * polynomial.coefficients[i]);
         }
 
-        Ok((
-            shares,
-            FeldmanVerifier {
-                generator: g,
-                commitments: vs,
-                marker: PhantomData,
-            },
-        ))
+        Ok((shares, FeldmanVerifier {
+            generator: g,
+            commitments: vs,
+            marker: PhantomData,
+        }))
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
-    where
-        F: PrimeField,
-    {
-        Shamir {
-            t: self.t,
-            n: self.n,
-        }
-        .combine_shares::<F>(shares)
+    where F: PrimeField {
+        Shamir { t: self.t, n: self.n }.combine_shares::<F>(shares)
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
@@ -93,10 +80,6 @@ impl Feldman {
         F: PrimeField,
         G: Group + GroupEncoding + ScalarMul<F> + Default,
     {
-        Shamir {
-            t: self.t,
-            n: self.n,
-        }
-        .combine_shares_group::<F, G>(shares)
+        Shamir { t: self.t, n: self.n }.combine_shares_group::<F, G>(shares)
     }
 }

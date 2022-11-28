@@ -1,7 +1,5 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 use ff::PrimeField;
 use rand_core::{CryptoRng, RngCore};
