@@ -18,7 +18,7 @@ use zeroize::Zeroize;
 /// provides no integrity checking
 /// The first byte is the X-coordinate or identifier
 /// The remaining bytes are the Y-coordinate
-#[derive(Copy, Clone, Debug, PartialEq, Zeroize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroize)]
 pub struct Share<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Default for Share<N> {

@@ -30,7 +30,7 @@ use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use subtle::{Choice, ConditionallySelectable, CtOption, ConstantTimeEq};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a ristretto25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -639,7 +639,7 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
 }
 
 /// Wraps a curve25519 scalar
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, Eq, Default)]
 pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
@@ -730,12 +730,6 @@ impl ConstantTimeEq for WrappedScalar {
 impl PartialEq for WrappedScalar {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
-    }
-}
-
-impl Default for WrappedScalar {
-    fn default() -> Self {
-        Self(Scalar::default())
     }
 }
 
