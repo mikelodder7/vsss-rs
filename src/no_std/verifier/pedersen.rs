@@ -1,27 +1,29 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+use core::{fmt, marker::PhantomData};
+
+use ff::PrimeField;
+use group::{Group, GroupEncoding, ScalarMul};
+use serde::{
+    de::{Error, SeqAccess, Unexpected, Visitor},
+    ser::SerializeTuple,
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
+};
 
 use super::FeldmanVerifier;
 use crate::{
     util::{bytes_to_field, get_group_size},
     Share,
 };
-use core::{fmt, marker::PhantomData};
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
-use serde::{
-    de::{Error, SeqAccess, Unexpected, Visitor},
-    ser::SerializeTuple,
-    Deserialize, Deserializer, Serialize, Serializer,
-};
 
 /// A Pedersen verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
 #[derive(Copy, Clone, Debug)]
-pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
-{
+pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize> {
     /// The generator for the blinding factor
     pub generator: G,
     /// The feldman verifier containing the share generator and commitments
@@ -36,9 +38,7 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         let mut bytes = self.generator.to_bytes();
         let mut tv = serializer.serialize_tuple(2 * (T + 1) * bytes.as_ref().len())?;
         for b in bytes.as_ref() {
@@ -71,9 +71,7 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         struct GroupVisitor<F, G, const T: usize>
         where
             F: PrimeField,
@@ -91,17 +89,11 @@ where
             type Value = PedersenVerifier<F, G, T>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(
-                    formatter,
-                    "an array of length {}",
-                    2 * (T + 1) * get_group_size::<G>()
-                )
+                write!(formatter, "an array of length {}", 2 * (T + 1) * get_group_size::<G>())
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            where A: SeqAccess<'de> {
                 let mut group_elem = |offset: usize| -> Result<G, A::Error> {
                     let mut repr = G::Repr::default();
                     for (i, ptr) in repr.as_mut().iter_mut().enumerate() {
@@ -111,10 +103,7 @@ where
                     }
                     let opt = G::from_bytes(&repr);
                     if opt.is_none().unwrap_u8() == 1 {
-                        return Err(A::Error::invalid_type(
-                            Unexpected::Bytes(repr.as_ref()),
-                            &self,
-                        ));
+                        return Err(A::Error::invalid_type(Unexpected::Bytes(repr.as_ref()), &self));
                     }
                     Ok(opt.unwrap())
                 };
@@ -157,9 +146,7 @@ where
     }
 }
 
-impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
-    PedersenVerifier<F, G, T>
-{
+impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize> PedersenVerifier<F, G, T> {
     /// Check whether the share is valid according this verifier set
     pub fn verify<const S: usize>(&self, share: &Share<S>, blind_share: &Share<S>) -> bool {
         let secret = bytes_to_field::<F>(share.value());
@@ -171,7 +158,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
         let secret = secret.unwrap();
         let blinding = blinding.unwrap();
 
-        let x = F::from(share.identifier() as u64);
+        let x = F::from(u64::from(share.identifier()));
         let mut i = F::one();
 
         // FUTURE: execute this sum of products

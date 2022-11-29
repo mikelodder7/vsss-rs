@@ -1,18 +1,21 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-use super::invalid::*;
-use super::valid::*;
-use crate::{
-    curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
-    Feldman, FeldmanVerifier, Pedersen, PedersenResult, PedersenVerifier, Shamir,
-};
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
 use rand::rngs::OsRng;
 use x25519_dalek::StaticSecret;
+
+use super::{invalid::*, valid::*};
+use crate::{
+    curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
+    Feldman,
+    FeldmanVerifier,
+    Pedersen,
+    PedersenResult,
+    PedersenVerifier,
+    Shamir,
+};
 
 #[test]
 fn invalid_tests() {
@@ -53,11 +56,7 @@ fn key_tests() {
 fn feldman_verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = Scalar::random(&mut osrng);
-    let res = Feldman::<2, 3>::split_secret::<WrappedScalar, WrappedRistretto, OsRng, 33>(
-        sk.into(),
-        None,
-        &mut osrng,
-    );
+    let res = Feldman::<2, 3>::split_secret::<WrappedScalar, WrappedRistretto, OsRng, 33>(sk.into(), None, &mut osrng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares {
@@ -66,8 +65,7 @@ fn feldman_verifier_serde_test() {
     let res = serde_cbor::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res =
-        serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedRistretto, 2>>(&v_bytes);
+    let res = serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedRistretto, 2>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
@@ -83,8 +81,7 @@ fn feldman_verifier_serde_test() {
     let res = serde_bare::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res =
-        serde_bare::from_slice::<FeldmanVerifier<WrappedScalar, WrappedRistretto, 2>>(&v_bytes);
+    let res = serde_bare::from_slice::<FeldmanVerifier<WrappedScalar, WrappedRistretto, 2>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
@@ -115,8 +112,7 @@ fn pedersen_verifier_serde_test() {
     let res = serde_cbor::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res =
-        serde_cbor::from_slice::<PedersenVerifier<WrappedScalar, WrappedEdwards, 2>>(&v_bytes);
+    let res = serde_cbor::from_slice::<PedersenVerifier<WrappedScalar, WrappedEdwards, 2>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
@@ -132,8 +128,7 @@ fn pedersen_verifier_serde_test() {
     let res = serde_bare::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res =
-        serde_bare::from_slice::<PedersenVerifier<WrappedScalar, WrappedEdwards, 2>>(&v_bytes);
+    let res = serde_bare::from_slice::<PedersenVerifier<WrappedScalar, WrappedEdwards, 2>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);

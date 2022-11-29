@@ -1,0 +1,35 @@
+on: [push, pull_request]
+
+name: Test
+
+jobs:
+  test:
+    name: cargo test
+    runs-on: [self-hosted, linux] 
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+#      - name: test/debug
+#        uses: actions-rs/cargo@v1
+#        with:
+#          command: test
+      - name: test/release
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release
+      - name: bench
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --benches

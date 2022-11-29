@@ -1,17 +1,13 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use super::super::utils::MockRng;
-use crate::{Feldman, Pedersen, Shamir, Share};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use zeroize::Zeroize;
 
-pub fn split_invalid_args<
-    F: PrimeField + Zeroize,
-    G: Group + GroupEncoding + Default + ScalarMul<F>,
->() {
+use super::super::utils::MockRng;
+use crate::{Feldman, Pedersen, Shamir, Share};
+
+pub fn split_invalid_args<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default + ScalarMul<F>>() {
     let secret = F::one();
     let mut rng = MockRng::default();
     assert!(Shamir { t: 0, n: 0 }
@@ -65,9 +61,7 @@ pub fn combine_invalid<F: PrimeField>() {
     // No secret
     let mut share = Share(vec![0u8; 32]);
     share.0[0] = 1u8;
-    assert!(shamir
-        .combine_shares::<F>(&[share, Share(vec![2u8; 32])])
-        .is_err());
+    assert!(shamir.combine_shares::<F>(&[share, Share(vec![2u8; 32])]).is_err());
     // Invalid identifier
     assert!(shamir
         .combine_shares::<F>(&[Share(vec![0u8; 32]), Share(vec![2u8; 32])])

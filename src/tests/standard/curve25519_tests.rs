@@ -1,18 +1,22 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-use super::invalid::*;
-use super::valid::*;
-use crate::{
-    curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
-    Feldman, FeldmanVerifier, Pedersen, PedersenResult, PedersenVerifier, Shamir,
-};
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
 use rand::rngs::OsRng;
+use rand_7::rngs::OsRng as OsRng_7;
 use x25519_dalek::StaticSecret;
+
+use super::{invalid::*, valid::*};
+use crate::{
+    curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
+    Feldman,
+    FeldmanVerifier,
+    Pedersen,
+    PedersenResult,
+    PedersenVerifier,
+    Shamir,
+};
 
 #[test]
 fn invalid_tests() {
@@ -32,11 +36,10 @@ fn valid_tests() {
 
 #[test]
 fn key_tests() {
-    let mut osrng = rand::rngs::OsRng::default();
-    let sc = Scalar::random(&mut osrng);
+    let sc = Scalar::random(&mut OsRng_7);
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-    let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng);
+    let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut OsRng::default());
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = Shamir { t: 2, n: 3 }.combine_shares::<WrappedScalar>(&shares);
@@ -51,12 +54,11 @@ fn key_tests() {
 
 #[test]
 fn feldman_verifier_serde_test() {
-    let mut osrng = OsRng::default();
-    let sk = Scalar::random(&mut osrng);
+    let sk = Scalar::random(&mut OsRng_7);
     let res = Feldman { t: 2, n: 3 }.split_secret::<WrappedScalar, WrappedRistretto, OsRng>(
         sk.into(),
         None,
-        &mut osrng,
+        &mut OsRng::default(),
     );
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
@@ -90,14 +92,13 @@ fn feldman_verifier_serde_test() {
 
 #[test]
 fn pedersen_verifier_serde_test() {
-    let mut osrng = OsRng::default();
-    let sk = Scalar::random(&mut osrng);
+    let sk = Scalar::random(&mut OsRng_7);
     let res = Pedersen { t: 2, n: 3 }.split_secret::<WrappedScalar, WrappedEdwards, OsRng>(
         sk.into(),
         None,
         None,
         None,
-        &mut osrng,
+        &mut OsRng::default(),
     );
     assert!(res.is_ok());
     let ped_res = res.unwrap();

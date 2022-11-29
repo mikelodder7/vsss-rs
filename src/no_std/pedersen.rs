@@ -1,16 +1,16 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-use super::share::Share;
-use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir};
 use core::marker::PhantomData;
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use zeroize::Zeroize;
+
+use super::share::Share;
+use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir};
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
@@ -77,10 +77,8 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
         t.zeroize();
 
         let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
-        let (secret_shares, secret_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(secret, &mut crng);
-        let (blind_shares, blinding_polynomial) =
-            Shamir::<T, N>::get_shares_and_polynomial(blinding, &mut crng);
+        let (secret_shares, secret_polynomial) = Shamir::<T, N>::get_shares_and_polynomial(secret, &mut crng);
+        let (blind_shares, blinding_polynomial) = Shamir::<T, N>::get_shares_and_polynomial(blinding, &mut crng);
 
         let mut feldman_commitments = [G::default(); T];
         let mut pedersen_commitments = [G::default(); T];
@@ -111,9 +109,7 @@ impl<const T: usize, const N: usize> Pedersen<T, N> {
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
-    where
-        F: PrimeField,
-    {
+    where F: PrimeField {
         Shamir::<T, N>::combine_shares::<F, S>(shares)
     }
 

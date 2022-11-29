@@ -1,12 +1,12 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use crate::{Error, FeldmanVerifier, Shamir, Share};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use core::marker::PhantomData;
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_core::{CryptoRng, RngCore};
+
+use crate::{Error, FeldmanVerifier, Shamir, Share};
 
 /// Feldman's Verifiable secret sharing scheme.
 /// (see <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
@@ -46,23 +46,18 @@ impl<const T: usize, const N: usize> Feldman<T, N> {
             *p = g * polynomial.coefficients[i];
         }
 
-        Ok((
-            shares,
-            FeldmanVerifier {
-                generator: g,
-                commitments: vs,
-                marker: PhantomData,
-            },
-        ))
+        Ok((shares, FeldmanVerifier {
+            generator: g,
+            commitments: vs,
+            marker: PhantomData,
+        }))
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
-    where
-        F: PrimeField,
-    {
+    where F: PrimeField {
         Shamir::<T, N>::combine_shares::<F, S>(shares)
     }
 

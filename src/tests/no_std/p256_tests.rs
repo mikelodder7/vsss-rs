@@ -1,13 +1,11 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use super::invalid::*;
-use super::valid::*;
-use crate::{Feldman, FeldmanVerifier, Shamir};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use ff::PrimeField;
 use p256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
 use rand::rngs::OsRng;
+
+use super::{invalid::*, valid::*};
+use crate::{Feldman, FeldmanVerifier, Shamir};
 
 #[test]
 fn invalid_tests() {
@@ -42,11 +40,7 @@ fn verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
-    let res = Feldman::<2, 3>::split_secret::<Scalar, ProjectivePoint, OsRng, 33>(
-        *nzs.as_ref(),
-        None,
-        &mut osrng,
-    );
+    let res = Feldman::<2, 3>::split_secret::<Scalar, ProjectivePoint, OsRng, 33>(*nzs.as_ref(), None, &mut osrng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares {

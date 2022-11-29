@@ -1,7 +1,5 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 //! Curve25519 is not a prime order curve
 //! Since this crate relies on the ff::PrimeField
 //! and Curve25519 does work with secret sharing schemes
@@ -15,6 +13,7 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
 use curve25519_dalek::{
     constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
     edwards::{CompressedEdwardsY, EdwardsPoint},
@@ -24,12 +23,16 @@ use curve25519_dalek::{
 };
 use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
-use rand_chacha::ChaChaRng;
-use rand_core::{RngCore, SeedableRng};
+use rand_7::rngs::OsRng as OsRng_7;
+use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
 };
+use sha3::Sha3_512;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a ristretto25519 point
@@ -39,11 +42,8 @@ pub struct WrappedRistretto(pub RistrettoPoint);
 impl Group for WrappedRistretto {
     type Scalar = WrappedScalar;
 
-    fn random(mut rng: impl RngCore) -> Self {
-        let mut seed = [0u8; 32];
-        rng.fill_bytes(&mut seed);
-        let mut crng = ChaChaRng::from_seed(seed);
-        Self(RistrettoPoint::random(&mut crng))
+    fn random(mut _rng: impl RngCore) -> Self {
+        Self(RistrettoPoint::random(&mut OsRng_7))
     }
 
     fn identity() -> Self {
@@ -64,8 +64,7 @@ impl Group for WrappedRistretto {
 }
 
 impl<T> Sum<T> for WrappedRistretto
-where
-    T: Borrow<WrappedRistretto>,
+where T: Borrow<WrappedRistretto>
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
@@ -286,9 +285,7 @@ impl From<RistrettoPoint> for WrappedRistretto {
 
 impl Serialize for WrappedRistretto {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         // convert to compressed ristretto format, then serialize
         serializer.serialize_bytes(self.0.compress().as_bytes())
     }
@@ -304,24 +301,18 @@ impl<'de> Visitor<'de> for WrappedRistrettoVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
+    where E: de::Error {
         // deserialize compressed ristretto, then decompress
         if let Some(ep) = CompressedRistretto::from_slice(v).decompress() {
             return Ok(WrappedRistretto(ep));
         }
-        Err(de::Error::custom(
-            "failed to deserialize CompressedRistretto",
-        ))
+        Err(de::Error::custom("failed to deserialize CompressedRistretto"))
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedRistretto {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         deserializer.deserialize_bytes(WrappedRistrettoVisitor)
     }
 }
@@ -336,7 +327,7 @@ impl Group for WrappedEdwards {
     fn random(mut rng: impl RngCore) -> Self {
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
-        Self(EdwardsPoint::hash_from_bytes::<sha2::Sha512>(&seed))
+        Self(EdwardsPoint::hash_from_bytes::<Sha3_512>(&seed))
     }
 
     fn identity() -> Self {
@@ -357,8 +348,7 @@ impl Group for WrappedEdwards {
 }
 
 impl<T> Sum<T> for WrappedEdwards
-where
-    T: Borrow<WrappedEdwards>,
+where T: Borrow<WrappedEdwards>
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
@@ -585,8 +575,8 @@ impl From<WrappedRistretto> for WrappedEdwards {
         // compute [8^{-1}][8]P to clear any cofactor
         // this is the byte representation of 8^{-1} mod q
         let eight_inv = Scalar::from_canonical_bytes([
-            121, 47, 220, 226, 41, 229, 6, 97, 208, 218, 28, 125, 179, 157, 211, 7, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6,
+            121, 47, 220, 226, 41, 229, 6, 97, 208, 218, 28, 125, 179, 157, 211, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 6,
         ])
         .unwrap();
 
@@ -598,9 +588,7 @@ impl From<WrappedRistretto> for WrappedEdwards {
 
 impl Serialize for WrappedEdwards {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         // convert to compressed edwards y format, then serialize
         serializer.serialize_bytes(self.0.compress().as_bytes())
     }
@@ -616,24 +604,18 @@ impl<'de> Visitor<'de> for WrappedEdwardsVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
+    where E: de::Error {
         // deserialize compressed edwards y, then decompress
         if let Some(ep) = CompressedEdwardsY::from_slice(v).decompress() {
             return Ok(WrappedEdwards(ep));
         }
-        Err(de::Error::custom(
-            "failed to deserialize CompressedEdwardsY",
-        ))
+        Err(de::Error::custom("failed to deserialize CompressedEdwardsY"))
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedEdwards {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         deserializer.deserialize_bytes(WrappedEdwardsVisitor)
     }
 }
@@ -643,11 +625,8 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
 pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
-    fn random(mut rng: impl RngCore) -> Self {
-        let mut seed = [0u8; 32];
-        rng.fill_bytes(&mut seed);
-        let mut crng = ChaChaRng::from_seed(seed);
-        Self(Scalar::random(&mut crng))
+    fn random(mut _rng: impl RngCore) -> Self {
+        Self(Scalar::random(&mut OsRng_7))
     }
 
     fn zero() -> Self {
@@ -683,6 +662,10 @@ impl Field for WrappedScalar {
 impl PrimeField for WrappedScalar {
     type Repr = [u8; 32];
 
+    const CAPACITY: u32 = Self::NUM_BITS - 1;
+    const NUM_BITS: u32 = 255;
+    const S: u32 = 32;
+
     fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
         CtOption::new(Self(Scalar::from_bits(bytes)), Choice::from(1u8))
     }
@@ -695,14 +678,9 @@ impl PrimeField for WrappedScalar {
         Choice::from(self.0[0] & 1)
     }
 
-    const NUM_BITS: u32 = 255;
-    const CAPACITY: u32 = Self::NUM_BITS - 1;
-
     fn multiplicative_generator() -> Self {
         unimplemented!();
     }
-
-    const S: u32 = 32;
 
     fn root_of_unity() -> Self {
         unimplemented!();
@@ -917,9 +895,7 @@ impl zeroize::DefaultIsZeroes for WrappedScalar {}
 
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         serializer.serialize_bytes(self.0.as_bytes())
     }
 }
@@ -934,9 +910,7 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
+    where E: de::Error {
         let mut buf: [u8; 32] = Default::default();
         buf.copy_from_slice(v);
         Ok(WrappedScalar(Scalar::from_bits(buf)))
@@ -945,48 +919,57 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
 
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         deserializer.deserialize_bytes(WrappedScalarVisitor)
     }
 }
 
-#[test]
-fn ristretto_to_edwards() {
-    let mut osrng = rand::rngs::OsRng::default();
-    let sk = Scalar::random(&mut osrng);
-    let pk = RISTRETTO_BASEPOINT_POINT * sk;
-    let ek = WrappedEdwards::from(WrappedRistretto(pk));
-    assert!(ek.0.is_torsion_free());
-}
+#[cfg(test)]
+mod tests {
+    use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
+    use ff::Field;
+    use group::Group;
+    use rand_7::rngs::OsRng as OsRng_7;
 
-#[test]
-fn serde_scalar() {
-    let rng = rand::rngs::OsRng::default();
-    let ws1 = WrappedScalar::random(rng);
-    // serialize
-    let res = serde_bare::to_vec(&ws1);
-    assert!(res.is_ok());
-    let wsvec = res.unwrap();
-    // deserialize
-    let res = serde_bare::from_slice(&wsvec);
-    assert!(res.is_ok());
-    let ws2: WrappedScalar = res.unwrap();
-    assert_eq!(ws1, ws2);
-}
+    use crate::curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar};
 
-#[test]
-fn serde_edwards() {
-    let rng = rand::rngs::OsRng::default();
-    let ed1 = WrappedEdwards::random(rng);
-    // serialize
-    let res = serde_bare::to_vec(&ed1);
-    assert!(res.is_ok());
-    let edvec = res.unwrap();
-    // deserialize
-    let res = serde_bare::from_slice(&edvec);
-    assert!(res.is_ok());
-    let ed2: WrappedEdwards = res.unwrap();
-    assert_eq!(ed1, ed2);
+    #[test]
+    fn ristretto_to_edwards() {
+        let sk = Scalar::random(&mut OsRng_7);
+        let pk = RISTRETTO_BASEPOINT_POINT * sk;
+        let ek = WrappedEdwards::from(WrappedRistretto(pk));
+        assert!(ek.0.is_torsion_free());
+    }
+
+    #[test]
+    fn serde_scalar() {
+        use rand::rngs::OsRng;
+        let rng = OsRng::default();
+        let ws1 = WrappedScalar::random(rng);
+        // serialize
+        let res = serde_bare::to_vec(&ws1);
+        assert!(res.is_ok());
+        let wsvec = res.unwrap();
+        // deserialize
+        let res = serde_bare::from_slice(&wsvec);
+        assert!(res.is_ok());
+        let ws2: WrappedScalar = res.unwrap();
+        assert_eq!(ws1, ws2);
+    }
+
+    #[test]
+    fn serde_edwards() {
+        use rand::rngs::OsRng;
+        let rng = OsRng::default();
+        let ed1 = WrappedEdwards::random(rng);
+        // serialize
+        let res = serde_bare::to_vec(&ed1);
+        assert!(res.is_ok());
+        let edvec = res.unwrap();
+        // deserialize
+        let res = serde_bare::from_slice(&edvec);
+        assert!(res.is_ok());
+        let ed2: WrappedEdwards = res.unwrap();
+        assert_eq!(ed1, ed2);
+    }
 }

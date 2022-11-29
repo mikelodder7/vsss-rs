@@ -1,18 +1,18 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-use super::super::Share;
-use crate::{lib::*, util::bytes_to_field};
 use core::marker::PhantomData;
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
+use super::super::Share;
+use crate::{lib::*, util::bytes_to_field};
+
 /// A Feldman verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The generator for the share polynomial coefficients
     pub generator: G,
@@ -34,9 +34,7 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         let serdes = FeldmanVerifierSerdes {
             generator: self.generator.to_bytes().as_ref().to_vec(),
             commitments: self
@@ -55,9 +53,7 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let group_elem = |v: &[u8], msg: &'static str| -> Result<G, D::Error> {
             let mut repr = G::Repr::default();
             repr.as_mut().copy_from_slice(v);
@@ -89,7 +85,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> FeldmanVerifier<F, 
         }
 
         let s = s.unwrap();
-        let x = F::from(share.identifier() as u64);
+        let x = F::from(u64::from(share.identifier()));
         let mut i = F::one();
 
         // FUTURE: execute this sum of products

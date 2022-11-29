@@ -1,15 +1,13 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use super::{Polynomial, Share};
-use crate::lib::*;
-use crate::util::bytes_to_group;
-use crate::{bytes_to_field, Error};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use core::ops::{AddAssign, Mul};
+
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
 use rand_core::{CryptoRng, RngCore};
+
+use super::{Polynomial, Share};
+use crate::{bytes_to_field, lib::*, util::bytes_to_group, Error};
 
 /// Shamir's simple secret sharing scheme
 /// T is the threshold
@@ -41,9 +39,7 @@ impl Shamir {
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
-    where
-        F: PrimeField,
-    {
+    where F: PrimeField {
         self.combine::<F, F>(shares, bytes_to_field)
     }
 
@@ -93,18 +89,14 @@ impl Shamir {
             if y.is_none() {
                 return Err(Error::InvalidShare);
             }
-            x_coordinates.push(F::from(identifier as u64));
+            x_coordinates.push(F::from(u64::from(identifier)));
             y_coordinates.push(y.unwrap());
         }
         let secret = Self::interpolate(&x_coordinates, &y_coordinates);
         Ok(secret)
     }
 
-    pub(crate) fn get_shares_and_polynomial<F, R>(
-        &self,
-        secret: F,
-        rng: &mut R,
-    ) -> (Vec<Share>, Polynomial<F>)
+    pub(crate) fn get_shares_and_polynomial<F, R>(&self, secret: F, rng: &mut R) -> (Vec<Share>, Polynomial<F>)
     where
         F: PrimeField,
         R: RngCore + CryptoRng,
@@ -117,6 +109,7 @@ impl Shamir {
         for i in 0..self.n {
             let y = polynomial.evaluate(x, self.t);
             let mut t = Vec::with_capacity(1 + y.to_repr().as_ref().len());
+            #[allow(clippy::cast_possible_truncation)]
             t.push((i + 1) as u8);
             t.extend_from_slice(y.to_repr().as_ref());
 
@@ -156,9 +149,7 @@ impl Shamir {
     }
 
     pub(crate) fn check_params<F>(&self, secret: Option<F>) -> Result<(), Error>
-    where
-        F: PrimeField,
-    {
+    where F: PrimeField {
         if self.n < self.t {
             return Err(Error::SharingLimitLessThanThreshold);
         }

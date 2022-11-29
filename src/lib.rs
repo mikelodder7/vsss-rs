@@ -1,7 +1,5 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 //! Verifiable Secret Sharing Schemes are using to split secrets into
 //! multiple shares and distribute them among different entities,
 //! with the ability to verify if the shares are correct and belong
@@ -36,22 +34,22 @@
 //! To split a p256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs::Shamir;
 //! use ff::PrimeField;
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
 //! use rand::rngs::OsRng;
+//! use vsss_rs::Shamir;
 //!
 //! let mut osrng = OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
 //! // 32 for field size, 1 for identifier = 33
-//! let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
+//! let res = Shamir { t: 2, n: 3 }.split_secret::<Scalar, OsRng>(*nzs.as_ref(), &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//! let res = Shamir { t: 2, n: 3 }.combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
-//! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+//! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 //! ```
@@ -59,18 +57,18 @@
 //! To split a k256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs::{Shamir, secp256k1::WrappedScalar};
 //! use ff::PrimeField;
 //! use k256::{NonZeroScalar, SecretKey};
 //! use rand::rngs::OsRng;
+//! use vsss_rs::{secp256k1::WrappedScalar, Shamir};
 //!
 //! let mut osrng = OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let secret = WrappedScalar(*sk.to_nonzero_scalar());
-//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(secret, &mut osrng);
+//! let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
+//! let res = Shamir { t: 2, n: 3 }.combine_shares::<WrappedScalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -81,20 +79,21 @@
 //! Feldman or Pedersen return extra information for verification using their respective verifiers
 //!
 //! ```
-//! use vsss_rs::Feldman;
-//! use bls12_381_plus::{Scalar, G1Projective};
+//! use bls12_381_plus::{G1Projective, Scalar};
 //! use ff::Field;
 //! use rand::rngs::OsRng;
+//! use vsss_rs::Feldman;
 //!
 //! let mut rng = OsRng::default();
 //! let secret = Scalar::random(&mut rng);
-//! let res = Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(secret, None, &mut rng);
+//! let res =
+//!     Feldman { t: 2, n: 3 }.split_secret::<Scalar, G1Projective, OsRng>(secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
 //!     assert!(verifier.verify(s));
 //! }
-//! let res = Feldman::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//! let res = Feldman { t: 2, n: 3 }.combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let secret_1 = res.unwrap();
 //! assert_eq!(secret, secret_1);
@@ -109,18 +108,19 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use ed25519_dalek::SecretKey;
-//! use vsss_rs::{Shamir, curve25519::WrappedScalar};
 //! use rand::rngs::OsRng;
+//! use rand_7::rngs::OsRng as OsRng_7;
+//! use vsss_rs::{curve25519::WrappedScalar, Shamir};
 //! use x25519_dalek::StaticSecret;
 //!
 //! let mut osrng = rand::rngs::OsRng::default();
-//! let sc = Scalar::random(&mut osrng);
+//! let sc = Scalar::random(&mut OsRng_7);
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng);
+//! let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
+//! let res = Shamir { t: 2, n: 3 }.combine_shares::<WrappedScalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! assert_eq!(scalar.0, sc);
@@ -177,13 +177,12 @@ pub mod secp256k1;
 mod standard;
 mod util;
 
-use util::*;
-
 pub use error::*;
 #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 pub use no_std::*;
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use standard::*;
+use util::*;
 
 /// Use shamir split regardless of no-std or std used
 #[macro_export]

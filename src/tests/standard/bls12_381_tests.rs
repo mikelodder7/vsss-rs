@@ -1,19 +1,21 @@
-/*
-    Copyright Michael Lodder. All Rights Reserved.
-    SPDX-License-Identifier: Apache-2.0
-*/
-use super::super::utils::MockRng;
-use super::invalid::*;
-use super::valid::*;
-use crate::lib::Vec;
-use crate::{Feldman, FeldmanVerifier, Shamir, Share};
+// Copyright Michael Lodder. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 use bls12_381_plus::{
-    multi_miller_loop, ExpandMsgXmd, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
+    multi_miller_loop,
+    ExpandMsgXmd,
+    G1Affine,
+    G1Projective,
+    G2Affine,
+    G2Prepared,
+    G2Projective,
     Scalar,
 };
 use ff::Field;
 use group::{Curve, Group};
 use rand::rngs::OsRng;
+
+use super::{super::utils::MockRng, invalid::*, valid::*};
+use crate::{lib::Vec, Feldman, FeldmanVerifier, Shamir, Share};
 
 #[test]
 fn invalid_tests() {
@@ -74,8 +76,7 @@ fn group_combine() {
     let sig2 = G2Prepared::from(res2.unwrap().to_affine());
 
     let h1 = G1Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine();
-    let h2 =
-        G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine());
+    let h2 = G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine());
 
     let pk1 = (G1Projective::generator() * secret).to_affine();
     let pk2 = G2Prepared::from((G2Projective::generator() * secret).to_affine());
@@ -104,8 +105,7 @@ fn group_combine() {
 fn verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = Scalar::random(&mut osrng);
-    let res =
-        Feldman { t: 2, n: 3 }.split_secret::<Scalar, G1Projective, OsRng>(sk, None, &mut osrng);
+    let res = Feldman { t: 2, n: 3 }.split_secret::<Scalar, G1Projective, OsRng>(sk, None, &mut osrng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares {

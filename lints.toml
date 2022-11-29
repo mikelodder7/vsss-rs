@@ -1,0 +1,57 @@
+deny = [
+    # Prevent spelling mistakes in lints
+    'unknown_lints',
+    # clippy groups:
+    'clippy::correctness',
+    # All clippy allows must have a reason
+    # TODO: enable lint-reasons feature
+    #    'clippy::allow_attributes_without_reason',
+    # Docs
+    #    'clippy::missing_errors_doc',
+    #    'clippy::missing_safety_doc',
+    #    'clippy::missing_panics_doc',
+
+    # Common mistakes
+    'clippy::await_holding_lock',
+    'unused_variables',
+    'unused_imports',
+    'dead_code',
+    'unused_extern_crates',
+    'unused_must_use',
+    'unreachable_patterns',
+    'clippy::cloned_instead_of_copied',
+    'clippy::create_dir',
+    'clippy::dbg_macro',
+    'clippy::else_if_without_else',
+    'clippy::enum_glob_use',
+    'clippy::inline_always',
+    'clippy::let_underscore_drop',
+    'clippy::let_unit_value',
+    'clippy::match_on_vec_items',
+    'clippy::match_wild_err_arm',
+    # In crypto code, it is fairly common to have similar names e.g. `owner_pk` and `owner_k`
+    # 'clippy::similar_names',
+    'clippy::needless_borrow',
+
+    # style
+    'clippy::explicit_into_iter_loop',
+    'clippy::explicit_iter_loop',
+    'clippy::if_not_else',
+    'clippy::match_bool',
+    'clippy::needless_pass_by_value',
+    'clippy::range_plus_one',
+    'clippy::struct_excessive_bools',
+    'clippy::too_many_lines',
+    'clippy::trivially_copy_pass_by_ref',
+    'clippy::upper_case_acronyms',
+
+    # casting mistakes
+    'clippy::cast_lossless',
+    'clippy::cast_possible_truncation',
+    'clippy::cast_possible_wrap',
+    'clippy::cast_precision-loss',
+    'clippy::cast_sign_loss'
+]
+warn = [
+    'missing_docs',
+]
