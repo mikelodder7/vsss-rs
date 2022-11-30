@@ -36,6 +36,7 @@ subtle = { version = "2.4", optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 rand_7 = { version = "0.7", package = "rand" }
 sha3 = { version = "0.9.1", default-features = false }
+thiserror = "1.0.26"
 
 [dev-dependencies]
 bls12_381_plus = "0.5.3"
