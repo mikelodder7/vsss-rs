@@ -10,7 +10,7 @@ use crate::{lib::*, util::bytes_to_field};
 
 /// A Pedersen verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The generator for the blinding factor
     pub generator: G,

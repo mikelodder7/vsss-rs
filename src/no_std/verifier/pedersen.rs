@@ -22,7 +22,7 @@ use crate::{
 
 /// A Pedersen verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize> {
     /// The generator for the blinding factor
     pub generator: G,
