@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "1.5.0"
+version = "1.6.0"
 
 [features]
 default = ["curve25519", "secp256k1" ]
@@ -18,7 +18,7 @@ curve25519 = ["curve25519-dalek", "subtle"]
 secp256k1 = ["k256", "elliptic-curve", "subtle"]
 
 [dependencies]
-curve25519-dalek = { version = "4.0.0-pre.1", optional = true }
+curve25519-dalek = { version = "=4.0.0-pre.1", optional = true }
 elliptic-curve = { version = "0.12", features = ["ecdh"], optional = true }
 ff = "0.12"
 group = "0.12"
@@ -33,7 +33,7 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
 bls12_381_plus = "0.5.3"
-curve25519-dalek = "4.0.0-pre.1"
+curve25519-dalek = "=4.0.0-pre.1"
 ed25519-dalek = "1.0"
 k256 = { version = "0.11", features = ["arithmetic", "bits"] }
 p256 = { version = "0.11", features = ["arithmetic", "bits"] }
