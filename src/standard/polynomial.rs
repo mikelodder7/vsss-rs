@@ -8,11 +8,11 @@ use elliptic_curve::ff::PrimeField;
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares
-pub struct Polynomial<F: PrimeField + Copy + Default> {
+pub struct Polynomial<F: PrimeField> {
     pub(crate) coefficients: Vec<F>,
 }
 
-impl<F: PrimeField + Copy + Default> Polynomial<F> {
+impl<F: PrimeField> Polynomial<F> {
     /// Construct a random polynomial with `N` degree using the specified intercept
     pub fn new(intercept: F, mut rng: impl RngCore + CryptoRng, length: usize) -> Self {
         let mut coefficients = Vec::with_capacity(length);

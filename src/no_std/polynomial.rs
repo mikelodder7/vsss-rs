@@ -7,11 +7,11 @@ use elliptic_curve::ff::PrimeField;
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares
-pub struct Polynomial<F: PrimeField + Copy + Default, const N: usize> {
+pub struct Polynomial<F: PrimeField, const N: usize> {
     pub(crate) coefficients: [F; N],
 }
 
-impl<F: PrimeField + Copy + Default, const N: usize> Polynomial<F, N> {
+impl<F: PrimeField, const N: usize> Polynomial<F, N> {
     /// Construct a random polynomial with `N` degree using the specified intercept
     pub fn new(intercept: F, mut rng: impl RngCore + CryptoRng) -> Self {
         let mut coefficients = [F::default(); N];
