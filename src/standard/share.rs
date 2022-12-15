@@ -5,8 +5,14 @@
 
 use crate::lib::*;
 use core::{array::TryFromSliceError, convert::TryFrom};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::GroupEncoding,
+};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
+use crate::Error;
+
 /// A Shamir simple secret share
 /// provides no integrity checking
 /// The first byte is the X-coordinate or identifier
@@ -58,5 +64,29 @@ impl Share {
     /// The raw byte value of the share
     pub fn value(&self) -> &[u8] {
         &self.0[1..]
+    }
+
+    /// Convert this share into a group element
+    pub fn as_group_element<G: GroupEncoding>(&self) -> Result<G, Error> {
+        let mut repr = G::Repr::default();
+        repr.as_mut().copy_from_slice(self.value());
+        let res = G::from_bytes(&repr);
+        if res.is_some().unwrap_u8() == 1u8 {
+            Ok(res.unwrap())
+        } else {
+            Err(Error::InvalidShareConversion)
+        }
+    }
+
+    /// Convert this share into a prime field element
+    pub fn as_field_element<F: PrimeField>(&self) -> Result<F, Error> {
+        let mut repr = F::Repr::default();
+        repr.as_mut().copy_from_slice(self.value());
+        let res = F::from_repr(repr);
+        if res.is_some().unwrap_u8() == 1u8 {
+            Ok(res.unwrap())
+        } else {
+            Err(Error::InvalidShareConversion)
+        }
     }
 }

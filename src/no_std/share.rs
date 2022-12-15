@@ -3,10 +3,15 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
+use crate::error::Error;
 use core::{
     array::TryFromSliceError,
     convert::TryFrom,
     fmt::{self, Formatter},
+};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::GroupEncoding,
 };
 use serde::{
     de::{self, SeqAccess, Visitor},
@@ -100,6 +105,31 @@ impl<const N: usize> Share<N> {
             v |= b;
         }
         v == 0
+    }
+
+
+    /// Convert this share into a group element
+    pub fn as_group_element<G: GroupEncoding>(&self) -> Result<G, Error> {
+        let mut repr = G::Repr::default();
+        repr.as_mut().copy_from_slice(self.value());
+        let res = G::from_bytes(&repr);
+        if res.is_some().unwrap_u8() == 1u8 {
+            Ok(res.unwrap())
+        } else {
+            Err(Error::InvalidShareConversion)
+        }
+    }
+
+    /// Convert this share into a prime field element
+    pub fn as_field_element<F: PrimeField>(&self) -> Result<F, Error> {
+        let mut repr = F::Repr::default();
+        repr.as_mut().copy_from_slice(self.value());
+        let res = F::from_repr(repr);
+        if res.is_some().unwrap_u8() == 1u8 {
+            Ok(res.unwrap())
+        } else {
+            Err(Error::InvalidShareConversion)
+        }
     }
 
     /// The identifier for this share

@@ -22,6 +22,8 @@ pub enum Error {
     InvalidShare,
     /// An invalid secret was supplied for split
     InvalidSecret,
+    /// A share cannot be converted to a group or field element
+    InvalidShareConversion,
 }
 
 impl Display for Error {
@@ -40,6 +42,7 @@ impl Display for Error {
                 "An invalid share was supplied for verification or combine"
             ),
             Self::InvalidSecret => write!(f, "An invalid secret was supplied for split"),
+            Self::InvalidShareConversion => write!(f, "A share cannot be converted to a group or field element"),
         }
     }
 }

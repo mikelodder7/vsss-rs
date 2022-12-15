@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## v2.2.0 - 2022-12
 - Update dependencies
 - Error implements Display and Error traits
+- Share can be converted to PrimeField and GroupEncoding
 
 
 ## v2.1.0 - 2022-11-23
