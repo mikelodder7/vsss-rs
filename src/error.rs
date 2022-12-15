@@ -2,8 +2,11 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
+use core::fmt::{self, Display, Formatter};
+use core2::error::Error as StdError;
+
 /// Errors during secret sharing
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub enum Error {
     /// Error when threshold is less than 2
     SharingMinThreshold,
@@ -20,3 +23,25 @@ pub enum Error {
     /// An invalid secret was supplied for split
     InvalidSecret,
 }
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SharingMinThreshold => write!(f, "Threshold cannot be less than 2"),
+            Self::SharingLimitLessThanThreshold => write!(f, "Limit is less than threshold"),
+            Self::SharingInvalidIdentifier => write!(f, "An invalid share detected"),
+            Self::SharingDuplicateIdentifier => write!(f, "Duplicate share detected"),
+            Self::SharingMaxRequest => write!(
+                f,
+                "The maximum number of shares to be made when splitting was reached"
+            ),
+            Self::InvalidShare => write!(
+                f,
+                "An invalid share was supplied for verification or combine"
+            ),
+            Self::InvalidSecret => write!(f, "An invalid secret was supplied for split"),
+        }
+    }
+}
+
+impl StdError for Error {}

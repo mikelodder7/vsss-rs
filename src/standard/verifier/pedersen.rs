@@ -6,8 +6,10 @@
 use super::super::Share;
 use super::FeldmanVerifier;
 use crate::{lib::*, util::bytes_to_field};
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A Pedersen verifier is used to provide integrity checking of shamir shares

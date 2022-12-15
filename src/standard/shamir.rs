@@ -7,8 +7,10 @@ use crate::lib::*;
 use crate::util::bytes_to_group;
 use crate::{bytes_to_field, Error};
 use core::ops::{AddAssign, Mul};
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use rand_core::{CryptoRng, RngCore};
 
 /// Shamir's simple secret sharing scheme

@@ -4,8 +4,10 @@
 */
 use crate::{Error, FeldmanVerifier, Shamir, Share};
 use core::marker::PhantomData;
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use rand_core::{CryptoRng, RngCore};
 
 /// Feldman's Verifiable secret sharing scheme.

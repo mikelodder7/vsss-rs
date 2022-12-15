@@ -2,8 +2,10 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-use ff::PrimeField;
-use group::{Group, GroupEncoding};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding},
+};
 
 pub fn bytes_to_field<F: PrimeField>(bytes: &[u8]) -> Option<F> {
     let mut s_repr = F::Repr::default();

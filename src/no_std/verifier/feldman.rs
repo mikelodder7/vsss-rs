@@ -7,8 +7,10 @@ use super::super::share::Share;
 use crate::util::{bytes_to_field, get_group_size};
 use core::fmt;
 use core::marker::PhantomData;
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use serde::{
     de::{Error, SeqAccess, Unexpected, Visitor},
     ser::SerializeTuple,

@@ -13,22 +13,20 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use elliptic_curve::{
-    bigint::{U512, ArrayEncoding},
+    bigint::{ArrayEncoding, U512},
+    ff::{Field, PrimeField},
     generic_array::GenericArray,
+    group::{Group, GroupEncoding},
     ops::Reduce,
-    sec1::{FromEncodedPoint, ToEncodedPoint}
+    sec1::{FromEncodedPoint, ToEncodedPoint},
 };
-use ff::{Field, PrimeField};
-use group::{Group, GroupEncoding};
-use k256::{
-    AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar
-};
+use k256::{AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoint, Scalar};
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use subtle::{Choice, ConditionallySelectable, CtOption, ConstantTimeEq};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wrapper around secp256k1 ProjectivePoint that handles serialization
 #[derive(Copy, Clone, Debug, Eq)]
@@ -435,7 +433,7 @@ impl ConditionallySelectable for WrappedScalar {
 
 impl ConstantTimeEq for WrappedScalar {
     fn ct_eq(&self, other: &Self) -> Choice {
-       self.0.ct_eq(&other.0)
+        self.0.ct_eq(&other.0)
     }
 }
 

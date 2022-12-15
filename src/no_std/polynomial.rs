@@ -3,7 +3,7 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use ff::PrimeField;
+use elliptic_curve::ff::PrimeField;
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares

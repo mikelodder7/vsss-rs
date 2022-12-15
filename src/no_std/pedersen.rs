@@ -6,8 +6,10 @@
 use super::share::Share;
 use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir};
 use core::marker::PhantomData;
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use zeroize::Zeroize;

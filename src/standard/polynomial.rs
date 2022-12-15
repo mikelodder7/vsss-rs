@@ -4,7 +4,7 @@
 */
 
 use crate::lib::*;
-use ff::PrimeField;
+use elliptic_curve::ff::PrimeField;
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares

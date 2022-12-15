@@ -22,15 +22,17 @@ use curve25519_dalek::{
     scalar::Scalar,
     traits::{Identity, IsIdentity},
 };
-use ff::{Field, PrimeField};
-use group::{Group, GroupEncoding};
+use elliptic_curve::{
+    ff::{Field, PrimeField},
+    group::{Group, GroupEncoding},
+};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use subtle::{Choice, ConditionallySelectable, CtOption, ConstantTimeEq};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a ristretto25519 point
 #[derive(Copy, Clone, Debug, Eq)]
