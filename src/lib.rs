@@ -37,14 +37,14 @@
 //!
 //! ```
 //! use vsss_rs::Shamir;
-//! use ff::PrimeField;
+//! use elliptic_curve::ff::PrimeField;
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
 //! use rand::rngs::OsRng;
 //!
 //! fn main() {
 //!     let mut osrng = OsRng::default();
 //!     let sk = SecretKey::random(&mut osrng);
-//!     let nzs = sk.to_secret_scalar();
+//!     let nzs = sk.to_nonzero_scalar();
 //!     // 32 for field size, 1 for identifier = 33
 //!     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
 //!     assert!(res.is_ok());
@@ -54,7 +54,7 @@
 //!     let scalar = res.unwrap();
 //!     let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //!     let sk_dup = SecretKey::from(nzs_dup);
-//!     assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+//!     assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 //! }
 //! ```
 //!
@@ -62,14 +62,14 @@
 //!
 //! ```
 //! use vsss_rs::{Shamir, secp256k1::WrappedScalar};
-//! use ff::PrimeField;
+//! use elliptic_curve::ff::PrimeField;
 //! use k256::{NonZeroScalar, SecretKey};
 //! use rand::rngs::OsRng;
 //!
 //! fn main() {
 //!     let mut osrng = OsRng::default();
 //!     let sk = SecretKey::random(&mut osrng);
-//!     let secret = WrappedScalar(*sk.to_secret_scalar());
+//!     let secret = WrappedScalar(*sk.to_nonzero_scalar());
 //!     let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(secret, &mut osrng);
 //!     assert!(res.is_ok());
 //!     let shares = res.unwrap();
@@ -78,7 +78,7 @@
 //!     let scalar = res.unwrap();
 //!     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //!     let sk_dup = SecretKey::from(nzs_dup);
-//!     assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+//!     assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 //! }
 //! ```
 //!
@@ -87,7 +87,7 @@
 //! ```
 //! use vsss_rs::Feldman;
 //! use bls12_381_plus::{Scalar, G1Projective};
-//! use ff::Field;
+//! use elliptic_curve::ff::Field;
 //! use rand::rngs::OsRng;
 //!
 //! fn main() {

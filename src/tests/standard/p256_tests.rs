@@ -5,7 +5,7 @@
 use super::invalid::*;
 use super::valid::*;
 use crate::{Feldman, FeldmanVerifier, Shamir};
-use ff::PrimeField;
+use elliptic_curve::ff::PrimeField;
 use p256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
 use rand::rngs::OsRng;
 
@@ -25,7 +25,7 @@ fn valid_tests() {
 fn key_tests() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
+    let nzs = sk.to_nonzero_scalar();
     let res = Shamir { t: 2, n: 3 }.split_secret::<Scalar, OsRng>(*nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
@@ -34,14 +34,14 @@ fn key_tests() {
     let scalar = res.unwrap();
     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
     let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+    assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
 }
 
 #[test]
 fn verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
+    let nzs = sk.to_nonzero_scalar();
     let res = Feldman { t: 2, n: 3 }.split_secret::<Scalar, ProjectivePoint, OsRng>(
         *nzs.as_ref(),
         None,

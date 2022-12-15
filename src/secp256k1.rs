@@ -652,7 +652,7 @@ impl<'de> Deserialize<'de> for WrappedScalar {
 
 #[test]
 fn serde_scalar() {
-    use ff::Field;
+    use elliptic_curve::ff::Field;
 
     let rng = rand::rngs::OsRng::default();
     let ws1 = WrappedScalar::from(Scalar::random(rng));
@@ -669,7 +669,7 @@ fn serde_scalar() {
 
 #[test]
 fn serde_projective_point() {
-    use group::Group;
+    use elliptic_curve::group::Group;
 
     let rng = rand::rngs::OsRng::default();
     let wpp1 = WrappedProjectivePoint::from(ProjectivePoint::random(rng));

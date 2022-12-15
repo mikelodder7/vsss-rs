@@ -10,8 +10,10 @@ use bls12_381_plus::{
     multi_miller_loop, ExpandMsgXmd, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
     Scalar,
 };
-use ff::Field;
-use group::{Curve, Group};
+use elliptic_curve::{
+    ff::Field,
+    group::{Curve, Group},
+};
 use rand::rngs::OsRng;
 
 #[test]
@@ -76,8 +78,8 @@ fn group_combine() {
     let h2 =
         G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine());
 
-    let pk1 = (G1Projective::generator() * secret).to_affine();
-    let pk2 = G2Prepared::from((G2Projective::generator() * secret).to_affine());
+    let pk1 = (G1Projective::GENERATOR * secret).to_affine();
+    let pk2 = G2Prepared::from((G2Projective::GENERATOR * secret).to_affine());
 
     let g1 = -G1Affine::generator();
     let g2 = G2Prepared::from(-G2Affine::generator());

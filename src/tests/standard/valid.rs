@@ -3,8 +3,10 @@
     SPDX-License-Identifier: Apache-2.0
 */
 use crate::{tests::utils::MockRng, util::bytes_to_field, Feldman, Pedersen, Shamir};
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use zeroize::Zeroize;
 
 pub fn combine_single<

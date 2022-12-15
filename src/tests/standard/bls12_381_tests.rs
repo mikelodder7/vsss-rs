@@ -11,8 +11,10 @@ use bls12_381_plus::{
     multi_miller_loop, ExpandMsgXmd, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
     Scalar,
 };
-use ff::Field;
-use group::{Curve, Group};
+use elliptic_curve::{
+    ff::Field,
+    group::{Curve, Group},
+};
 use rand::rngs::OsRng;
 
 #[test]

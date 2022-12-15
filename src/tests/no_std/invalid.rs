@@ -4,8 +4,10 @@
 */
 use super::super::utils::MockRng;
 use crate::{Feldman, Pedersen, Shamir, Share};
-use ff::PrimeField;
-use group::{Group, GroupEncoding, ScalarMul};
+use elliptic_curve::{
+    ff::PrimeField,
+    group::{Group, GroupEncoding, ScalarMul},
+};
 use zeroize::Zeroize;
 
 pub fn split_invalid_args<
