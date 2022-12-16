@@ -13,7 +13,6 @@ use elliptic_curve::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
-use zeroize::Zeroize;
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
@@ -64,7 +63,7 @@ impl Pedersen {
         rng: &mut R,
     ) -> Result<PedersenResult<F, G>, Error>
     where
-        F: PrimeField + Zeroize,
+        F: PrimeField,
         G: Group + GroupEncoding + Default + ScalarMul<F>,
         R: RngCore + CryptoRng,
     {
@@ -79,9 +78,8 @@ impl Pedersen {
         let mut crng = ChaChaRng::from_seed(seed);
 
         let g = share_generator.unwrap_or_else(G::generator);
-        let mut t = F::random(&mut crng);
+        let t = F::random(&mut crng);
         let h = blind_factor_generator.unwrap_or_else(|| G::generator() * t);
-        t.zeroize();
 
         let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
         let (secret_shares, secret_polynomial) =
