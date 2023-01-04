@@ -13,9 +13,10 @@ use elliptic_curve::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::{Deserialize, Serialize};
 
 /// Result from calling Pedersen::split_secret
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The random blinding factor randomly generated or supplied
     pub blinding: F,

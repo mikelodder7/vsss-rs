@@ -14,7 +14,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A Feldman verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The generator for the share polynomial coefficients
     pub generator: G,

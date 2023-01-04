@@ -5,6 +5,7 @@
 
 use super::share::Share;
 use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir};
+use core::fmt::Formatter;
 use core::marker::PhantomData;
 use elliptic_curve::{
     ff::PrimeField,
@@ -12,9 +13,12 @@ use elliptic_curve::{
 };
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::ser::SerializeTuple;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Result from calling Pedersen::split_secret
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PedersenResult<
     F: PrimeField,
     G: Group + GroupEncoding + ScalarMul<F>,
@@ -25,11 +29,59 @@ pub struct PedersenResult<
     /// The random blinding factor randomly generated or supplied
     pub blinding: F,
     /// The blinding shares
+    #[serde(
+        serialize_with = "serialize_shares_array",
+        deserialize_with = "deserialize_shares_array"
+    )]
     pub blind_shares: [Share<S>; N],
     /// The secret shares
+    #[serde(
+        serialize_with = "serialize_shares_array",
+        deserialize_with = "deserialize_shares_array"
+    )]
     pub secret_shares: [Share<S>; N],
     /// The verifier for validating shares
     pub verifier: PedersenVerifier<F, G, T>,
+}
+
+fn serialize_shares_array<SS: Serializer, const S: usize, const N: usize>(
+    shares: &[Share<S>; N],
+    s: SS,
+) -> Result<SS::Ok, SS::Error> {
+    let mut tupler = s.serialize_tuple(N)?;
+    for share in shares {
+        tupler.serialize_element(share)?;
+    }
+    tupler.end()
+}
+
+fn deserialize_shares_array<'de, D: Deserializer<'de>, const S: usize, const N: usize>(
+    d: D,
+) -> Result<[Share<S>; N], D::Error> {
+    struct ShareArrayVisitor<const S: usize, const N: usize>;
+
+    impl<'de, const S: usize, const N: usize> Visitor<'de> for ShareArrayVisitor<S, N> {
+        type Value = [Share<S>; N];
+
+        fn expecting(&self, formatter: &mut Formatter) -> core::fmt::Result {
+            write!(formatter, "a tuple")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut arr = [Share::<S>::default(); N];
+            for (i, p) in arr.iter_mut().enumerate() {
+                *p = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(i, &self))?;
+            }
+            Ok(arr)
+        }
+    }
+
+    d.deserialize_tuple(N, ShareArrayVisitor)
 }
 
 /// Pedersen's Verifiable secret sharing scheme.

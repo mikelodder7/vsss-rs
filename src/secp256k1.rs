@@ -331,7 +331,7 @@ impl<'de> Deserialize<'de> for WrappedProjectivePoint {
 }
 
 /// Wrapper around secp256k1 Scalar that handles serialization
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, Eq, Default)]
 pub struct WrappedScalar(pub Scalar);
 
 impl WrappedScalar {
@@ -440,12 +440,6 @@ impl ConstantTimeEq for WrappedScalar {
 impl PartialEq for WrappedScalar {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
-    }
-}
-
-impl Default for WrappedScalar {
-    fn default() -> Self {
-        Self(Scalar::default())
     }
 }
 

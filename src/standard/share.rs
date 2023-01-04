@@ -4,27 +4,18 @@
 */
 
 use crate::lib::*;
+use crate::Error;
 use core::{array::TryFromSliceError, convert::TryFrom};
-use elliptic_curve::{
-    ff::PrimeField,
-    group::GroupEncoding,
-};
+use elliptic_curve::{ff::PrimeField, group::GroupEncoding};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
-use crate::Error;
 
 /// A Shamir simple secret share
 /// provides no integrity checking
 /// The first byte is the X-coordinate or identifier
 /// The remaining bytes are the Y-coordinate
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Zeroize)]
+#[derive(Clone, Debug, Deserialize, Default, PartialEq, Eq, Serialize, Zeroize)]
 pub struct Share(pub Vec<u8>);
-
-impl Default for Share {
-    fn default() -> Self {
-        Self(Vec::new())
-    }
-}
 
 impl AsRef<[u8]> for Share {
     fn as_ref(&self) -> &[u8] {

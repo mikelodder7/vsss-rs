@@ -9,10 +9,7 @@ use core::{
     convert::TryFrom,
     fmt::{self, Formatter},
 };
-use elliptic_curve::{
-    ff::PrimeField,
-    group::GroupEncoding,
-};
+use elliptic_curve::{ff::PrimeField, group::GroupEncoding};
 use serde::{
     de::{self, SeqAccess, Visitor},
     ser::SerializeTuple,
@@ -23,7 +20,7 @@ use zeroize::Zeroize;
 /// provides no integrity checking
 /// The first byte is the X-coordinate or identifier
 /// The remaining bytes are the Y-coordinate
-#[derive(Copy, Clone, Debug, PartialEq, Zeroize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroize)]
 pub struct Share<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Default for Share<N> {
@@ -106,7 +103,6 @@ impl<const N: usize> Share<N> {
         }
         v == 0
     }
-
 
     /// Convert this share into a group element
     pub fn as_group_element<G: GroupEncoding>(&self) -> Result<G, Error> {

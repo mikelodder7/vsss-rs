@@ -641,7 +641,7 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
 }
 
 /// Wraps a curve25519 scalar
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, Eq, Default)]
 pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
@@ -732,12 +732,6 @@ impl ConstantTimeEq for WrappedScalar {
 impl PartialEq for WrappedScalar {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
-    }
-}
-
-impl Default for WrappedScalar {
-    fn default() -> Self {
-        Self(Scalar::default())
     }
 }
 
