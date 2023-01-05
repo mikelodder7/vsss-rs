@@ -3,83 +3,28 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use super::super::Share;
+use super::super::*;
 use crate::{lib::*, util::bytes_to_field};
 use core::marker::PhantomData;
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
 };
-use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 /// A Feldman verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The generator for the share polynomial coefficients
+    #[serde(serialize_with = "serialize_group", deserialize_with = "deserialize_group")]
     pub generator: G,
     /// The commitments to the polynomial
+    #[serde(serialize_with = "serialize_group_vec", deserialize_with = "deserialize_group_vec")]
     pub commitments: Vec<G>,
     /// Marker
+    #[serde(skip_serializing)]
     pub marker: PhantomData<F>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct FeldmanVerifierSerdes {
-    pub generator: Vec<u8>,
-    pub commitments: Vec<Vec<u8>>,
-}
-
-impl<F, G> Serialize for FeldmanVerifier<F, G>
-where
-    F: PrimeField,
-    G: Group + GroupEncoding + ScalarMul<F>,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let serdes = FeldmanVerifierSerdes {
-            generator: self.generator.to_bytes().as_ref().to_vec(),
-            commitments: self
-                .commitments
-                .iter()
-                .map(|c| c.to_bytes().as_ref().to_vec())
-                .collect(),
-        };
-        serdes.serialize(serializer)
-    }
-}
-
-impl<'de, F, G> Deserialize<'de> for FeldmanVerifier<F, G>
-where
-    F: PrimeField,
-    G: Group + GroupEncoding + ScalarMul<F>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let group_elem = |v: &[u8], msg: &'static str| -> Result<G, D::Error> {
-            let mut repr = G::Repr::default();
-            repr.as_mut().copy_from_slice(v);
-            let opt = G::from_bytes(&repr);
-            if opt.is_none().unwrap_u8() == 1 {
-                return Err(D::Error::missing_field(msg));
-            }
-            Ok(opt.unwrap())
-        };
-        let serdes = FeldmanVerifierSerdes::deserialize(deserializer)?;
-        let mut commitments = Vec::with_capacity(serdes.commitments.len());
-        for c in &serdes.commitments {
-            commitments.push(group_elem(c, "commitment")?);
-        }
-        Ok(Self {
-            generator: group_elem(&serdes.generator, "generator")?,
-            commitments,
-            marker: PhantomData,
-        })
-    }
 }
 
 impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> FeldmanVerifier<F, G> {

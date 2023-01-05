@@ -159,6 +159,8 @@ mod lib {
     pub use std::collections::BTreeSet;
     #[cfg(feature = "std")]
     pub use std::vec::Vec;
+    #[cfg(feature = "std")]
+    pub use std::string::String;
 }
 
 #[cfg(test)]
