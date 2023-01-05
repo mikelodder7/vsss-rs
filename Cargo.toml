@@ -24,7 +24,7 @@ core2 = { version = "0.4", default-features = false }
 curve25519-dalek = { version = "4.0.0", optional = true, package = "curve25519-dalek-ml" }
 elliptic-curve = { version = "0.12", features = ["ecdh"], optional = true }
 k256 = { version = "0.11", features = ["arithmetic", "bits", "serde"], optional = true }
-hex = { version = "0.4", default-features = false, optional = true }
+hex = { version = "0.4", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 rand_core = "0.6"
 serde = { version = "1.0", default-features = false, features = ["serde_derive"] }
@@ -32,7 +32,7 @@ serde-big-array = "0.4"
 serde_cbor = { version = "0.11", optional = true }
 sha2 = { version = "0.10", default-features = false }
 subtle = { version = "2.4", optional = true }
-uint-zigzag = { version = "0.2", optional = true }
+uint-zigzag = { version = "0.2" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]

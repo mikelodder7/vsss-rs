@@ -142,6 +142,7 @@
     trivial_numeric_casts
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(feature = "nightly", generic_const_exprs)]
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc;
