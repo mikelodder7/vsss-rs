@@ -32,8 +32,9 @@ fn valid_tests() {
 
 #[test]
 fn key_tests() {
-    let mut osrng = rand::rngs::OsRng::default();
-    let sc = Scalar::random(&mut osrng);
+    let mut osrng = OsRng::default();
+    let mut osrng7 = rand_7::rngs::OsRng::default();
+    let sc = Scalar::random(&mut osrng7);
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
     let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng);
@@ -52,7 +53,8 @@ fn key_tests() {
 #[test]
 fn feldman_verifier_serde_test() {
     let mut osrng = OsRng::default();
-    let sk = Scalar::random(&mut osrng);
+    let mut osrng7 = rand_7::rngs::OsRng::default();
+    let sk = Scalar::random(&mut osrng7);
     let res = Feldman::<2, 3>::split_secret::<WrappedScalar, WrappedRistretto, OsRng, 33>(
         sk.into(),
         None,
@@ -93,7 +95,8 @@ fn feldman_verifier_serde_test() {
 #[test]
 fn pedersen_verifier_serde_test() {
     let mut osrng = OsRng::default();
-    let sk = Scalar::random(&mut osrng);
+    let mut osrng7 = rand_7::rngs::OsRng::default();
+    let sk = Scalar::random(&mut osrng7);
     let res = Pedersen::<2, 3>::split_secret::<WrappedScalar, WrappedEdwards, OsRng, 33>(
         sk.into(),
         None,

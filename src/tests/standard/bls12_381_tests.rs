@@ -50,8 +50,8 @@ fn group_combine() {
         bytes.copy_from_slice(s.value());
         let sk = Scalar::from_bytes(&bytes).unwrap();
 
-        let h1 = G1Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst);
-        let h2 = G2Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst);
+        let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
+        let h2 = G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
 
         let s1 = h1 * sk;
         let s2 = h2 * sk;
@@ -75,9 +75,9 @@ fn group_combine() {
     let sig1 = res1.unwrap().to_affine();
     let sig2 = G2Prepared::from(res2.unwrap().to_affine());
 
-    let h1 = G1Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine();
+    let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst).to_affine();
     let h2 =
-        G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine());
+        G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst).to_affine());
 
     let pk1 = (G1Projective::GENERATOR * secret).to_affine();
     let pk2 = G2Prepared::from((G2Projective::GENERATOR * secret).to_affine());

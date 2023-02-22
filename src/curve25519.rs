@@ -26,8 +26,8 @@ use elliptic_curve::{
     ff::{Field, PrimeField},
     group::{Group, GroupEncoding},
 };
-use rand_chacha::ChaChaRng;
-use rand_core::{RngCore, SeedableRng};
+use rand_chacha_02::{ChaChaRng, rand_core::SeedableRng}; // for curve25519_dalek compatability
+use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -956,7 +956,7 @@ impl<'de> Deserialize<'de> for WrappedScalar {
 
 #[test]
 fn ristretto_to_edwards() {
-    let mut osrng = rand::rngs::OsRng::default();
+    let mut osrng = rand_7::rngs::OsRng::default();
     let sk = Scalar::random(&mut osrng);
     let pk = RISTRETTO_BASEPOINT_POINT * sk;
     let ek = WrappedEdwards::from(WrappedRistretto(pk));
