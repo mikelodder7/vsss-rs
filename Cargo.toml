@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "2.3.2"
+version = "2.4.0"
 
 [features]
 default = ["curve25519", "secp256k1"]
@@ -37,12 +37,12 @@ uint-zigzag = { version = "0.2" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
-bls12_381_plus = "0.5.3"
+bls12_381_plus = "0.5.5"
 ed25519-dalek = "1.0"
 k256 = { version = "0.11.6", features = ["arithmetic", "bits"] }
 p256 = { version = "0.11.1", features = ["arithmetic", "bits"] }
-rand = "0.8"
 rand_7 = { version = "0.7", package = "rand" }
+rand = "0.8"
 rand_xorshift = "0.3"
 serde_json = "1.0"
 serde_cbor = "0.11"

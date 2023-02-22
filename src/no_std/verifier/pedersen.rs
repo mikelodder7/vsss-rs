@@ -5,10 +5,7 @@
 
 use super::super::*;
 use super::FeldmanVerifier;
-use crate::{
-    util::bytes_to_field,
-    Share,
-};
+use crate::{util::bytes_to_field, Share};
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
@@ -21,12 +18,18 @@ use serde::{Deserialize, Serialize};
 pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
 {
     /// The generator for the blinding factor
-    #[serde(serialize_with = "serialize_group", deserialize_with = "deserialize_group")]
+    #[serde(
+        serialize_with = "serialize_group",
+        deserialize_with = "deserialize_group"
+    )]
     pub generator: G,
     /// The feldman verifier containing the share generator and commitments
     pub feldman_verifier: FeldmanVerifier<F, G, T>,
     /// The blinded commitments to the polynomial
-    #[serde(serialize_with = "serialize_group_vec", deserialize_with = "deserialize_group_vec")]
+    #[serde(
+        serialize_with = "serialize_group_vec",
+        deserialize_with = "deserialize_group_vec"
+    )]
     pub commitments: [G; T],
 }
 

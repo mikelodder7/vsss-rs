@@ -17,13 +17,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The generator for the share polynomial coefficients
-    #[serde(serialize_with = "serialize_group", deserialize_with = "deserialize_group")]
+    #[serde(
+        serialize_with = "serialize_group",
+        deserialize_with = "deserialize_group"
+    )]
     pub generator: G,
     /// The commitments to the polynomial
-    #[serde(serialize_with = "serialize_group_vec", deserialize_with = "deserialize_group_vec")]
+    #[serde(
+        serialize_with = "serialize_group_vec",
+        deserialize_with = "deserialize_group_vec"
+    )]
     pub commitments: Vec<G>,
     /// Marker
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub marker: PhantomData<F>,
 }
 

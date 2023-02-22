@@ -25,7 +25,7 @@ pub enum Error {
     /// A share cannot be converted to a group or field element
     InvalidShareConversion,
     /// A specific function is not implemented
-    NotImplemented
+    NotImplemented,
 }
 
 impl Display for Error {
@@ -46,8 +46,8 @@ impl Display for Error {
             Self::InvalidSecret => write!(f, "An invalid secret was supplied for split"),
             Self::InvalidShareConversion => {
                 write!(f, "A share cannot be converted to a group or field element")
-            },
-            Self::NotImplemented => write!(f, "Not implemented")
+            }
+            Self::NotImplemented => write!(f, "Not implemented"),
         }
     }
 }

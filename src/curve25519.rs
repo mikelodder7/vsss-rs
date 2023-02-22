@@ -26,7 +26,7 @@ use elliptic_curve::{
     ff::{Field, PrimeField},
     group::{Group, GroupEncoding},
 };
-use rand_chacha_02::{ChaChaRng, rand_core::SeedableRng}; // for curve25519_dalek compatability
+use rand_chacha_02::{rand_core::SeedableRng, ChaChaRng}; // for curve25519_dalek compatability
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},

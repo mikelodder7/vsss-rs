@@ -17,12 +17,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The generator for the blinding factor
-    #[serde(serialize_with = "serialize_group", deserialize_with = "deserialize_group")]
+    #[serde(
+        serialize_with = "serialize_group",
+        deserialize_with = "deserialize_group"
+    )]
     pub generator: G,
     /// The feldman verifier containing the share generator and commitments
     pub feldman_verifier: FeldmanVerifier<F, G>,
     /// The blinded commitments to the polynomial
-    #[serde(serialize_with = "serialize_group_vec", deserialize_with = "deserialize_group_vec")]
+    #[serde(
+        serialize_with = "serialize_group_vec",
+        deserialize_with = "deserialize_group_vec"
+    )]
     pub commitments: Vec<G>,
 }
 

@@ -12,32 +12,45 @@ pub use shamir::*;
 pub use share::*;
 pub use verifier::*;
 
-use crate::lib::String;
+use crate::lib::{String, Vec};
 use crate::util::*;
 use core::{
-    marker::PhantomData,
     fmt::{self, Formatter},
+    marker::PhantomData,
 };
-use std::prelude::v1::Vec;
 use elliptic_curve::group::{Group, GroupEncoding};
-use serde::{Serializer, Deserializer, de::{Visitor, SeqAccess, Error, Unexpected}, ser::{SerializeTuple, SerializeSeq}};
+use serde::{
+    de::{Error, SeqAccess, Unexpected, Visitor},
+    ser::{SerializeSeq, SerializeTuple},
+    Deserializer, Serializer,
+};
 
-pub(crate) fn serialize_group<G: Group + GroupEncoding, S: Serializer>(g: &G, s: S) -> Result<S::Ok, S::Error> {
-   let repr = g.to_bytes();
+pub(crate) fn serialize_group<G: Group + GroupEncoding, S: Serializer>(
+    g: &G,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    let repr = g.to_bytes();
     serialize_ref(repr, s)
 }
 
-pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer>(g: &Vec<G>, s: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer>(
+    g: &Vec<G>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
     let is_human_readable = s.is_human_readable();
-    let mut sequencer = s.serialize_seq(Some(g.len()))?;
+    let mut sequencer;
     if is_human_readable {
+        sequencer = s.serialize_seq(Some(g.len()))?;
         for gg in g {
             sequencer.serialize_element(&hex::encode(gg.to_bytes().as_ref()))?;
         }
     } else {
         let len = uint_zigzag::Uint::from(g.len());
 
-        for b in len.to_vec() {
+        let g_len = G::Repr::default().as_ref().len();
+        let len_bytes = len.to_vec();
+        sequencer = s.serialize_seq(Some(g.len() * g_len + len_bytes.len()))?;
+        for b in len_bytes {
             sequencer.serialize_element(&b)?;
         }
 
@@ -47,7 +60,6 @@ pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer>(g: &V
                 sequencer.serialize_element(b)?;
             }
         }
-
     }
     sequencer.end()
 }
@@ -66,10 +78,12 @@ fn serialize_ref<B: AsRef<[u8]>, S: Serializer>(bytes: B, s: S) -> Result<S::Ok,
     }
 }
 
-pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializer<'de>>(d: D) -> Result<Vec<G>, D::Error> {
+pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Vec<G>, D::Error> {
     struct GroupVecVisitor<G: Group + GroupEncoding> {
         is_human_readable: bool,
-        marker: PhantomData<G>
+        marker: PhantomData<G>,
     }
 
     impl<'de, G: Group + GroupEncoding> Visitor<'de> for GroupVecVisitor<G> {
@@ -79,12 +93,17 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
             write!(f, "a byte sequence or strings")
         }
 
-        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
             let mut values = Vec::new();
             if self.is_human_readable {
-                while let Some(s) = seq.next_element()?.ok_or(Error::invalid_length(values.len(), &self))? {
-                    let bytes = hex::decode::<&String>(&s).map_err(|_| Error::invalid_length(values.len(), &self))?;
-                    let f = bytes_to_group(&bytes).ok_or(Error::invalid_value(Unexpected::Bytes(&bytes), &self))?;
+                while let Some(s) = seq.next_element()? {
+                    let bytes = hex::decode::<&String>(&s)
+                        .map_err(|_| Error::invalid_length(values.len(), &self))?;
+                    let f = bytes_to_group(&bytes)
+                        .ok_or_else(|| Error::invalid_value(Unexpected::Bytes(&bytes), &self))?;
                     values.push(f);
                 }
             } else {
@@ -92,6 +111,7 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
                 let mut i = 0;
                 while let Some(b) = seq.next_element()? {
                     buffer[i] = b;
+                    i += 1;
                     if i == uint_zigzag::Uint::MAX_BYTES {
                         break;
                     }
@@ -111,6 +131,7 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
                 values.reserve(groups.0 as usize);
                 while let Some(b) = seq.next_element()? {
                     repr.as_mut()[i] = b;
+                    i += 1;
                     if i == repr_len {
                         i = 0;
                         let pt = G::from_bytes(&repr);
@@ -122,7 +143,6 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
                             break;
                         }
                     }
-                    i += 1;
                 }
                 if values.len() != groups.0 as usize {
                     return Err(Error::invalid_length(values.len(), &self));
@@ -134,7 +154,7 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
 
     let v = GroupVecVisitor {
         is_human_readable: d.is_human_readable(),
-        marker: PhantomData::<G>
+        marker: PhantomData::<G>,
     };
     d.deserialize_seq(v)
 }

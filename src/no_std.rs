@@ -19,21 +19,29 @@ use core::{
     mem::MaybeUninit,
 };
 use elliptic_curve::group::{Group, GroupEncoding};
-use serde::{de::{Error, SeqAccess, Unexpected, Visitor}, Deserializer, ser::{self, SerializeSeq, SerializeTuple}, Serializer};
+use serde::{
+    de::{Error, SeqAccess, Unexpected, Visitor},
+    ser::{self, SerializeSeq, SerializeTuple},
+    Deserializer, Serializer,
+};
 
 /// Set to BLS12-381. If we need bigger, then adjust
 const MAX_GROUP_BYTES: usize = 192;
-const MAX_GROUP_HEX: usize = MAX_GROUP_BYTES*2;
+const MAX_GROUP_HEX: usize = MAX_GROUP_BYTES * 2;
 
-pub(crate) fn serialize_group<G: Group + GroupEncoding, S: Serializer>(g: &G, s: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn serialize_group<G: Group + GroupEncoding, S: Serializer>(
+    g: &G,
+    s: S,
+) -> Result<S::Ok, S::Error> {
     let repr = g.to_bytes();
     let bytes = repr.as_ref();
 
     if s.is_human_readable() {
         let mut output = [0u8; MAX_GROUP_HEX];
         let len = bytes.len();
-        hex::encode_to_slice(bytes, &mut output[..len*2]).map_err(|_| ser::Error::custom("invalid length"))?;
-        let h = unsafe { core::str::from_utf8_unchecked(&output[..len*2]) };
+        hex::encode_to_slice(bytes, &mut output[..len * 2])
+            .map_err(|_| ser::Error::custom("invalid length"))?;
+        let h = unsafe { core::str::from_utf8_unchecked(&output[..len * 2]) };
         s.serialize_str(h)
     } else {
         let mut tupler = s.serialize_tuple(bytes.len())?;
@@ -44,17 +52,22 @@ pub(crate) fn serialize_group<G: Group + GroupEncoding, S: Serializer>(g: &G, s:
     }
 }
 
-pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer, const N: usize>(g: &[G; N], s: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer, const N: usize>(
+    g: &[G; N],
+    s: S,
+) -> Result<S::Ok, S::Error> {
     let is_human_readable = s.is_human_readable();
-    let mut sequencer = s.serialize_seq(Some(N))?;
+    let mut sequencer;
     if is_human_readable {
+        sequencer = s.serialize_seq(Some(N))?;
         let mut out = [0u8; MAX_GROUP_HEX];
         for gg in g {
             let repr = gg.to_bytes();
             let bytes = repr.as_ref();
             let len = bytes.len();
-            hex::encode_to_slice(&bytes, &mut out[..len*2]).map_err(|_| ser::Error::custom("invalid length"))?;
-            let h = unsafe { core::str::from_utf8_unchecked(&out[..len*2]) };
+            hex::encode_to_slice(bytes, &mut out[..len * 2])
+                .map_err(|_| ser::Error::custom("invalid length"))?;
+            let h = unsafe { core::str::from_utf8_unchecked(&out[..len * 2]) };
             sequencer.serialize_element(h)?;
         }
     } else {
@@ -62,8 +75,11 @@ pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer, const
 
         let mut len_bytes = [0u8; uint_zigzag::Uint::MAX_BYTES];
         let len_len = len.to_bytes_with_length(&mut len_bytes);
-        for i in 0..len_len {
-            sequencer.serialize_element(&len_bytes[i])?;
+
+        let g_len = G::Repr::default().as_ref().len();
+        sequencer = s.serialize_seq(Some(N * g_len + len_len))?;
+        for i in &len_bytes[..len_len] {
+            sequencer.serialize_element(i)?;
         }
 
         for gg in g {
@@ -77,10 +93,17 @@ pub(crate) fn serialize_group_vec<G: Group + GroupEncoding, S: Serializer, const
     sequencer.end()
 }
 
-pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializer<'de>, const N: usize>(d: D) -> Result<[G; N], D::Error> {
+pub(crate) fn deserialize_group_vec<
+    'de,
+    G: Group + GroupEncoding,
+    D: Deserializer<'de>,
+    const N: usize,
+>(
+    d: D,
+) -> Result<[G; N], D::Error> {
     struct GroupVecVisitor<G: Group + GroupEncoding, const N: usize> {
         is_human_readable: bool,
-        marker: PhantomData<G>
+        marker: PhantomData<G>,
     }
 
     impl<'de, G: Group + GroupEncoding, const N: usize> Visitor<'de> for GroupVecVisitor<G, N> {
@@ -90,31 +113,30 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
             write!(f, "a byte sequence or strings")
         }
 
-        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
             let mut values = MaybeUninit::<[G; N]>::uninit();
             if self.is_human_readable {
-                #[cfg(not(any(feature = "alloc", feature = "std")))]
-                {
-                    return Err(Error::custom("not supported in no-std mode"));
-                }
-                #[cfg(any(feature = "alloc", feature = "std"))]
-                {
-                    use crate::lib::String;
-                    let mut repr = G::Repr::default();
-                    let mut i = 0;
-                    while let Some(s) = seq.next_element()?.ok_or(Error::invalid_length(i, &self))? {
-                        hex::decode_to_slice::<&String>(&s, repr.as_mut()).map_err(|_| Error::invalid_length(i, &self))?;
-                        let g = bytes_to_group(repr.as_ref()).ok_or(Error::invalid_value(Unexpected::Bytes(&repr.as_ref()), &self))?;
-                        let p = (values.as_mut_ptr() as *mut G).wrapping_add(i);
-                        unsafe { core::ptr::write(p, g) };
-                        i += 1;
-                    }
+                let mut repr = G::Repr::default();
+                let mut i = 0;
+                while let Some(s) = seq.next_element::<&str>()? {
+                    hex::decode_to_slice(s, repr.as_mut())
+                        .map_err(|_| Error::invalid_length(i, &self))?;
+                    let g = bytes_to_group(repr.as_ref()).ok_or_else(|| {
+                        Error::invalid_value(Unexpected::Bytes(repr.as_ref()), &self)
+                    })?;
+                    let p = (values.as_mut_ptr() as *mut G).wrapping_add(i);
+                    unsafe { core::ptr::write(p, g) };
+                    i += 1;
                 }
             } else {
                 let mut buffer = [0u8; uint_zigzag::Uint::MAX_BYTES];
                 let mut i = 0;
                 while let Some(b) = seq.next_element()? {
                     buffer[i] = b;
+                    i += 1;
                     if i == uint_zigzag::Uint::MAX_BYTES {
                         break;
                     }
@@ -138,6 +160,7 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
                 let mut j = 0;
                 while let Some(b) = seq.next_element()? {
                     repr.as_mut()[i] = b;
+                    i += 1;
                     if i == repr_len {
                         i = 0;
                         let pt = G::from_bytes(&repr);
@@ -151,7 +174,6 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
                             break;
                         }
                     }
-                    i += 1;
                 }
             }
             let values = unsafe { values.assume_init() };
@@ -159,6 +181,9 @@ pub(crate) fn deserialize_group_vec<'de, G: Group + GroupEncoding, D: Deserializ
         }
     }
 
-    let v = GroupVecVisitor { is_human_readable: d.is_human_readable(), marker: PhantomData::<G>};
+    let v = GroupVecVisitor {
+        is_human_readable: d.is_human_readable(),
+        marker: PhantomData::<G>,
+    };
     d.deserialize_seq(v)
 }

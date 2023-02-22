@@ -44,11 +44,17 @@
 //! let mut osrng = OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! // 32 for field size, 1 for identifier = 33
 //! let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Shamir {t: 2, n: 3}.split_secret::<Scalar, OsRng>(*nzs.as_ref(), &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Shamir {t: 2, n: 3}.combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -67,10 +73,16 @@
 //! let mut osrng = OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let secret = WrappedScalar(*sk.to_nonzero_scalar());
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(secret, &mut osrng);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Shamir {t: 2, n: 3}.split_secret::<WrappedScalar, OsRng>(secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Shamir {t: 2, n: 3}.combine_shares::<WrappedScalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -88,13 +100,19 @@
 //!
 //! let mut rng = OsRng::default();
 //! let secret = Scalar::random(&mut rng);
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! let res = Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(secret, None, &mut rng);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Feldman{ t: 2, n: 3}.split_secret::<Scalar, G1Projective, OsRng>(secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
 //!     assert!(verifier.verify(s));
 //! }
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! let res = Feldman::<2, 3>::combine_shares::<Scalar, 33>(&shares);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Feldman{ t: 2, n: 3}.combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let secret_1 = res.unwrap();
 //! assert_eq!(secret, secret_1);
@@ -113,14 +131,21 @@
 //! use rand::rngs::OsRng;
 //! use x25519_dalek::StaticSecret;
 //!
-//! let mut osrng = rand::rngs::OsRng::default();
-//! let sc = Scalar::random(&mut osrng);
+//! let mut osrng_7 = rand_7::rngs::OsRng::default();
+//! let mut osrng_8 = rand::rngs::OsRng::default();
+//! let sc = Scalar::random(&mut osrng_7);
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng);
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
+//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng_8);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Shamir {t: 2, n: 3}.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng_8);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
+//! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 //! let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
+//! #[cfg(any(feature = "std", feature = "alloc"))]
+//! let res = Shamir {t: 2, n: 3}.combine_shares::<WrappedScalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! assert_eq!(scalar.0, sc);
@@ -155,13 +180,15 @@ mod lib {
     #[cfg(all(feature = "alloc", not(feature = "std")))]
     pub use alloc::collections::BTreeSet;
     #[cfg(all(feature = "alloc", not(feature = "std")))]
+    pub use alloc::string::String;
+    #[cfg(all(feature = "alloc", not(feature = "std")))]
     pub use alloc::vec::Vec;
     #[cfg(feature = "std")]
     pub use std::collections::BTreeSet;
     #[cfg(feature = "std")]
-    pub use std::vec::Vec;
-    #[cfg(feature = "std")]
     pub use std::string::String;
+    #[cfg(feature = "std")]
+    pub use std::vec::Vec;
 }
 
 #[cfg(test)]
