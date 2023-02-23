@@ -19,11 +19,73 @@ use core::{
     marker::PhantomData,
 };
 use elliptic_curve::group::{Group, GroupEncoding};
+use elliptic_curve::PrimeField;
 use serde::{
     de::{Error, SeqAccess, Unexpected, Visitor},
     ser::{SerializeSeq, SerializeTuple},
     Deserializer, Serializer,
 };
+
+pub(crate) fn serialize_scalar<F: PrimeField, S: Serializer>(
+    scalar: &F,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    let repr = scalar.to_repr();
+    serialize_ref(repr, s)
+}
+
+pub(crate) fn deserialize_scalar<'de, F: PrimeField, D: Deserializer<'de>>(
+    d: D,
+) -> Result<F, D::Error> {
+    struct ScalarVisitor<F: PrimeField> {
+        marker: PhantomData<F>,
+    }
+
+    impl<'de, F: PrimeField> Visitor<'de> for ScalarVisitor<F> {
+        type Value = F;
+
+        fn expecting(&self, f: &mut Formatter) -> fmt::Result {
+            write!(f, "a byte sequence or string")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            let mut repr = F::Repr::default();
+            hex::decode_to_slice(v, repr.as_mut())
+                .map_err(|_| Error::invalid_value(Unexpected::Str(v), &self))?;
+            bytes_to_field(repr.as_ref())
+                .ok_or_else(|| Error::invalid_value(Unexpected::Bytes(repr.as_ref()), &self))
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut repr = F::Repr::default();
+
+            let mut i = 0;
+            while let Some(b) = seq.next_element()? {
+                repr.as_mut()[i] = b;
+                i += 1;
+            }
+
+            bytes_to_field(repr.as_ref())
+                .ok_or_else(|| Error::custom("unable to convert to a scalar"))
+        }
+    }
+
+    let v = ScalarVisitor {
+        marker: PhantomData::<F>,
+    };
+    if d.is_human_readable() {
+        d.deserialize_str(v)
+    } else {
+        let repr = F::Repr::default();
+        d.deserialize_tuple(repr.as_ref().len(), v)
+    }
+}
 
 pub(crate) fn serialize_group<G: Group + GroupEncoding, S: Serializer>(
     g: &G,

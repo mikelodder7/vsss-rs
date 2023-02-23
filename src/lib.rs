@@ -137,7 +137,7 @@
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
 //! #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng_8);
+//! let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng_8);
 //! #[cfg(any(feature = "std", feature = "alloc"))]
 //! let res = Shamir {t: 2, n: 3}.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng_8);
 //! assert!(res.is_ok());

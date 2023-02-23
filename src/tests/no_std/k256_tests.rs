@@ -6,7 +6,7 @@ use super::invalid::*;
 use super::valid::*;
 use crate::{
     secp256k1::{WrappedProjectivePoint, WrappedScalar},
-    Feldman, FeldmanVerifier, Shamir,
+    Feldman, FeldmanVerifier, Pedersen, PedersenResult, Shamir,
 };
 use elliptic_curve::ff::PrimeField;
 use k256::{NonZeroScalar, SecretKey};
@@ -81,4 +81,19 @@ fn verifier_serde_test() {
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
+
+    let res = Pedersen::<2, 3>::split_secret::<WrappedScalar, WrappedProjectivePoint, OsRng, 33>(
+        secret, None, None, None, &mut osrng,
+    );
+    assert!(res.is_ok());
+    let result = res.unwrap();
+    let res = serde_cbor::to_vec(&result);
+    assert!(res.is_ok());
+    let v_bytes = res.unwrap();
+    let res = serde_cbor::from_slice::<
+        PedersenResult<WrappedScalar, WrappedProjectivePoint, 33, 2, 3>,
+    >(&v_bytes);
+    assert!(res.is_ok());
+    let result2 = res.unwrap();
+    assert_eq!(result2.blinding, result.blinding);
 }

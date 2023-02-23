@@ -24,6 +24,8 @@ pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<
     )]
     pub generator: G,
     /// The feldman verifier containing the share generator and commitments
+    #[serde(bound(serialize = "FeldmanVerifier<F, G, T>: Serialize"))]
+    #[serde(bound(deserialize = "FeldmanVerifier<F, G, T>: Deserialize<'de>"))]
     pub feldman_verifier: FeldmanVerifier<F, G, T>,
     /// The blinded commitments to the polynomial
     #[serde(

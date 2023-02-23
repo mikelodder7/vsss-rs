@@ -5,6 +5,15 @@ All notable changes to this crate will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v2.5.0 - 2023-02-23
+
+- Additional serialization and test fixes
+
+## v2.4.0 - 2023-02-20
+
+- Fixed some serialization and tests
+- Update dependencies
+
 ## v2.3.2 - 2023-01-04
 - Add serdes to all structs
 

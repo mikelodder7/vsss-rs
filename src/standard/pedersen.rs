@@ -3,7 +3,9 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use super::{FeldmanVerifier, PedersenVerifier, Shamir, Share};
+use super::{
+    deserialize_scalar, serialize_scalar, FeldmanVerifier, PedersenVerifier, Shamir, Share,
+};
 use crate::lib::*;
 use crate::Error;
 use core::marker::PhantomData;
@@ -19,12 +21,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
     /// The random blinding factor randomly generated or supplied
+    #[serde(
+        serialize_with = "serialize_scalar",
+        deserialize_with = "deserialize_scalar"
+    )]
     pub blinding: F,
     /// The blinding shares
     pub blind_shares: Vec<Share>,
     /// The secret shares
     pub secret_shares: Vec<Share>,
     /// The verifier for validating shares
+    #[serde(bound(serialize = "PedersenVerifier<F, G>: Serialize"))]
+    #[serde(bound(deserialize = "PedersenVerifier<F, G>: Deserialize<'de>"))]
     pub verifier: PedersenVerifier<F, G>,
 }
 

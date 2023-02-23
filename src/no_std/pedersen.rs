@@ -3,7 +3,7 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use super::share::Share;
+use super::{deserialize_scalar, serialize_scalar, share::Share};
 use crate::{Error, FeldmanVerifier, PedersenVerifier, Shamir};
 use core::fmt::Formatter;
 use core::marker::PhantomData;
@@ -27,6 +27,10 @@ pub struct PedersenResult<
     const N: usize,
 > {
     /// The random blinding factor randomly generated or supplied
+    #[serde(
+        serialize_with = "serialize_scalar",
+        deserialize_with = "deserialize_scalar"
+    )]
     pub blinding: F,
     /// The blinding shares
     #[serde(
@@ -41,6 +45,8 @@ pub struct PedersenResult<
     )]
     pub secret_shares: [Share<S>; N],
     /// The verifier for validating shares
+    #[serde(bound(serialize = "PedersenVerifier<F, G, T>: Serialize"))]
+    #[serde(bound(deserialize = "PedersenVerifier<F, G, T>: Deserialize<'de>"))]
     pub verifier: PedersenVerifier<F, G, T>,
 }
 
