@@ -10,9 +10,10 @@ use core::{
     fmt::{self, Formatter},
 };
 use elliptic_curve::{ff::PrimeField, group::GroupEncoding};
+use serde::de::Unexpected;
 use serde::{
     de::{self, SeqAccess, Visitor},
-    ser::SerializeTuple,
+    ser::{self, SerializeSeq},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use zeroize::Zeroize;
@@ -54,11 +55,20 @@ impl<const N: usize> Serialize for Share<N> {
     where
         S: Serializer,
     {
-        let mut seq = s.serialize_tuple(N)?;
-        for b in &self.0 {
-            seq.serialize_element(b)?;
+        if s.is_human_readable() {
+            let mut output = [0u8; 66];
+            let len = self.0.len();
+            hex::encode_to_slice(self.0, &mut output[..len * 2])
+                .map_err(|_| ser::Error::custom("invalid length"))?;
+            let h = unsafe { core::str::from_utf8_unchecked(&output[..len * 2]) };
+            s.serialize_str(h)
+        } else {
+            let mut seq = s.serialize_seq(Some(N))?;
+            for b in &self.0 {
+                seq.serialize_element(b)?;
+            }
+            seq.end()
         }
-        seq.end()
     }
 }
 
@@ -76,6 +86,16 @@ impl<'de, const N: usize> Deserialize<'de> for Share<N> {
                 write!(f, "a byte sequence")
             }
 
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let mut arr = [0u8; N];
+                hex::decode_to_slice(v, &mut arr)
+                    .map_err(|_| de::Error::invalid_value(Unexpected::Str(v), &self))?;
+                Ok(Share(arr))
+            }
+
             fn visit_seq<A>(self, mut s: A) -> Result<Share<N>, A::Error>
             where
                 A: SeqAccess<'de>,
@@ -90,7 +110,11 @@ impl<'de, const N: usize> Deserialize<'de> for Share<N> {
             }
         }
 
-        deserializer.deserialize_tuple(N, ShareVisitor)
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(ShareVisitor)
+        } else {
+            deserializer.deserialize_seq(ShareVisitor)
+        }
     }
 }
 
