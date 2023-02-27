@@ -33,7 +33,7 @@ impl Shamir {
         F: PrimeField,
         R: RngCore + CryptoRng,
     {
-        self.check_params(Some(secret))?;
+        self.check_params()?;
 
         let (shares, _) = self.get_shares_and_polynomial(secret, rng);
         Ok(shares)
@@ -68,7 +68,7 @@ impl Shamir {
         F: PrimeField,
         S: Default + Copy + AddAssign + Mul<F, Output = S>,
     {
-        self.check_params::<F>(None)?;
+        self.check_params()?;
 
         if shares.len() < self.t {
             return Err(Error::SharingMinThreshold);
@@ -157,10 +157,7 @@ impl Shamir {
         result
     }
 
-    pub(crate) fn check_params<F>(&self, secret: Option<F>) -> Result<(), Error>
-    where
-        F: PrimeField,
-    {
+    pub(crate) fn check_params(&self) -> Result<(), Error> {
         if self.n < self.t {
             return Err(Error::SharingLimitLessThanThreshold);
         }
@@ -169,9 +166,6 @@ impl Shamir {
         }
         if self.n > 255 {
             return Err(Error::SharingMaxRequest);
-        }
-        if secret.is_some() && secret.unwrap().is_zero().unwrap_u8() == 1u8 {
-            return Err(Error::InvalidShare);
         }
         Ok(())
     }

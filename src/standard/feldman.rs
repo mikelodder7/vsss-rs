@@ -46,7 +46,7 @@ impl Feldman {
             t: self.t,
             n: self.n,
         };
-        shamir.check_params(Some(secret))?;
+        shamir.check_params()?;
 
         let (shares, polynomial) = shamir.get_shares_and_polynomial(secret, rng);
 

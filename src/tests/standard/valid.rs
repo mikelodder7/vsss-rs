@@ -2,7 +2,7 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-use crate::{tests::utils::MockRng, util::bytes_to_field, Feldman, Pedersen, Shamir};
+use crate::{tests::utils::MockRng, util::bytes_to_field, Feldman, Pedersen, Shamir, Share};
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
@@ -45,6 +45,46 @@ pub fn combine_single<
     for (i, s) in p_res.secret_shares.iter().enumerate() {
         assert!(p_res.verifier.verify(s, &p_res.blind_shares[i]));
     }
+    let res = shamir.combine_shares::<F>(&shares);
+    assert!(res.is_ok());
+    let secret_1 = res.unwrap();
+    assert_eq!(secret, secret_1);
+
+    // Zero is a special case so make sure it works
+    let secret = F::zero();
+    let res = shamir.split_secret::<F, MockRng>(secret, &mut rng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+
+    let res = shamir.combine_shares::<F>(&shares);
+    assert!(res.is_ok());
+    let secret_1 = res.unwrap();
+    assert_eq!(secret, secret_1);
+
+    // Feldman test
+    let res = Feldman { t: 2, n: 3 }.split_secret::<F, G, MockRng>(secret, None, &mut rng);
+    assert!(res.is_ok());
+    let (shares, verifier) = res.unwrap();
+    for s in &shares {
+        assert!(verifier.verify(s));
+    }
+    // make sure no malicious share works
+    let bad_share = Share(vec![1u8; 33]);
+    assert!(!verifier.verify(&bad_share));
+
+    let res = shamir.combine_shares::<F>(&shares);
+    assert!(res.is_ok());
+    let secret_1 = res.unwrap();
+    assert_eq!(secret, secret_1);
+
+    let res =
+        Pedersen { t: 2, n: 3 }.split_secret::<F, G, MockRng>(secret, None, None, None, &mut rng);
+    assert!(res.is_ok());
+    let p_res = res.unwrap();
+    for (i, s) in p_res.secret_shares.iter().enumerate() {
+        assert!(p_res.verifier.verify(s, &p_res.blind_shares[i]));
+    }
+    assert!(!p_res.verifier.verify(&bad_share, &bad_share));
     let res = shamir.combine_shares::<F>(&shares);
     assert!(res.is_ok());
     let secret_1 = res.unwrap();

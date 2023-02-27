@@ -34,7 +34,7 @@ impl<const T: usize, const N: usize> Feldman<T, N> {
         G: Group + GroupEncoding + Default + ScalarMul<F>,
         R: RngCore + CryptoRng,
     {
-        Shamir::<T, N>::check_params(Some(secret))?;
+        Shamir::<T, N>::check_params()?;
 
         let (shares, polynomial) = Shamir::<T, N>::get_shares_and_polynomial(secret, rng);
 

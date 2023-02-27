@@ -37,14 +37,6 @@ pub fn split_invalid_args<
         Pedersen::<1, 8>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng)
             .is_err()
     );
-
-    let secret = F::zero();
-    assert!(Shamir::<2, 3>::split_secret::<F, MockRng, S>(secret, &mut rng).is_err());
-    assert!(Feldman::<2, 3>::split_secret::<F, G, MockRng, S>(secret, None, &mut rng).is_err());
-    assert!(
-        Pedersen::<2, 3>::split_secret::<F, G, MockRng, S>(secret, None, None, None, &mut rng)
-            .is_err()
-    );
 }
 
 pub fn combine_invalid<F: PrimeField, const S: usize>() {

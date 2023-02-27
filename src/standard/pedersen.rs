@@ -80,7 +80,7 @@ impl Pedersen {
             t: self.t,
             n: self.n,
         };
-        shamir.check_params(Some(secret))?;
+        shamir.check_params()?;
 
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
