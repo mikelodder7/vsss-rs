@@ -197,12 +197,21 @@ mod tests;
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
+#[cfg(feature = "curve25519")]
+pub use curve25519_dalek;
 mod error;
 #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 mod no_std;
 #[cfg(feature = "secp256k1")]
 #[cfg_attr(docsrs, doc(cfg(feature = "secp256k1")))]
 pub mod secp256k1;
+#[cfg(feature = "secp256k1")]
+pub use k256;
+pub use elliptic_curve;
+#[cfg(feature = "curve25519")]
+pub use sha2;
+#[cfg(any(feature = "secp256k1", feature = "curve25519"))]
+pub use subtle;
 #[cfg(any(feature = "std", feature = "alloc"))]
 mod standard;
 mod util;
