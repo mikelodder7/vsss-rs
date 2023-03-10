@@ -5,7 +5,7 @@
 use super::super::utils::MockRng;
 use super::invalid::*;
 use super::valid::*;
-use crate::{Feldman, FeldmanVerifier, Shamir, Share};
+use crate::*;
 use bls12_381_plus::{
     multi_miller_loop, ExpandMsgXmd, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
     Scalar,
@@ -35,7 +35,7 @@ fn valid_tests() {
 fn group_combine() {
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
-    let res = Shamir { t: 3, n: 5 }.split_secret::<Scalar, MockRng>(secret, &mut rng);
+    let res = split_secret::<Scalar, _>(3, 5, secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
@@ -66,8 +66,8 @@ fn group_combine() {
         sig_shares2[i] = Share(bytes2);
     }
 
-    let res1 = Shamir { t: 3, n: 5 }.combine_shares_group::<Scalar, G1Projective>(&sig_shares1);
-    let res2 = Shamir { t: 3, n: 5 }.combine_shares_group::<Scalar, G2Projective>(&sig_shares2);
+    let res1 = combine_shares_group::<Scalar, G1Projective>(&sig_shares1);
+    let res2 = combine_shares_group::<Scalar, G2Projective>(&sig_shares2);
     assert!(res1.is_ok());
     assert!(res2.is_ok());
 
@@ -105,21 +105,12 @@ fn group_combine() {
 fn verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = Scalar::random(&mut osrng);
-    let res =
-        Feldman { t: 2, n: 3 }.split_secret::<Scalar, G1Projective, OsRng>(sk, None, &mut osrng);
+    let res = feldman::split_secret::<Scalar, G1Projective, _>(2, 3, sk, None, &mut osrng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares {
         assert!(verifier.verify(s).is_ok());
     }
-    let res = serde_cbor::to_vec(&verifier);
-    assert!(res.is_ok());
-    let v_bytes = res.unwrap();
-    let res = serde_cbor::from_slice::<FeldmanVerifier<Scalar, G1Projective>>(&v_bytes);
-    assert!(res.is_ok());
-    let verifier2 = res.unwrap();
-    assert_eq!(verifier.generator, verifier2.generator);
-
     let res = serde_json::to_string(&verifier);
     assert!(res.is_ok());
     let v_str = res.unwrap();

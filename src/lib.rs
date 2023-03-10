@@ -36,17 +36,17 @@
 //! To split a p256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs_std::Shamir;
+//! use vsss_rs_std::{*, shamir};
 //! use elliptic_curve::ff::PrimeField;
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
 //!
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
-//! let res = Shamir {t: 2, n: 3}.split_secret::<Scalar, _>(*nzs.as_ref(), &mut osrng);
+//! let res = shamir::split_secret::<Scalar, _>(2, 3, *nzs.as_ref(), &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = Shamir {t: 2, n: 3}.combine_shares::<Scalar>(&shares);
+//! let res = combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -57,17 +57,17 @@
 //! To split a k256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs_std::{Shamir, secp256k1::WrappedScalar};
+//! use vsss_rs_std::{*, shamir};
 //! use elliptic_curve::ff::PrimeField;
-//! use k256::{NonZeroScalar, SecretKey};
+//! use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 //!
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
-//! let secret = WrappedScalar(*sk.to_nonzero_scalar());
-//! let res = Shamir {t: 2, n: 3}.split_secret::<WrappedScalar, _>(secret, &mut osrng);
+//! let secret = *sk.to_nonzero_scalar();
+//! let res = shamir::split_secret::<Scalar, _>(2, 3, secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = Shamir {t: 2, n: 3}.combine_shares::<WrappedScalar>(&shares);
+//! let res = combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -78,19 +78,19 @@
 //! Feldman or Pedersen return extra information for verification using their respective verifiers
 //!
 //! ```
-//! use vsss_rs_std::Feldman;
+//! use vsss_rs_std::{*, feldman};
 //! use bls12_381_plus::{Scalar, G1Projective};
 //! use elliptic_curve::ff::Field;
 //!
 //! let mut rng = rand_core::OsRng::default();
 //! let secret = Scalar::random(&mut rng);
-//! let res = Feldman{ t: 2, n: 3}.split_secret::<Scalar, G1Projective, _>(secret, None, &mut rng);
+//! let res = feldman::split_secret::<Scalar, G1Projective, _>(2, 3, secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
 //!     assert!(verifier.verify(s).is_ok());
 //! }
-//! let res = Feldman{ t: 2, n: 3}.combine_shares::<Scalar>(&shares);
+//! let res = combine_shares::<Scalar>(&shares);
 //! assert!(res.is_ok());
 //! let secret_1 = res.unwrap();
 //! assert_eq!(secret, secret_1);
@@ -105,7 +105,7 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use ed25519_dalek::SecretKey;
-//! use vsss_rs_std::{Shamir, curve25519::WrappedScalar};
+//! use vsss_rs_std::{curve25519::WrappedScalar, *};
 //! use x25519_dalek::StaticSecret;
 //!
 //! let mut osrng_7 = rand_7::rngs::OsRng::default();
@@ -113,10 +113,10 @@
 //! let sc = Scalar::random(&mut osrng_7);
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-//! let res = Shamir {t: 2, n: 3}.split_secret::<WrappedScalar, _>(sc.into(), &mut osrng_8);
+//! let res = shamir::split_secret::<WrappedScalar, _>(2, 3, sc.into(), &mut osrng_8);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = Shamir {t: 2, n: 3}.combine_shares::<WrappedScalar>(&shares);
+//! let res = combine_shares::<WrappedScalar>(&shares);
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
 //! assert_eq!(scalar.0, sc);
@@ -143,21 +143,21 @@
 mod tests;
 
 mod error;
-mod feldman;
-mod pedersen;
+pub mod feldman;
+pub mod pedersen;
 mod polynomial;
-mod shamir;
+pub mod shamir;
 mod share;
 mod util;
 mod verifier;
 
+use shamir::*;
 use util::*;
 
 pub use error::*;
-pub use feldman::*;
-pub use pedersen::*;
+pub use pedersen::PedersenResult;
 pub use polynomial::*;
-pub use shamir::*;
+pub use shamir::{combine_shares, combine_shares_group};
 pub use share::*;
 pub use verifier::*;
 
@@ -166,9 +166,6 @@ pub use verifier::*;
 pub mod curve25519;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
-#[cfg(feature = "secp256k1")]
-#[cfg_attr(docsrs, doc(cfg(feature = "secp256k1")))]
-pub mod secp256k1;
 pub use elliptic_curve;
 #[cfg(feature = "secp256k1")]
 pub use k256;

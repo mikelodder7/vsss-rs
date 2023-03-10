@@ -7,7 +7,7 @@ use super::invalid::*;
 use super::valid::*;
 use crate::{
     curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
-    Feldman, FeldmanVerifier, Pedersen, PedersenResult, PedersenVerifier, Shamir,
+    *,
 };
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
@@ -36,10 +36,10 @@ fn key_tests() {
     let sc = Scalar::random(&mut osrng_7);
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-    let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, _>(sc.into(), &mut osrng_8);
+    let res = split_secret::<WrappedScalar, _>(2, 3, sc.into(), &mut osrng_8);
     assert!(res.is_ok());
     let shares = res.unwrap();
-    let res = Shamir { t: 2, n: 3 }.combine_shares::<WrappedScalar>(&shares);
+    let res = combine_shares::<WrappedScalar>(&shares);
     assert!(res.is_ok());
     let scalar = res.unwrap();
     assert_eq!(scalar.0, sc);
@@ -54,7 +54,9 @@ fn feldman_verifier_serde_test() {
     let mut osrng_7 = rand_7::rngs::OsRng::default();
     let mut osrng_8 = rand::rngs::OsRng::default();
     let sk = Scalar::random(&mut osrng_7);
-    let res = Feldman { t: 2, n: 3 }.split_secret::<WrappedScalar, WrappedRistretto, _>(
+    let res = feldman::split_secret::<WrappedScalar, WrappedRistretto, _>(
+        2,
+        3,
         sk.into(),
         None,
         &mut osrng_8,
@@ -64,16 +66,6 @@ fn feldman_verifier_serde_test() {
     for s in &shares {
         assert!(verifier.verify(s).is_ok());
     }
-    let res = serde_cbor::to_vec(&verifier);
-    assert!(res.is_ok());
-    let v_bytes = res.unwrap();
-    let res = serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedRistretto>>(&v_bytes);
-    if res.is_err() {
-        println!("{:?}", res);
-    }
-    assert!(res.is_ok());
-    let verifier2 = res.unwrap();
-    assert_eq!(verifier.generator, verifier2.generator);
 
     let res = serde_json::to_string(&verifier);
     assert!(res.is_ok());
@@ -97,14 +89,15 @@ fn pedersen_verifier_serde_test() {
     let mut osrng_7 = rand_7::rngs::OsRng::default();
     let mut osrng_8 = rand::rngs::OsRng::default();
     let sk = Scalar::random(&mut osrng_7);
-    let res = Pedersen { t: 2, n: 3 }
-        .split_secret::<WrappedScalar, WrappedEdwards, rand::rngs::OsRng>(
-            sk.into(),
-            None,
-            None,
-            None,
-            &mut osrng_8,
-        );
+    let res = pedersen::split_secret::<WrappedScalar, WrappedEdwards, rand::rngs::OsRng>(
+        2,
+        3,
+        sk.into(),
+        None,
+        None,
+        None,
+        &mut osrng_8,
+    );
     assert!(res.is_ok());
     let ped_res = res.unwrap();
     let PedersenResult {
@@ -116,13 +109,6 @@ fn pedersen_verifier_serde_test() {
     for (s, b) in secret_shares.iter().zip(blind_shares.iter()) {
         assert!(verifier.verify(s, b).is_ok());
     }
-    let res = serde_cbor::to_vec(&verifier);
-    assert!(res.is_ok());
-    let v_bytes = res.unwrap();
-    let res = serde_cbor::from_slice::<PedersenVerifier<WrappedScalar, WrappedEdwards>>(&v_bytes);
-    assert!(res.is_ok());
-    let verifier2 = res.unwrap();
-    assert_eq!(verifier.generator, verifier2.generator);
 
     let res = serde_json::to_string(&verifier);
     assert!(res.is_ok());

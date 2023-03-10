@@ -128,13 +128,37 @@ impl Share {
     pub fn as_group_element<G: GroupEncoding>(&self) -> VsssResult<G> {
         let mut repr = G::Repr::default();
         repr.as_mut().copy_from_slice(self.value());
-        Option::<G>::from(G::from_bytes(&repr)).ok_or_else(|| Error::InvalidShareConversion)
+        Option::<G>::from(G::from_bytes(&repr)).ok_or(Error::InvalidShareConversion)
+    }
+
+    /// Convert group element into a share
+    pub fn from_group_element<G: GroupEncoding>(identifier: u8, group: G) -> VsssResult<Self> {
+        if identifier == 0 {
+            Err(Error::InvalidShareConversion)
+        } else {
+            let repr = group.to_bytes();
+            let mut bytes = vec![identifier; repr.as_ref().len()];
+            bytes[1..].copy_from_slice(repr.as_ref());
+            Ok(Self(bytes))
+        }
     }
 
     /// Convert this share into a prime field element
     pub fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
         let mut repr = F::Repr::default();
         repr.as_mut().copy_from_slice(self.value());
-        Option::<F>::from(F::from_repr(repr)).ok_or_else(|| Error::InvalidShareConversion)
+        Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
+    }
+
+    /// Convert field element into a share
+    pub fn from_field_element<F: PrimeField>(identifier: u8, field: F) -> VsssResult<Self> {
+        if identifier == 0 {
+            Err(Error::InvalidShareConversion)
+        } else {
+            let repr = field.to_repr();
+            let mut bytes = vec![identifier; repr.as_ref().len()];
+            bytes[1..].copy_from_slice(repr.as_ref());
+            Ok(Self(bytes))
+        }
     }
 }

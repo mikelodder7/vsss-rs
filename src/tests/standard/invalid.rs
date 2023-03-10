@@ -3,7 +3,7 @@
     SPDX-License-Identifier: Apache-2.0
 */
 use super::super::utils::MockRng;
-use crate::{Feldman, Pedersen, Shamir, Share};
+use crate::*;
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
@@ -16,55 +16,30 @@ pub fn split_invalid_args<
 >() {
     let secret = F::one();
     let mut rng = MockRng::default();
-    assert!(Shamir { t: 0, n: 0 }
-        .split_secret::<F, MockRng>(secret, &mut rng)
-        .is_err());
-    assert!(Shamir { t: 3, n: 2 }
-        .split_secret::<F, MockRng>(secret, &mut rng)
-        .is_err());
-    assert!(Shamir { t: 1, n: 8 }
-        .split_secret::<F, MockRng>(secret, &mut rng)
-        .is_err());
+    assert!(split_secret::<F, _>(0, 0, secret, &mut rng).is_err());
+    assert!(split_secret::<F, _>(3, 2, secret, &mut rng).is_err());
+    assert!(split_secret::<F, _>(1, 8, secret, &mut rng).is_err());
 
-    assert!(Feldman { t: 0, n: 0 }
-        .split_secret::<F, G, MockRng>(secret, None, &mut rng)
-        .is_err());
-    assert!(Feldman { t: 3, n: 2 }
-        .split_secret::<F, G, MockRng>(secret, None, &mut rng)
-        .is_err());
-    assert!(Feldman { t: 1, n: 8 }
-        .split_secret::<F, G, MockRng>(secret, None, &mut rng)
-        .is_err());
+    assert!(feldman::split_secret::<F, G, _>(0, 0, secret, None, &mut rng).is_err());
+    assert!(feldman::split_secret::<F, G, _>(3, 2, secret, None, &mut rng).is_err());
+    assert!(feldman::split_secret::<F, G, _>(1, 8, secret, None, &mut rng).is_err());
 
-    assert!(Pedersen { t: 0, n: 0 }
-        .split_secret::<F, G, MockRng>(secret, None, None, None, &mut rng)
-        .is_err());
-    assert!(Pedersen { t: 3, n: 2 }
-        .split_secret::<F, G, MockRng>(secret, None, None, None, &mut rng)
-        .is_err());
-    assert!(Pedersen { t: 1, n: 8 }
-        .split_secret::<F, G, MockRng>(secret, None, None, None, &mut rng)
-        .is_err());
+    assert!(pedersen::split_secret::<F, G, _>(0, 0, secret, None, None, None, &mut rng).is_err());
+    assert!(pedersen::split_secret::<F, G, _>(3, 2, secret, None, None, None, &mut rng).is_err());
+    assert!(pedersen::split_secret::<F, G, _>(1, 8, secret, None, None, None, &mut rng).is_err());
 }
 
 pub fn combine_invalid<F: PrimeField>() {
-    let shamir = Shamir { t: 2, n: 3 };
     // No shares
-    assert!(shamir.combine_shares::<F>(&[]).is_err());
+    assert!(combine_shares::<F>(&[]).is_err());
     // One share
-    assert!(shamir.combine_shares::<F>(&[Share(vec![1u8; 32])]).is_err());
+    assert!(combine_shares::<F>(&[Share(vec![1u8; 32])]).is_err());
     // No secret
     let mut share = Share(vec![0u8; 32]);
     share.0[0] = 1u8;
-    assert!(shamir
-        .combine_shares::<F>(&[share, Share(vec![2u8; 32])])
-        .is_err());
+    assert!(combine_shares::<F>(&[share, Share(vec![2u8; 32])]).is_err());
     // Invalid identifier
-    assert!(shamir
-        .combine_shares::<F>(&[Share(vec![0u8; 32]), Share(vec![2u8; 32])])
-        .is_err());
+    assert!(combine_shares::<F>(&[Share(vec![0u8; 32]), Share(vec![2u8; 32])]).is_err());
     // Duplicate shares
-    assert!(shamir
-        .combine_shares::<F>(&[Share(vec![1u8; 32]), Share(vec![1u8; 32])])
-        .is_err());
+    assert!(combine_shares::<F>(&[Share(vec![1u8; 32]), Share(vec![1u8; 32])]).is_err());
 }

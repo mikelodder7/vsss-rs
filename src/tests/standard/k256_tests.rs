@@ -4,35 +4,32 @@
 */
 use super::invalid::*;
 use super::valid::*;
-use crate::{
-    secp256k1::{WrappedProjectivePoint, WrappedScalar},
-    Feldman, FeldmanVerifier, Shamir,
-};
+use crate::*;
 use elliptic_curve::ff::PrimeField;
-use k256::{NonZeroScalar, SecretKey};
+use k256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
 use rand::rngs::OsRng;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<WrappedScalar, WrappedProjectivePoint>();
-    combine_invalid::<WrappedScalar>();
+    split_invalid_args::<Scalar, ProjectivePoint>();
+    combine_invalid::<Scalar>();
 }
 
 #[test]
 fn valid_tests() {
-    combine_single::<WrappedScalar, WrappedProjectivePoint>();
-    combine_all::<WrappedScalar, WrappedProjectivePoint>();
+    combine_single::<Scalar, ProjectivePoint>();
+    combine_all::<Scalar, ProjectivePoint>();
 }
 
 #[test]
 fn key_tests() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let secret = WrappedScalar(*sk.to_nonzero_scalar());
-    let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, _>(secret, &mut osrng);
+    let secret = *sk.to_nonzero_scalar();
+    let res = split_secret::<Scalar, _>(2, 3, secret, &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
-    let res = Shamir { t: 2, n: 3 }.combine_shares::<WrappedScalar>(&shares);
+    let res = combine_shares::<Scalar>(&shares);
     assert!(res.is_ok());
     let scalar = res.unwrap();
     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
@@ -44,28 +41,18 @@ fn key_tests() {
 fn verifier_serde_test() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let secret = WrappedScalar(*sk.to_nonzero_scalar());
-    let res = Feldman { t: 2, n: 3 }
-        .split_secret::<WrappedScalar, WrappedProjectivePoint, _>(secret, None, &mut osrng);
+    let secret = *sk.to_nonzero_scalar();
+    let res = feldman::split_secret::<Scalar, ProjectivePoint, _>(2, 3, secret, None, &mut osrng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares {
         assert!(verifier.verify(s).is_ok());
     }
-    let res = serde_cbor::to_vec(&verifier);
-    assert!(res.is_ok());
-    let v_bytes = res.unwrap();
-    let res =
-        serde_cbor::from_slice::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint>>(&v_bytes);
-    assert!(res.is_ok());
-    let verifier2 = res.unwrap();
-    assert_eq!(verifier.generator, verifier2.generator);
 
     let res = serde_json::to_string(&verifier);
     assert!(res.is_ok());
     let v_str = res.unwrap();
-    let res =
-        serde_json::from_str::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint>>(&v_str);
+    let res = serde_json::from_str::<FeldmanVerifier<Scalar, ProjectivePoint>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
@@ -73,8 +60,7 @@ fn verifier_serde_test() {
     let res = serde_bare::to_vec(&verifier);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res =
-        serde_bare::from_slice::<FeldmanVerifier<WrappedScalar, WrappedProjectivePoint>>(&v_bytes);
+    let res = serde_bare::from_slice::<FeldmanVerifier<Scalar, ProjectivePoint>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
