@@ -36,7 +36,7 @@
 //! To split a p256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs_std::{*, shamir};
+//! use vsss_rs::{*, shamir};
 //! use elliptic_curve::ff::PrimeField;
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
 //!
@@ -57,7 +57,7 @@
 //! To split a k256 secret using Shamir
 //!
 //! ```
-//! use vsss_rs_std::{*, shamir};
+//! use vsss_rs::{*, shamir};
 //! use elliptic_curve::ff::PrimeField;
 //! use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 //!
@@ -78,7 +78,7 @@
 //! Feldman or Pedersen return extra information for verification using their respective verifiers
 //!
 //! ```
-//! use vsss_rs_std::{*, feldman};
+//! use vsss_rs::{*, feldman};
 //! use bls12_381_plus::{Scalar, G1Projective};
 //! use elliptic_curve::ff::Field;
 //!
@@ -105,7 +105,7 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use ed25519_dalek::SecretKey;
-//! use vsss_rs_std::{curve25519::WrappedScalar, *};
+//! use vsss_rs::{curve25519::WrappedScalar, *};
 //! use x25519_dalek::StaticSecret;
 //!
 //! let mut osrng_7 = rand_7::rngs::OsRng::default();
@@ -136,8 +136,16 @@
     trivial_casts,
     trivial_numeric_casts
 )]
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "nightly", generic_const_exprs)]
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+#[cfg_attr(feature = "std", macro_use)]
+extern crate std;
 
 #[cfg(test)]
 mod tests;
@@ -151,6 +159,7 @@ mod share;
 mod util;
 mod verifier;
 
+use heapless::Vec;
 use shamir::*;
 use util::*;
 
@@ -167,6 +176,7 @@ pub mod curve25519;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
+pub use heapless;
 #[cfg(feature = "secp256k1")]
 pub use k256;
 #[cfg(feature = "curve25519")]

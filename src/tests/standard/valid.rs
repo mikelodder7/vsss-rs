@@ -67,7 +67,7 @@ pub fn combine_single<
         assert!(verifier.verify(s).is_ok());
     }
     // make sure no malicious share works
-    let bad_share = Share(vec![1u8; 33]);
+    let bad_share = Share(Vec::from_slice(&[1u8; 33]).unwrap());
     assert!(verifier.verify(&bad_share).is_err());
 
     let res = combine_shares::<F>(&shares);

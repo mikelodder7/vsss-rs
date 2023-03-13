@@ -33,13 +33,21 @@ pub fn combine_invalid<F: PrimeField>() {
     // No shares
     assert!(combine_shares::<F>(&[]).is_err());
     // One share
-    assert!(combine_shares::<F>(&[Share(vec![1u8; 32])]).is_err());
+    assert!(combine_shares::<F>(&[Share(Vec::from_slice(&[1u8; 32]).unwrap())]).is_err());
     // No secret
-    let mut share = Share(vec![0u8; 32]);
+    let mut share = Share(Vec::from_slice(&[0u8; 32]).unwrap());
     share.0[0] = 1u8;
-    assert!(combine_shares::<F>(&[share, Share(vec![2u8; 32])]).is_err());
+    assert!(combine_shares::<F>(&[share, Share(Vec::from_slice(&[2u8; 32]).unwrap())]).is_err());
     // Invalid identifier
-    assert!(combine_shares::<F>(&[Share(vec![0u8; 32]), Share(vec![2u8; 32])]).is_err());
+    assert!(combine_shares::<F>(&[
+        Share(Vec::from_slice(&[0u8; 32]).unwrap()),
+        Share(Vec::from_slice(&[2u8; 32]).unwrap())
+    ])
+    .is_err());
     // Duplicate shares
-    assert!(combine_shares::<F>(&[Share(vec![1u8; 32]), Share(vec![1u8; 32])]).is_err());
+    assert!(combine_shares::<F>(&[
+        Share(Vec::from_slice(&[1u8; 32]).unwrap()),
+        Share(Vec::from_slice(&[1u8; 32]).unwrap())
+    ])
+    .is_err());
 }

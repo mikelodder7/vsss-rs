@@ -28,9 +28,9 @@ pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>
     )]
     pub blinding: F,
     /// The blinding shares
-    pub blind_shares: Vec<Share>,
+    pub blind_shares: Vec<Share, MAX_SHARES>,
     /// The secret shares
-    pub secret_shares: Vec<Share>,
+    pub secret_shares: Vec<Share, MAX_SHARES>,
     /// The verifier for validating shares
     #[serde(bound(serialize = "PedersenVerifier<F, G>: Serialize"))]
     #[serde(bound(deserialize = "PedersenVerifier<F, G>: Deserialize<'de>"))]
@@ -62,9 +62,7 @@ where
 {
     check_params(threshold, limit)?;
 
-    let mut seed = [0u8; 32];
-    rng.fill_bytes(&mut seed);
-    let mut crng = ChaChaRng::from_seed(seed);
+    let mut crng = ChaChaRng::from_rng(rng).map_err(|_| Error::NotImplemented)?;
 
     let g = share_generator.unwrap_or_else(G::generator);
     let t = F::random(&mut crng);
@@ -72,18 +70,18 @@ where
 
     let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
     let (secret_shares, secret_polynomial) =
-        get_shares_and_polynomial(threshold, limit, secret, &mut crng);
+        get_shares_and_polynomial(threshold, limit, secret, &mut crng)?;
     let (blind_shares, blinding_polynomial) =
-        get_shares_and_polynomial(threshold, limit, blinding, &mut crng);
+        get_shares_and_polynomial(threshold, limit, blinding, &mut crng)?;
 
-    let mut feldman_commitments = Vec::with_capacity(threshold);
-    let mut pedersen_commitments = Vec::with_capacity(threshold);
+    let mut feldman_commitments = Vec::new();
+    let mut pedersen_commitments = Vec::new();
     // {(g^p0 h^r0), (g^p1, h^r1), ..., (g^pn, h^rn)}
     for i in 0..threshold {
         let g_i = g * secret_polynomial.coefficients[i];
         let h_i = h * blinding_polynomial.coefficients[i];
-        feldman_commitments.push(g_i);
-        pedersen_commitments.push(g_i + h_i);
+        feldman_commitments.push(g_i).expect(EXPECT_MSG);
+        pedersen_commitments.push(g_i + h_i).expect(EXPECT_MSG);
     }
     Ok(PedersenResult {
         blinding,

@@ -7,12 +7,15 @@
 
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
 
-This crate was separated from `vsss-rs` so both modes can be included in the same project.
-
 * **This implementation has not been reviewed or audited. Use at your own risk.**
 * This implementation targets Rust `1.51` or later.
 * This implementation does not require the Rust standard library.
 * All operations are constant time unless explicitly noted.
+
+## NOTE if upgrading from Version 2
+
+The standard mode has been split out into [vsss-rs-std](https://docs.rs/vsss-rs-std) to enable both in the same project.
+In addition, the interfaces have been redesigned to be compatible with each other as well as serialization.
 
 ## [Documentation](https://docs.rs/vsss-rs)
 
@@ -160,6 +163,12 @@ fn main() {
 ```
 
 Either `RistrettoPoint` or `EdwardsPoint` may be used when using Feldman and Pedersen VSSS.
+
+## Testing
+
+Due to no_std mode, this requires a larger stack than the current default.
+
+`RUST_MIN_STACK=4964353 cargo test`
 
 # License
 

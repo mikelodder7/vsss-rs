@@ -42,8 +42,8 @@ fn group_combine() {
     // Compute partial bls signatures
     let dst = b"group_combine";
     let msg = b"1234567890";
-    let mut sig_shares1: Vec<Share> = (0..5).map(|_| Share::default()).collect();
-    let mut sig_shares2: Vec<Share> = (0..5).map(|_| Share::default()).collect();
+    let mut sig_shares1: Vec<Share, 5> = (0..5).map(|_| Share::default()).collect();
+    let mut sig_shares2: Vec<Share, 5> = (0..5).map(|_| Share::default()).collect();
     for (i, s) in shares.iter().enumerate() {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(s.value());
@@ -55,15 +55,8 @@ fn group_combine() {
         let s1 = h1 * sk;
         let s2 = h2 * sk;
 
-        let mut bytes1 = vec![0u8; 49];
-        let mut bytes2 = vec![0u8; 97];
-
-        bytes1[0] = s.identifier();
-        bytes2[0] = s.identifier();
-        bytes1[1..].copy_from_slice(&s1.to_affine().to_compressed());
-        bytes2[1..].copy_from_slice(&s2.to_affine().to_compressed());
-        sig_shares1[i] = Share(bytes1);
-        sig_shares2[i] = Share(bytes2);
+        sig_shares1[i] = Share::from_group_element(s.identifier(), s1).unwrap();
+        sig_shares2[i] = Share::from_group_element(s.identifier(), s2).unwrap();
     }
 
     let res1 = combine_shares_group::<Scalar, G1Projective>(&sig_shares1);

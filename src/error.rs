@@ -2,7 +2,7 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-use thiserror::Error;
+use thiserror_no_std::Error;
 
 /// Errors during secret sharing
 #[derive(Error, Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]

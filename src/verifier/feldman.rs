@@ -26,7 +26,7 @@ pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F
         serialize_with = "serialize_group_vec",
         deserialize_with = "deserialize_group_vec"
     )]
-    pub commitments: Vec<G>,
+    pub commitments: Vec<G, MAX_SHARES>,
     /// Marker
     #[serde(skip)]
     pub marker: PhantomData<F>,

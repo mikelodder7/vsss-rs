@@ -11,7 +11,7 @@ use core::{
 };
 use elliptic_curve::{ff::PrimeField, group::GroupEncoding};
 use serde::{
-    de::{self, SeqAccess, Unexpected, Visitor},
+    de::{self, SeqAccess, Visitor},
     ser::SerializeSeq,
     Deserialize, Deserializer, Serialize, Serializer,
 };
@@ -22,7 +22,7 @@ use zeroize::Zeroize;
 /// The first byte is the X-coordinate or identifier
 /// The remaining bytes are the Y-coordinate
 #[derive(Clone, Debug, Default, PartialEq, Eq, Zeroize)]
-pub struct Share(pub Vec<u8>);
+pub struct Share(pub Vec<u8, MAX_SHARE_BYTES>);
 
 impl Serialize for Share {
     fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
@@ -30,7 +30,11 @@ impl Serialize for Share {
         S: Serializer,
     {
         if s.is_human_readable() {
-            hex::encode(&self.0).serialize(s)
+            let mut hexits = [0u8; MAX_SHARE_HEXITS];
+            let len = self.0.len() * 2;
+            hex::encode_to_slice(&self.0, &mut hexits[..len]).expect(EXPECT_MSG);
+            let h = unsafe { core::str::from_utf8_unchecked(&hexits[..len]) };
+            s.serialize_str(h)
         } else {
             let mut tupler = s.serialize_seq(Some(self.0.len()))?;
             for b in &self.0 {
@@ -59,9 +63,10 @@ impl<'de> Deserialize<'de> for Share {
             where
                 E: de::Error,
             {
-                let bytes = hex::decode(v)
-                    .map_err(|_e| de::Error::invalid_value(Unexpected::Str(v), &self))?;
-                Ok(Share(bytes))
+                let len = v.len() / 2;
+                let mut bytes = [0u8; MAX_SHARE_BYTES];
+                hex::decode_to_slice(v, &mut bytes[..len]).expect(EXPECT_MSG);
+                Ok(Share(Vec::from_slice(&bytes[..len]).expect(EXPECT_MSG)))
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -70,7 +75,7 @@ impl<'de> Deserialize<'de> for Share {
             {
                 let mut bytes = Vec::new();
                 while let Some(b) = seq.next_element()? {
-                    bytes.push(b);
+                    bytes.push(b).expect(EXPECT_MSG);
                 }
                 Ok(Share(bytes))
             }
@@ -94,11 +99,29 @@ impl TryFrom<&[u8]> for Share {
     type Error = TryFromSliceError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(bytes.to_vec()))
+        Ok(Self(Vec::from_slice(bytes).expect(EXPECT_MSG)))
     }
 }
 
-impl From<Share> for Vec<u8> {
+#[cfg(feature = "std")]
+impl From<Share> for std::vec::Vec<u8> {
+    fn from(value: Share) -> Self {
+        let mut v = std::vec::Vec::with_capacity(MAX_SHARE_BYTES);
+        v.extend_from_slice(value.0.as_slice());
+        v
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl From<Share> for alloc::vec::Vec<u8> {
+    fn from(value: Share) -> Self {
+        let mut v = alloc::vec::Vec::with_capacity(MAX_SHARE_BYTES);
+        v.extend_from_slice(value.0.as_slice());
+        v
+    }
+}
+
+impl From<Share> for Vec<u8, MAX_SHARE_BYTES> {
     fn from(share: Share) -> Self {
         share.0
     }
@@ -137,8 +160,10 @@ impl Share {
             Err(Error::InvalidShareConversion)
         } else {
             let repr = group.to_bytes();
-            let mut bytes = vec![identifier; repr.as_ref().len()];
-            bytes[1..].copy_from_slice(repr.as_ref());
+            let r_repr = repr.as_ref();
+            let mut bytes = Vec::new();
+            bytes.push(identifier).expect(EXPECT_MSG);
+            bytes.extend_from_slice(r_repr).expect(EXPECT_MSG);
             Ok(Self(bytes))
         }
     }
@@ -156,8 +181,10 @@ impl Share {
             Err(Error::InvalidShareConversion)
         } else {
             let repr = field.to_repr();
-            let mut bytes = vec![identifier; repr.as_ref().len()];
-            bytes[1..].copy_from_slice(repr.as_ref());
+            let r_repr = repr.as_ref();
+            let mut bytes = Vec::new();
+            bytes.push(identifier).expect(EXPECT_MSG);
+            bytes.extend_from_slice(r_repr).expect(EXPECT_MSG);
             Ok(Self(bytes))
         }
     }

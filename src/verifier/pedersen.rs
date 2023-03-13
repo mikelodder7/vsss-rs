@@ -29,7 +29,7 @@ pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<
         serialize_with = "serialize_group_vec",
         deserialize_with = "deserialize_group_vec"
     )]
-    pub commitments: Vec<G>,
+    pub commitments: Vec<G, MAX_SHARES>,
 }
 
 impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> PedersenVerifier<F, G> {
