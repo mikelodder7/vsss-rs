@@ -25,6 +25,10 @@ pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<
     #[serde(bound(deserialize = "FeldmanVerifier<F, G>: Deserialize<'de>"))]
     pub feldman_verifier: FeldmanVerifier<F, G>,
     /// The blinded commitments to the polynomial
+    #[serde(
+        serialize_with = "serialize_group_vec",
+        deserialize_with = "deserialize_group_vec"
+    )]
     pub commitments: Vec<G, MAX_SHARES>,
 }
 

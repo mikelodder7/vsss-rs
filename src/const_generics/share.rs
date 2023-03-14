@@ -56,6 +56,20 @@ impl<const N: usize> From<Share<N>> for crate::Share {
     }
 }
 
+#[cfg(feature = "alloc")]
+impl<const N: usize> From<Share<N>> for alloc::vec::Vec<u8> {
+    fn from(value: Share<N>) -> Self {
+        (&value.0[..]).to_vec()
+    }
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> From<Share<N>> for std::vec::Vec<u8> {
+    fn from(value: Share<N>) -> Self {
+        (&value.0[..]).to_vec()
+    }
+}
+
 impl<const N: usize> TryFrom<crate::Share> for Share<N> {
     type Error = Error;
 

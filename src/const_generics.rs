@@ -7,6 +7,10 @@ pub mod shamir;
 mod share;
 mod verifier;
 
+#[cfg(test)]
+mod tests;
+
+pub use pedersen::PedersenResult;
 pub use polynomial::Polynomial;
 pub use shamir::{combine_shares, combine_shares_group};
 pub use share::Share;

@@ -148,7 +148,7 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 mod error;
 pub mod feldman;

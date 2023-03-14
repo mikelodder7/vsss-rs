@@ -4,7 +4,10 @@
 */
 
 use super::super::share::Share;
-use crate::{deserialize_group, serialize_group, Error, Vec, VsssResult};
+use crate::{
+    deserialize_group, deserialize_group_vec, serialize_group, serialize_group_vec, Error, Vec,
+    VsssResult,
+};
 use core::marker::PhantomData;
 use elliptic_curve::{
     ff::PrimeField,
@@ -23,6 +26,10 @@ pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F
     )]
     pub generator: G,
     /// The commitments to the polynomial
+    #[serde(
+        serialize_with = "serialize_group_vec",
+        deserialize_with = "deserialize_group_vec"
+    )]
     pub commitments: Vec<G, T>,
     /// Marker
     #[serde(skip)]

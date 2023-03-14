@@ -5,7 +5,6 @@
 
 use rand_core::SeedableRng;
 
-#[cfg(test)]
 pub struct MockRng(rand_xorshift::XorShiftRng);
 
 impl Default for MockRng {
@@ -14,7 +13,6 @@ impl Default for MockRng {
     }
 }
 
-#[cfg(test)]
 impl SeedableRng for MockRng {
     type Seed = [u8; 16];
 
@@ -23,10 +21,8 @@ impl SeedableRng for MockRng {
     }
 }
 
-#[cfg(test)]
 impl rand_core::CryptoRng for MockRng {}
 
-#[cfg(test)]
 impl rand_core::RngCore for MockRng {
     fn next_u32(&mut self) -> u32 {
         self.0.next_u32()

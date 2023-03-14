@@ -5,7 +5,10 @@
 
 use super::super::share::Share;
 use super::FeldmanVerifier;
-use crate::{deserialize_group, serialize_group, Error, Vec, VsssResult};
+use crate::{
+    deserialize_group, deserialize_group_vec, serialize_group, serialize_group_vec, Error, Vec,
+    VsssResult,
+};
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
@@ -28,6 +31,10 @@ pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<
     #[serde(bound(deserialize = "FeldmanVerifier<F, G, T>: Deserialize<'de>"))]
     pub feldman_verifier: FeldmanVerifier<F, G, T>,
     /// The blinded commitments to the polynomial
+    #[serde(
+        serialize_with = "serialize_group_vec",
+        deserialize_with = "deserialize_group_vec"
+    )]
     pub commitments: Vec<G, T>,
 }
 

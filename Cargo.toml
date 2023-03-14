@@ -2,15 +2,15 @@
 authors = ["Michael Lodder <redmike7@gmail.com>"]
 categories = ["cryptography", "algorithms"]
 description = "Verifiable Secret Sharing Schemes for splitting, combining and verifying secret shares"
-documentation = "https://docs.rs/vsss-rs-std"
+documentation = "https://docs.rs/vsss-rs"
 edition = "2021"
-homepage = "https://github.com/mikelodder7/vsss-rs-std"
+homepage = "https://github.com/mikelodder7/vsss-rs"
 keywords = ["crypto", "sharing", "secret", "verifiable"]
 license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
-repository = "https://github.com/mikelodder7/vsss-rs-std"
-version = "3.0.0-pre1"
+repository = "https://github.com/mikelodder7/vsss-rs"
+version = "3.0.0-pre3"
 
 [features]
 default = ["curve25519"]
@@ -32,6 +32,7 @@ serde = { version = "1.0", default-features = false, features = ["serde_derive"]
 sha2 = { version = "0.9", default-features = false, optional = true }
 subtle = { version = "2.4" }
 thiserror-no-std = "2.0.2"
+uint-zigzag = "0.2"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
