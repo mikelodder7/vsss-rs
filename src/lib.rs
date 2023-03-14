@@ -161,6 +161,7 @@ mod verifier;
 
 use heapless::Vec;
 use shamir::*;
+use subtle::*;
 use util::*;
 
 pub use error::*;
@@ -170,16 +171,16 @@ pub use shamir::{combine_shares, combine_shares_group};
 pub use share::*;
 pub use verifier::*;
 
+#[cfg(feature = "const-generics")]
+pub mod const_generics;
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
+
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
 pub use heapless;
-#[cfg(feature = "secp256k1")]
-pub use k256;
 #[cfg(feature = "curve25519")]
 pub use sha2;
-#[cfg(any(feature = "secp256k1", feature = "curve25519"))]
 pub use subtle;

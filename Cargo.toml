@@ -13,28 +13,25 @@ repository = "https://github.com/mikelodder7/vsss-rs-std"
 version = "3.0.0-pre0"
 
 [features]
-default = ["curve25519", "secp256k1"]
+default = ["curve25519"]
 alloc = []
-curve25519 = ["curve25519-dalek", "subtle", "sha2"]
-secp256k1 = ["k256", "subtle"]
+const-generics = []
+curve25519 = ["curve25519-dalek", "sha2"]
 std = []
 
 [dependencies]
 anyhow = { version = "1.0", default-features = false }
 curve25519-dalek = { version = "3", optional = true }
 elliptic-curve = { version = "0.12", features = ["ecdh"] }
-k256 = { version = "0.12", features = ["arithmetic", "bits", "serde"], optional = true }
 heapless = { version = "0.7", features = ["serde"] }
 hex = { version = "0.4", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 rand_chacha_02 = { version = "0.2", package = "rand_chacha", default-features = false }
 rand_core = "0.6"
 serde = { version = "1.0", default-features = false, features = ["serde_derive"] }
-serde-big-array = "0.5"
 sha2 = { version = "0.9", default-features = false, optional = true }
-subtle = { version = "2.4", optional = true }
+subtle = { version = "2.4" }
 thiserror-no-std = "2.0.2"
-uint-zigzag = { version = "0.2" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]

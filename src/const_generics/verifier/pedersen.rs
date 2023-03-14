@@ -3,7 +3,9 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use crate::*;
+use super::super::share::Share;
+use super::FeldmanVerifier;
+use crate::{deserialize_group, serialize_group, Error, Vec, VsssResult};
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
@@ -13,7 +15,8 @@ use serde::{Deserialize, Serialize};
 /// A Pedersen verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
+pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
+{
     /// The generator for the blinding factor
     #[serde(
         serialize_with = "serialize_group",
@@ -21,16 +24,22 @@ pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<
     )]
     pub generator: G,
     /// The feldman verifier containing the share generator and commitments
-    #[serde(bound(serialize = "FeldmanVerifier<F, G>: Serialize"))]
-    #[serde(bound(deserialize = "FeldmanVerifier<F, G>: Deserialize<'de>"))]
-    pub feldman_verifier: FeldmanVerifier<F, G>,
+    #[serde(bound(serialize = "FeldmanVerifier<F, G, T>: Serialize"))]
+    #[serde(bound(deserialize = "FeldmanVerifier<F, G, T>: Deserialize<'de>"))]
+    pub feldman_verifier: FeldmanVerifier<F, G, T>,
     /// The blinded commitments to the polynomial
-    pub commitments: Vec<G, MAX_SHARES>,
+    pub commitments: Vec<G, T>,
 }
 
-impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> PedersenVerifier<F, G> {
+impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
+    PedersenVerifier<F, G, T>
+{
     /// Check whether the share is valid according this verifier set
-    pub fn verify(&self, share: &Share, blind_share: &Share) -> VsssResult<()> {
+    pub fn verify<const S: usize>(
+        &self,
+        share: &Share<S>,
+        blind_share: &Share<S>,
+    ) -> VsssResult<()> {
         let secret = share.as_field_element::<F>()?;
         let blinding = blind_share.as_field_element::<F>()?;
 

@@ -4,7 +4,11 @@
 */
 //! Secret splitting for Shamir Secret Sharing Scheme
 //! and combine methods for field and group elements
-use super::*;
+
+use super::{polynomial::Polynomial, share::Share};
+use crate::{
+    bytes_to_field, bytes_to_group, check_params, interpolate, Error, Vec, VsssResult, EXPECT_MSG,
+};
 use core::ops::{AddAssign, Mul};
 use elliptic_curve::{
     ff::PrimeField,
@@ -14,31 +18,31 @@ use rand_core::{CryptoRng, RngCore};
 
 /// Create shares from a secret.
 /// F is the prime field
-/// S is the number of bytes used to represent F
-pub fn split_secret<F, R>(
-    threshold: usize,
-    limit: usize,
+/// T is the threshold
+/// N is the number of shares
+/// S is the number of bytes in the share
+pub fn split_secret<F, R, const T: usize, const N: usize, const S: usize>(
     secret: F,
     rng: &mut R,
-) -> VsssResult<Vec<Share, MAX_SHARES>>
+) -> VsssResult<Vec<Share<S>, N>>
 where
     F: PrimeField,
     R: RngCore + CryptoRng,
 {
-    check_params(threshold, limit)?;
+    check_params(T, N)?;
 
-    let (shares, _) = get_shares_and_polynomial(threshold, limit, secret, rng)?;
+    let (shares, _) = get_shares_and_polynomial::<F, R, T, N, S>(secret, rng)?;
     Ok(shares)
 }
 
 /// Reconstruct a secret from shares created from `split_secret`.
 /// The X-coordinates operate in `F`
 /// The Y-coordinates operate in `F`
-pub fn combine_shares<F>(shares: &[Share]) -> VsssResult<F>
+pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> VsssResult<F>
 where
     F: PrimeField,
 {
-    combine::<F, F>(shares, bytes_to_field)
+    combine::<F, F, S>(shares, bytes_to_field)
 }
 
 /// Reconstruct a secret from shares created from `split_secret`.
@@ -47,15 +51,15 @@ where
 ///
 /// Exists to support operations like threshold BLS where the shares
 /// operate in `F` but the partial signatures operate in `G`.
-pub fn combine_shares_group<F, G>(shares: &[Share]) -> VsssResult<G>
+pub fn combine_shares_group<F, G, const S: usize>(shares: &[Share<S>]) -> VsssResult<G>
 where
     F: PrimeField,
     G: Group + GroupEncoding + ScalarMul<F> + Default,
 {
-    combine::<F, G>(shares, bytes_to_group)
+    combine::<F, G, S>(shares, bytes_to_group)
 }
 
-fn combine<F, S>(shares: &[Share], f: fn(&[u8]) -> Option<S>) -> VsssResult<S>
+fn combine<F, S, const SS: usize>(shares: &[Share<SS>], f: fn(&[u8]) -> Option<S>) -> VsssResult<S>
 where
     F: PrimeField,
     S: Default + Copy + AddAssign + Mul<F, Output = S>,
@@ -64,9 +68,9 @@ where
         return Err(Error::SharingMinThreshold);
     }
 
-    let mut dups = [false; MAX_SHARES];
-    let mut x_coordinates = Vec::<F, MAX_SHARES>::new();
-    let mut y_coordinates = Vec::<S, MAX_SHARES>::new();
+    let mut dups = [false; SS];
+    let mut x_coordinates = Vec::<F, SS>::new();
+    let mut y_coordinates = Vec::<S, SS>::new();
 
     for s in shares {
         let identifier = s.identifier();
@@ -93,68 +97,25 @@ where
     Ok(secret)
 }
 
-pub(crate) fn get_shares_and_polynomial<F, R>(
-    threshold: usize,
-    limit: usize,
+pub(crate) fn get_shares_and_polynomial<F, R, const T: usize, const N: usize, const S: usize>(
     secret: F,
     rng: &mut R,
-) -> VsssResult<(Vec<Share, MAX_SHARES>, Polynomial<F>)>
+) -> VsssResult<(Vec<Share<S>, N>, Polynomial<F, T>)>
 where
     F: PrimeField,
     R: RngCore + CryptoRng,
 {
-    let polynomial = Polynomial::<F>::new(secret, rng, threshold);
+    let polynomial = Polynomial::<F, T>::new(secret, rng);
     // Generate the shares of (x, y) coordinates
     // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
-    let mut shares = Vec::new();
+    let mut shares = Vec::<Share<S>, N>::new();
     let mut x = F::one();
-    for i in 0..limit {
-        let y = polynomial.evaluate(x, threshold);
+    for i in 0..N {
+        let y = polynomial.evaluate(x);
         shares
-            .push(Share::from_field_element((i + 1) as u8, y)?)
+            .push(Share::<S>::from_field_element((i + 1) as u8, y)?)
             .expect(EXPECT_MSG);
         x += F::one();
     }
     Ok((shares, polynomial))
-}
-
-/// Calculate lagrange interpolation
-pub(crate) fn interpolate<F, S>(x_coordinates: &[F], y_coordinates: &[S]) -> S
-where
-    F: PrimeField,
-    S: Default + Copy + AddAssign + Mul<F, Output = S>,
-{
-    let limit = x_coordinates.len();
-    // Initialize to zero
-    let mut result = S::default();
-
-    for i in 0..limit {
-        let mut basis = F::one();
-        for j in 0..limit {
-            if i == j {
-                continue;
-            }
-
-            let mut denom: F = x_coordinates[j] - x_coordinates[i];
-            denom = denom.invert().unwrap();
-            // x_m / (x_m - x_j) * ...
-            basis *= x_coordinates[j] * denom;
-        }
-
-        result += y_coordinates[i] * basis;
-    }
-    result
-}
-
-pub(crate) fn check_params(threshold: usize, limit: usize) -> VsssResult<()> {
-    if limit < threshold {
-        return Err(Error::SharingLimitLessThanThreshold);
-    }
-    if threshold < 2 {
-        return Err(Error::SharingMinThreshold);
-    }
-    if limit > MAX_SHARES {
-        return Err(Error::SharingMaxRequest);
-    }
-    Ok(())
 }

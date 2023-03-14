@@ -3,36 +3,38 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use crate::*;
+use super::super::share::Share;
+use crate::{deserialize_group, serialize_group, Error, Vec, VsssResult};
+use core::marker::PhantomData;
 use elliptic_curve::{
     ff::PrimeField,
     group::{Group, GroupEncoding, ScalarMul},
 };
 use serde::{Deserialize, Serialize};
 
-/// A Pedersen verifier is used to provide integrity checking of shamir shares
+/// A Feldman verifier is used to provide integrity checking of shamir shares
 /// `T` commitments are made to be used for verification.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct PedersenVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
-    /// The generator for the blinding factor
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeldmanVerifier<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize> {
+    /// The generator for the share polynomial coefficients
     #[serde(
         serialize_with = "serialize_group",
         deserialize_with = "deserialize_group"
     )]
     pub generator: G,
-    /// The feldman verifier containing the share generator and commitments
-    #[serde(bound(serialize = "FeldmanVerifier<F, G>: Serialize"))]
-    #[serde(bound(deserialize = "FeldmanVerifier<F, G>: Deserialize<'de>"))]
-    pub feldman_verifier: FeldmanVerifier<F, G>,
-    /// The blinded commitments to the polynomial
-    pub commitments: Vec<G, MAX_SHARES>,
+    /// The commitments to the polynomial
+    pub commitments: Vec<G, T>,
+    /// Marker
+    #[serde(skip)]
+    pub marker: PhantomData<F>,
 }
 
-impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> PedersenVerifier<F, G> {
+impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
+    FeldmanVerifier<F, G, T>
+{
     /// Check whether the share is valid according this verifier set
-    pub fn verify(&self, share: &Share, blind_share: &Share) -> VsssResult<()> {
-        let secret = share.as_field_element::<F>()?;
-        let blinding = blind_share.as_field_element::<F>()?;
+    pub fn verify<const S: usize>(&self, share: &Share<S>) -> VsssResult<()> {
+        let s = share.as_field_element::<F>()?;
 
         let x = F::from(share.identifier() as u64);
         let mut i = F::one();
@@ -53,10 +55,9 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> PedersenVerifier<F,
             rhs += *v * i;
         }
 
-        let g: G = (-self.feldman_verifier.generator) * secret;
-        let h: G = (-self.generator) * blinding;
+        let lhs: G = -self.generator * s;
 
-        let res: G = rhs + g + h;
+        let res: G = lhs + rhs;
 
         if res.is_identity().into() {
             Ok(())
