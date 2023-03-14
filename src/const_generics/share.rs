@@ -15,12 +15,13 @@ use serde::{
     ser::{self, SerializeSeq},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use zeroize::Zeroize;
+use zeroize::ZeroizeOnDrop;
+
 /// A Shamir simple secret share
 /// provides no integrity checking
 /// The first byte is the X-coordinate or identifier
 /// The remaining bytes are the Y-coordinate
-#[derive(Clone, Debug, PartialEq, Eq, Zeroize)]
+#[derive(Clone, Debug, PartialEq, Eq, ZeroizeOnDrop)]
 pub struct Share<const N: usize>(pub Vec<u8, N>);
 
 impl<const N: usize> Default for Share<N> {
@@ -45,7 +46,25 @@ impl<const N: usize> TryFrom<&[u8]> for Share<N> {
 
 impl<const N: usize> From<Share<N>> for Vec<u8, N> {
     fn from(share: Share<N>) -> Self {
-        share.0
+        share.0.clone()
+    }
+}
+
+impl<const N: usize> From<Share<N>> for crate::Share {
+    fn from(value: Share<N>) -> Self {
+        Self(Vec::from_slice(&value.0[..]).expect(EXPECT_MSG))
+    }
+}
+
+impl<const N: usize> TryFrom<crate::Share> for Share<N> {
+    type Error = Error;
+
+    fn try_from(value: crate::Share) -> VsssResult<Self> {
+        if value.0.len() > N {
+            return Err(Error::InvalidShareConversion);
+        }
+
+        Ok(Self(Vec::from_slice(&value.0[..]).expect(EXPECT_MSG)))
     }
 }
 
