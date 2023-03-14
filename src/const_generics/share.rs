@@ -165,8 +165,18 @@ impl<const N: usize> Share<N> {
         Choice::from(v as u8)
     }
 
+    /// The identifier for this share
+    pub fn identifier(&self) -> u8 {
+        self.0[0]
+    }
+
+    /// The raw byte value of the share
+    pub fn value(&self) -> &[u8] {
+        &self.0[1..]
+    }
+
     /// Convert this share into a group element
-    pub fn as_group_element<G: GroupEncoding>(&self) -> Result<G, Error> {
+    pub fn as_group_element<G: GroupEncoding>(&self) -> VsssResult<G> {
         let mut repr = G::Repr::default();
         repr.as_mut().copy_from_slice(self.value());
         Option::<G>::from(G::from_bytes(&repr)).ok_or(Error::InvalidShareConversion)
@@ -187,7 +197,7 @@ impl<const N: usize> Share<N> {
     }
 
     /// Convert this share into a prime field element
-    pub fn as_field_element<F: PrimeField>(&self) -> Result<F, Error> {
+    pub fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
         let mut repr = F::Repr::default();
         repr.as_mut().copy_from_slice(self.value());
         Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
@@ -205,15 +215,5 @@ impl<const N: usize> Share<N> {
             bytes.extend_from_slice(r_repr).expect(EXPECT_MSG);
             Ok(Self(bytes))
         }
-    }
-
-    /// The identifier for this share
-    pub fn identifier(&self) -> u8 {
-        self.0[0]
-    }
-
-    /// The raw byte value of the share
-    pub fn value(&self) -> &[u8] {
-        &self.0[1..]
     }
 }
