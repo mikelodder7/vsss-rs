@@ -35,7 +35,7 @@ fn key_tests() {
     let scalar = res.unwrap();
     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
     let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
+    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 }
 
 #[test]

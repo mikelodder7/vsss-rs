@@ -12,7 +12,7 @@
 use core::{
     borrow::Borrow,
     fmt,
-    iter::Sum,
+    iter::{Iterator, Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use curve25519_dalek::{
@@ -23,7 +23,7 @@ use curve25519_dalek::{
     traits::{Identity, IsIdentity},
 };
 use elliptic_curve::{
-    ff::{Field, PrimeField},
+    ff::{Field, PrimeField, helpers},
     group::{Group, GroupEncoding},
 };
 use rand_chacha_02::{rand_core::SeedableRng, ChaChaRng}; // for curve25519_dalek compatability
@@ -338,7 +338,7 @@ impl Group for WrappedEdwards {
     fn random(mut rng: impl RngCore) -> Self {
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
-        Self(EdwardsPoint::hash_from_bytes::<sha2::Sha512>(&seed))
+        Self(EdwardsPoint::hash_from_bytes::<sha2_9::Sha512>(&seed))
     }
 
     fn identity() -> Self {
@@ -645,6 +645,12 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
 pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
+    const ZERO: Self = Self(Scalar::from_bits([0u8; 32]));
+    const ONE: Self = Self(Scalar::from_bits([
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0,
+    ]));
+
     fn random(mut rng: impl RngCore) -> Self {
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
@@ -652,17 +658,13 @@ impl Field for WrappedScalar {
         Self(Scalar::random(&mut crng))
     }
 
-    fn zero() -> Self {
-        Self(Scalar::zero())
-    }
-
-    fn one() -> Self {
-        Self(Scalar::one())
-    }
-
-    fn is_zero(&self) -> Choice {
-        Choice::from(u8::from(self.0 == Scalar::zero()))
-    }
+    // fn zero() -> Self {
+    //     Self(Scalar::zero())
+    // }
+    //
+    // fn one() -> Self {
+    //     Self(Scalar::one())
+    // }
 
     fn square(&self) -> Self {
         Self(self.0 * self.0)
@@ -676,9 +678,8 @@ impl Field for WrappedScalar {
         CtOption::new(Self(self.0.invert()), Choice::from(1u8))
     }
 
-    fn sqrt(&self) -> CtOption<Self> {
-        // Not used for secret sharing
-        unimplemented!()
+    fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
+        helpers::sqrt_ratio_generic(num, div)
     }
 }
 
@@ -697,18 +698,38 @@ impl PrimeField for WrappedScalar {
         Choice::from(self.0[0] & 1)
     }
 
+    const MODULUS: &'static str =
+        "0000100000000000000000000014def9000dea2f79cd65810002631a5cf5d3ed";
+
     const NUM_BITS: u32 = 255;
     const CAPACITY: u32 = Self::NUM_BITS - 1;
+    const TWO_INV: Self = Self(Scalar::from_bits([
+        0xf7, 0xe9, 0x7a, 0x2e, 0x8d, 0x31, 0x09, 0x2c, 0x6b, 0xce, 0x7b, 0x51, 0xef, 0x7c, 0x6f,
+        0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x08,
+    ]));
+    const MULTIPLICATIVE_GENERATOR: Self = Self(Scalar::from_bits([
+        0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00,
+    ]));
 
-    fn multiplicative_generator() -> Self {
-        unimplemented!();
-    }
-
-    const S: u32 = 32;
-
-    fn root_of_unity() -> Self {
-        unimplemented!();
-    }
+    const S: u32 = 16;
+    const ROOT_OF_UNITY: Self = Self(Scalar::from_bits([
+        0x13, 0xec, 0x5b, 0xd7, 0x37, 0xca, 0x0f, 0xa2, 0xf3, 0xf8, 0xb2, 0x1c, 0x58, 0xfb, 0xd7,
+        0x24, 0x06, 0x30, 0x4c, 0x86, 0x38, 0x8a, 0x6a, 0x40, 0xdb, 0x53, 0xbd, 0x45, 0x20, 0x05,
+        0x00, 0x00,
+    ]));
+    const ROOT_OF_UNITY_INV: Self = Self(Scalar::from_bits([
+        0x09, 0x91, 0xe8, 0xf4, 0x91, 0xbb, 0xc8, 0xca, 0x08, 0xed, 0xfb, 0xe5, 0xde, 0x4a, 0x8e,
+        0xdb, 0xea, 0x46, 0x8f, 0x60, 0x55, 0xfd, 0xbd, 0x30, 0x37, 0xae, 0xc1, 0x09, 0x0a, 0x07,
+        0x00, 0x00,
+    ]));
+    const DELTA: Self = Self(Scalar::from_bits([
+        0x89, 0xf6, 0x30, 0x4e, 0x68, 0x88, 0x5f, 0x18, 0xae, 0xa2, 0xee, 0x41, 0x54, 0xce, 0x9b,
+        0x4d, 0x17, 0xda, 0xad, 0xd4, 0x92, 0x69, 0x49, 0x1c, 0xfa, 0x5c, 0xa3, 0xd3, 0x99, 0x00,
+        0x00, 0x00,
+    ]));
 }
 
 impl From<u64> for WrappedScalar {
@@ -951,6 +972,46 @@ impl<'de> Deserialize<'de> for WrappedScalar {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_bytes(WrappedScalarVisitor)
+    }
+}
+
+impl Sum for WrappedScalar {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut acc = Scalar::zero();
+        for s in iter {
+            acc += s.0;
+        }
+        Self(acc)
+    }
+}
+
+impl<'a> Sum<&'a WrappedScalar> for WrappedScalar {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        let mut acc = Scalar::zero();
+        for s in iter {
+            acc += s.0;
+        }
+        Self(acc)
+    }
+}
+
+impl Product for WrappedScalar {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut acc = Scalar::one();
+        for s in iter {
+            acc *= s.0;
+        }
+        Self(acc)
+    }
+}
+
+impl<'a> Product<&'a WrappedScalar> for WrappedScalar {
+    fn product<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        let mut acc = Scalar::one();
+        for s in iter {
+            acc *= s.0;
+        }
+        Self(acc)
     }
 }
 

@@ -109,13 +109,13 @@ where
     // Generate the shares of (x, y) coordinates
     // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
     let mut shares = Vec::<Share<S>, N>::new();
-    let mut x = F::one();
+    let mut x = F::ONE;
     for i in 0..N {
         let y = polynomial.evaluate(x);
         shares
             .push(Share::<S>::from_field_element((i + 1) as u8, y)?)
             .expect(EXPECT_MSG);
-        x += F::one();
+        x += F::ONE;
     }
     Ok((shares, polynomial))
 }

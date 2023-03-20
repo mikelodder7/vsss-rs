@@ -51,7 +51,7 @@ pub fn combine_single<
     assert_eq!(secret, secret_1);
 
     // Zero is a special case so make sure it works
-    let secret = F::zero();
+    let secret = F::ZERO;
     let res = shamir::split_secret::<F, _, 2, 3, S>(secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();

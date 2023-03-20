@@ -51,7 +51,7 @@
 //! let scalar = res.unwrap();
 //! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
-//! assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
+//! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 //! ```
 //!
 //! To split a k256 secret using Shamir
@@ -72,7 +72,7 @@
 //! let scalar = res.unwrap();
 //! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
-//! assert_eq!(sk_dup.to_be_bytes(), sk.to_be_bytes());
+//! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 //! ```
 //!
 //! Feldman or Pedersen return extra information for verification using their respective verifiers
@@ -182,5 +182,5 @@ pub use curve25519_dalek;
 pub use elliptic_curve;
 pub use heapless;
 #[cfg(feature = "curve25519")]
-pub use sha2;
+pub use sha2_9;
 pub use subtle;

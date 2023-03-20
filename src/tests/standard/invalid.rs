@@ -14,7 +14,7 @@ pub fn split_invalid_args<
     F: PrimeField + Zeroize,
     G: Group + GroupEncoding + Default + ScalarMul<F>,
 >() {
-    let secret = F::one();
+    let secret = F::ONE;
     let mut rng = MockRng::default();
     assert!(split_secret::<F, _>(0, 0, secret, &mut rng).is_err());
     assert!(split_secret::<F, _>(3, 2, secret, &mut rng).is_err());

@@ -51,7 +51,7 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>, const T: usize>
         let blinding = blind_share.as_field_element::<F>()?;
 
         let x = F::from(share.identifier() as u64);
-        let mut i = F::one();
+        let mut i = F::ONE;
 
         // FUTURE: execute this sum of products
         // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
