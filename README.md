@@ -57,7 +57,7 @@ use rand::rngs::OsRng;
 fn main() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
+    let nzs = sk.to_nonzero_scalar();
     // 32 for field size, 1 for identifier = 33
     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
@@ -84,7 +84,7 @@ use rand::rngs::OsRng;
 fn main() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
+    let nzs = sk.to_nonzero_scalar();
     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
