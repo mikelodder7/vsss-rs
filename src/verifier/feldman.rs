@@ -66,4 +66,40 @@ impl<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> FeldmanVerifier<F, 
             Err(Error::InvalidShare)
         }
     }
+
+    #[cfg(feature = "const-generics")]
+    /// Check whether the share is valid according this verifier set
+    /// `S` is the number of bytes in the share
+    pub fn verify_const_generics<const S: usize>(&self, share: &const_generics::Share<S>) -> VsssResult<()> {
+        let s = share.as_field_element::<F>()?;
+
+        let x = F::from(share.identifier() as u64);
+        let mut i = F::ONE;
+
+        // FUTURE: execute this sum of products
+        // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
+        // as a constant time operation using <https://cr.yp.to/papers/pippenger.pdf>
+        // or Guide to Elliptic Curve Cryptography book,
+        // "Algorithm 3.48 Simultaneous multiple point multiplication"
+        // without precomputing the addition but still reduces doublings
+
+        // c_0
+        let mut rhs = self.commitments[0];
+        for v in &self.commitments[1..] {
+            i *= x;
+
+            // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
+            rhs += *v * i;
+        }
+
+        let lhs: G = -self.generator * s;
+
+        let res: G = lhs + rhs;
+
+        if res.is_identity().into() {
+            Ok(())
+        } else {
+            Err(Error::InvalidShare)
+        }
+    }
 }

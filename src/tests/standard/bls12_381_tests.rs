@@ -7,15 +7,18 @@ use super::invalid::*;
 use super::valid::*;
 use crate::*;
 use bls12_381_plus::{
-    multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
-    Scalar,
+    multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
+use bls12_381_plus::ff::PrimeField;
+use bls12_381_plus::group::GroupEncoding;
 use elliptic_curve::{
     ff::Field,
-    hash2curve::ExpandMsgXmd,
     group::{Curve, Group},
+    hash2curve::ExpandMsgXmd,
 };
+use elliptic_curve::group::ScalarMul;
 use rand::rngs::OsRng;
+use rstest::*;
 
 #[test]
 fn invalid_tests() {
@@ -120,4 +123,50 @@ fn verifier_serde_test() {
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(verifier.generator, verifier2.generator);
+}
+
+#[cfg(feature = "const-generics")]
+#[rstest]
+#[case::threshold2_of_3(2, 3)]
+#[case::threshold3_of_5(3, 5)]
+#[case::threshold4_of_7(4, 7)]
+#[case::threshold5_of_9(5, 9)]
+#[case::threshold6_of_11(6, 11)]
+#[case::threshold7_of_13(7, 13)]
+#[case::threshold8_of_15(8, 15)]
+fn split_combine_test(
+   #[case] threshold: usize,
+   #[case] limit: usize,
+) {
+    const SECRET_SHARE_SIZE: usize = 33;
+    const G1_SHARE_SIZE: usize = 49;
+    const G2_SHARE_SIZE: usize = 97;
+    const MAX_TEST_SHARES: usize = 16;
+    let secret = Scalar::random(OsRng);
+    let shares = split_secret_const_generics::<_, _, SECRET_SHARE_SIZE>(threshold, limit, secret, &mut OsRng).unwrap();
+    let secret2 = combine_shares_const_generics::<Scalar, SECRET_SHARE_SIZE>(&shares[..threshold]).unwrap();
+    assert_eq!(secret, secret2);
+
+    let mut sigs_g1 = Vec::<const_generics::Share<G1_SHARE_SIZE>, MAX_TEST_SHARES>::new();
+    let mut sigs_g2 = Vec::<const_generics::Share<G2_SHARE_SIZE>, MAX_TEST_SHARES>::new();
+    for s in &shares {
+        let ff = s.as_field_element::<Scalar>().unwrap();
+        let sig_g1 = G1Projective::GENERATOR * ff;
+        let new_share_g1 = const_generics::Share::<G1_SHARE_SIZE>::from_group_element(s.identifier(), sig_g1).unwrap();
+        sigs_g1.push(new_share_g1).unwrap();
+
+        let sig_g2 = G2Projective::GENERATOR * ff;
+        let new_share_g2 = const_generics::Share::<G2_SHARE_SIZE>::from_group_element(s.identifier(), sig_g2).unwrap();
+        sigs_g2.push(new_share_g2).unwrap();
+    }
+
+    let sig_g1 = combine_shares_group_const_generics::<Scalar, G1Projective, G1_SHARE_SIZE>(&sigs_g1[..threshold]).unwrap();
+    assert_eq!(sig_g1, G1Projective::GENERATOR * secret);
+    let sig_g2 = combine_shares_group_const_generics::<Scalar, G2Projective, G2_SHARE_SIZE>(&sigs_g2[..threshold]).unwrap();
+    assert_eq!(sig_g2, G2Projective::GENERATOR * secret);
+
+    let (shares, verifier) = feldman::split_secret_const_generics::<_, G1Projective, _, SECRET_SHARE_SIZE>(threshold, limit, secret, None, &mut OsRng).unwrap();
+    for s in &shares {
+        assert!(verifier.verify_const_generics(s).is_ok());
+    }
 }

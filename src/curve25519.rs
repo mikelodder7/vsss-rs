@@ -23,7 +23,7 @@ use curve25519_dalek::{
     traits::{Identity, IsIdentity},
 };
 use elliptic_curve::{
-    ff::{Field, PrimeField, helpers},
+    ff::{helpers, Field, PrimeField},
     group::{Group, GroupEncoding},
 };
 use rand_chacha_02::{rand_core::SeedableRng, ChaChaRng}; // for curve25519_dalek compatability

@@ -8,13 +8,12 @@ use super::valid::*;
 use super::SHARE_SIZE;
 use crate::{tests::utils::MockRng, Vec};
 use bls12_381_plus::{
-    multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective,
-    Scalar,
+    multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
 use elliptic_curve::{
     ff::Field,
-    hash2curve::ExpandMsgXmd,
     group::{Curve, Group},
+    hash2curve::ExpandMsgXmd,
 };
 use rand::rngs::OsRng;
 

@@ -39,7 +39,6 @@ pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>
 
 /// Create shares from a secret.
 /// F is the prime field
-/// S is the number of bytes used to represent F.
 /// `blinding` is the blinding factor.
 /// If [`None`], a random value is generated in F.
 /// `share_generator` is the generator point to use for shares.
