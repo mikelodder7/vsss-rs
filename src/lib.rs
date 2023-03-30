@@ -168,8 +168,11 @@ pub use error::*;
 pub use pedersen::PedersenResult;
 pub use polynomial::*;
 pub use shamir::{combine_shares, combine_shares_group};
+#[cfg(feature = "const-generics")]
+pub use shamir::{combine_shares_group_const_generics, combine_shares_const_generics};
 pub use share::*;
 pub use verifier::*;
+pub use util::MAX_SHARES;
 
 #[cfg(feature = "const-generics")]
 pub mod const_generics;

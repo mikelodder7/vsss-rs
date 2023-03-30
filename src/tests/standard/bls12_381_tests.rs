@@ -9,14 +9,11 @@ use crate::*;
 use bls12_381_plus::{
     multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
-use bls12_381_plus::ff::PrimeField;
-use bls12_381_plus::group::GroupEncoding;
 use elliptic_curve::{
     ff::Field,
     group::{Curve, Group},
     hash2curve::ExpandMsgXmd,
 };
-use elliptic_curve::group::ScalarMul;
 use rand::rngs::OsRng;
 use rstest::*;
 

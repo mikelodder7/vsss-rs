@@ -22,7 +22,8 @@ pub(crate) const MAX_GROUP_HEXITS: usize = MAX_GROUP_SIZE * 2;
 pub(crate) const MAX_SHARE_BYTES: usize = MAX_GROUP_SIZE + 1;
 pub(crate) const MAX_SHARE_HEXITS: usize = MAX_SHARE_BYTES * 2;
 pub(crate) const MAX_POLYNOMIAL_SIZE: usize = 255;
-pub(crate) const MAX_SHARES: usize = 255;
+/// The maximum number of shares that can be created
+pub const MAX_SHARES: usize = 255;
 pub(crate) const EXPECT_MSG: &str = "a bigger array";
 
 pub fn bytes_to_field<F: PrimeField>(bytes: &[u8]) -> Option<F> {
