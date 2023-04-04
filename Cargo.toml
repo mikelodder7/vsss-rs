@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "2.1.0"
+version = "2.1.1"
 
 [features]
 default = ["secp256k1", "curve25519", "std"]
