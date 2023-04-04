@@ -78,8 +78,8 @@ fn group_combine() {
     let h1 = G1Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine();
     let h2 = G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2v9::Sha256>>(msg, dst).to_affine());
 
-    let pk1 = (G1Projective::generator() * secret).to_affine();
-    let pk2 = G2Prepared::from((G2Projective::generator() * secret).to_affine());
+    let pk1 = (G1Projective::GENERATOR * secret).to_affine();
+    let pk2 = G2Prepared::from((G2Projective::GENERATOR * secret).to_affine());
 
     let g1 = -G1Affine::generator();
     let g2 = G2Prepared::from(-G2Affine::generator());
