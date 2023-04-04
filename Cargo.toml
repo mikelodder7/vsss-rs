@@ -20,7 +20,7 @@ secp256k1 = ["k256", "elliptic-curve", "subtle"]
 std = ["alloc"]
 
 [dependencies]
-curve25519-dalek = {git = "https://github.com/tari-project/curve25519-dalek", tag = "v4.0.2", optional = true, default-features = false, features = ["serde", "alloc", "u64_backend"] }
+curve25519-dalek = { package = "tari-curve25519-dalek", version = "4.0.2", optional = true, default-features = false, features = ["serde", "alloc", "u64_backend"] }
 elliptic-curve = { version = "0.12", features = ["ecdh"], optional = true }
 ff = "0.12"
 group = "0.12"
@@ -40,7 +40,7 @@ thiserror = "1.0.26"
 
 [dev-dependencies]
 bls12_381_plus = "0.5.3"
-curve25519-dalek = {git = "https://github.com/tari-project/curve25519-dalek", tag = "v4.0.2", default-features = false, features = ["serde", "alloc", "u64_backend"] }
+curve25519-dalek = { package = "tari-curve25519-dalek", version = "4.0.2", default-features = false, features = ["serde", "alloc", "u64_backend"] }
 ed25519-dalek = "1.0"
 k256 = { version = "0.11.6", features = ["arithmetic", "bits"] }
 p256 = { version = "0.11.1", features = ["arithmetic", "bits"] }
