@@ -26,7 +26,7 @@ use elliptic_curve::{
     ff::{helpers, Field, PrimeField},
     group::{Group, GroupEncoding},
 };
-use rand_chacha_02::{rand_core::SeedableRng, ChaChaRng}; // for curve25519_dalek compatability
+use rand::Rng;
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
@@ -42,10 +42,9 @@ impl Group for WrappedRistretto {
     type Scalar = WrappedScalar;
 
     fn random(mut rng: impl RngCore) -> Self {
-        let mut seed = [0u8; 32];
+        let mut seed = [0u8; 64];
         rng.fill_bytes(&mut seed);
-        let mut crng = ChaChaRng::from_seed(seed);
-        Self(RistrettoPoint::random(&mut crng))
+        Self(RistrettoPoint::from_uniform_bytes(&seed))
     }
 
     fn identity() -> Self {
@@ -336,9 +335,9 @@ impl Group for WrappedEdwards {
     type Scalar = WrappedScalar;
 
     fn random(mut rng: impl RngCore) -> Self {
-        let mut seed = [0u8; 32];
-        rng.fill_bytes(&mut seed);
-        Self(EdwardsPoint::hash_from_bytes::<sha2_9::Sha512>(&seed))
+        Self(EdwardsPoint::hash_from_bytes::<sha2_9::Sha512>(
+            &rng.gen::<[u8; 32]>(),
+        ))
     }
 
     fn identity() -> Self {
@@ -652,19 +651,10 @@ impl Field for WrappedScalar {
     ]));
 
     fn random(mut rng: impl RngCore) -> Self {
-        let mut seed = [0u8; 32];
+        let mut seed = [0u8; 64];
         rng.fill_bytes(&mut seed);
-        let mut crng = ChaChaRng::from_seed(seed);
-        Self(Scalar::random(&mut crng))
+        Self(Scalar::from_bytes_mod_order_wide(&seed))
     }
-
-    // fn zero() -> Self {
-    //     Self(Scalar::zero())
-    // }
-    //
-    // fn one() -> Self {
-    //     Self(Scalar::one())
-    // }
 
     fn square(&self) -> Self {
         Self(self.0 * self.0)
@@ -1017,13 +1007,13 @@ impl<'a> Product<&'a WrappedScalar> for WrappedScalar {
 
 #[test]
 fn ristretto_to_edwards() {
-    let mut osrng = rand_7::rngs::OsRng::default();
-    let sk = Scalar::random(&mut osrng);
+    let sk = Scalar::from_bits(rand_core::OsRng.gen::<[u8; 32]>());
     let pk = RISTRETTO_BASEPOINT_POINT * sk;
     let ek = WrappedEdwards::from(WrappedRistretto(pk));
     assert!(ek.0.is_torsion_free());
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn serde_scalar() {
     let rng = rand::rngs::OsRng::default();
@@ -1039,6 +1029,7 @@ fn serde_scalar() {
     assert_eq!(ws1, ws2);
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn serde_edwards() {
     let rng = rand::rngs::OsRng::default();

@@ -9,91 +9,177 @@
 //! that both may be needed for other protocols like Gennaro's DKG. Otherwise,
 //! the Feldman verifiers may be discarded.
 use crate::*;
-use core::marker::PhantomData;
 use elliptic_curve::{
-    ff::PrimeField,
-    group::{Group, GroupEncoding, ScalarMul},
+    ff::Field,
+    group::Group,
 };
-use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRng, RngCore, SeedableRng};
-use serde::{Deserialize, Serialize};
+use rand_core::{CryptoRng, RngCore};
 
-/// Result from calling Pedersen::split_secret
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct PedersenResult<F: PrimeField, G: Group + GroupEncoding + ScalarMul<F>> {
-    /// The random blinding factor randomly generated or supplied
-    #[serde(
-        serialize_with = "serialize_scalar",
-        deserialize_with = "deserialize_scalar"
-    )]
-    pub blinding: F,
-    /// The blinding shares
-    pub blind_shares: Vec<Share, MAX_SHARES>,
-    /// The secret shares
-    pub secret_shares: Vec<Share, MAX_SHARES>,
-    /// The verifier for validating shares
-    #[serde(bound(serialize = "PedersenVerifier<F, G>: Serialize"))]
-    #[serde(bound(deserialize = "PedersenVerifier<F, G>: Deserialize<'de>"))]
-    pub verifier: PedersenVerifier<F, G>,
+/// A secret sharing scheme that uses pedersen commitments as verifiers
+pub trait Pedersen<G, I, S>: Shamir<G::Scalar, I, S>
+where
+    G: Group,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
+{
+    /// The feldman verifier set
+    type FeldmanVerifierSet: FeldmanVerifierSet<G>;
+    /// The pedersen verifier set
+    type PedersenVerifierSet: PedersenVerifierSet<G>;
+    /// The result from running `split_secret_with_verifier`
+    type PedersenResult: PedersenResult<G, I, S,
+        ShareSet = <Self as Shamir<G::Scalar, I, S>>::ShareSet,
+        FeldmanVerifierSet = Self::FeldmanVerifierSet,
+        PedersenVerifierSet = Self::PedersenVerifierSet,
+    >;
+
+    /// Create shares from a secret.
+    /// `blinder` is the blinding factor.
+    /// If [`None`], a random value is generated in G::Scalar.
+    /// `secret_generator` is the generator point to use for shares.
+    /// If [`None`], the default generator is used.
+    /// `blinder_generator` is the generator point to use for blinder shares.
+    /// If [`None`], a random generator is used
+    ///
+    /// Returns the secret shares, blinder, blinder shares, and the verifiers
+    fn split_secret_with_verifier(
+        threshold: usize,
+        limit: usize,
+        secret: G::Scalar,
+        blinder: Option<G::Scalar>,
+        secret_generator: Option<G>,
+        blinder_generator: Option<G>,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> VsssResult<Self::PedersenResult> {
+        check_params(threshold, limit)?;
+        let g = secret_generator.unwrap_or_else(G::generator);
+        let h = blinder_generator.unwrap_or_else(|| G::random(&mut rng));
+        if (g.is_identity() | h.is_identity()).into() {
+            return Err(Error::InvalidGenerator);
+        }
+        let blinder = blinder.unwrap_or_else(|| G::Scalar::random(&mut rng));
+
+        let secret_polynomial = Self::fill(secret, &mut rng, threshold)?;
+        let blinder_polynomial = Self::fill(blinder, &mut rng, threshold)?;
+
+        let mut feldman_verifier_set = Self::FeldmanVerifierSet::create(threshold, g);
+        let mut pedersen_verifier_set = Self::PedersenVerifierSet::create(threshold, g, h);
+        // Generate the verifiable commitments to the polynomial for the shares
+        // Each share is multiple of the polynomial and the specified generator point.
+        // {g^p0, g^p1, g^p2, ..., g^pn}
+        let secret_coefficients = secret_polynomial.as_ref();
+        let blinder_coefficients = blinder_polynomial.as_ref();
+        for (i, (fvs, pvs)) in feldman_verifier_set
+            .verifiers_mut()
+            .iter_mut()
+            .zip(pedersen_verifier_set.verifiers_mut().iter_mut())
+            .enumerate()
+        {
+            *fvs = g * secret_coefficients[i];
+            *pvs = *fvs + h * blinder_coefficients[i];
+        }
+        let secret_shares = create_shares(&secret_polynomial, threshold, limit)?;
+        let blinder_shares = create_shares(&blinder_polynomial, threshold, limit)?;
+        Ok(Self::PedersenResult::new(
+            blinder,
+            secret_shares,
+            blinder_shares,
+            feldman_verifier_set,
+            pedersen_verifier_set,
+        ))
+    }
 }
 
-/// Create shares from a secret.
-/// F is the prime field
-/// `blinding` is the blinding factor.
-/// If [`None`], a random value is generated in F.
-/// `share_generator` is the generator point to use for shares.
-/// If [`None`], the default generator is used.
-/// `blind_factor_generator` is the generator point to use for blinding factor shares.
-/// If [`None`], a random generator is used
-pub fn split_secret<F, G, R>(
-    threshold: usize,
-    limit: usize,
-    secret: F,
-    blinding: Option<F>,
-    share_generator: Option<G>,
-    blind_factor_generator: Option<G>,
-    rng: &mut R,
-) -> Result<PedersenResult<F, G>, Error>
+/// A result output from splitting a secret with [`Pedersen`]
+pub trait PedersenResult<G, I, S>: Sized
 where
-    F: PrimeField,
-    G: Group + GroupEncoding + Default + ScalarMul<F>,
-    R: RngCore + CryptoRng,
+    G: Group,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
 {
-    check_params(threshold, limit)?;
+    /// The secret shares
+    type ShareSet: ReadableShareSet<I, S>;
+    /// The feldman verifier set
+    type FeldmanVerifierSet: FeldmanVerifierSet<G>;
+    /// The pedersen verifier set
+    type PedersenVerifierSet: PedersenVerifierSet<G>;
 
-    let mut crng = ChaChaRng::from_rng(rng).map_err(|_| Error::NotImplemented)?;
+    /// Create a new result
+    fn new(
+        blinder: G::Scalar,
+        secret_shares: Self::ShareSet,
+        blinder_shares: Self::ShareSet,
+        feldman_verifier_set: Self::FeldmanVerifierSet,
+        pedersen_verifier_set: Self::PedersenVerifierSet,
+    ) -> Self;
 
-    let g = share_generator.unwrap_or_else(G::generator);
-    let t = F::random(&mut crng);
-    let h = blind_factor_generator.unwrap_or_else(|| G::generator() * t);
+    /// The blinder used by split secret
+    fn blinder(&self) -> G::Scalar;
 
-    let blinding = blinding.unwrap_or_else(|| F::random(&mut crng));
-    let (secret_shares, secret_polynomial) =
-        get_shares_and_polynomial(threshold, limit, secret, &mut crng)?;
-    let (blind_shares, blinding_polynomial) =
-        get_shares_and_polynomial(threshold, limit, blinding, &mut crng)?;
+    /// The secret shares generated by split secret
+    fn secret_shares(&self) -> &Self::ShareSet;
 
-    let mut feldman_commitments = Vec::new();
-    let mut pedersen_commitments = Vec::new();
-    // {(g^p0 h^r0), (g^p1, h^r1), ..., (g^pn, h^rn)}
-    for i in 0..threshold {
-        let g_i = g * secret_polynomial.coefficients[i];
-        let h_i = h * blinding_polynomial.coefficients[i];
-        feldman_commitments.push(g_i).expect(EXPECT_MSG);
-        pedersen_commitments.push(g_i + h_i).expect(EXPECT_MSG);
+    /// The blinder shares generated by split secret
+    fn blinder_shares(&self) -> &Self::ShareSet;
+
+    /// The feldman verifier set for verifying secrets w/o blinders
+    fn feldman_verifier_set(&self) -> &Self::FeldmanVerifierSet;
+
+    /// The pedersen verifier set for verifying secrets w/blinders
+    fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet;
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// The Default result to use when an allocator is available
+pub struct DefaultPedersenResult<G, I, S>
+    where G: Group + elliptic_curve::group::GroupEncoding + Default,
+          I: ShareIdentifier,
+          S: Share<Identifier = I>,
+{
+    blinder: G::Scalar,
+    secret_shares: Vec<S>,
+    blinder_shares: Vec<S>,
+    feldman_verifier_set: Vec<G>,
+    pedersen_verifier_set: Vec<G>,
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<G, I, S> PedersenResult<G, I, S> for DefaultPedersenResult<G, I, S>
+    where G: Group + elliptic_curve::group::GroupEncoding + Default,
+          I: ShareIdentifier,
+          S: Share<Identifier = I>,
+{
+    type ShareSet = Vec<S>;
+    type FeldmanVerifierSet = Vec<G>;
+    type PedersenVerifierSet = Vec<G>;
+
+    fn new(blinder: G::Scalar, secret_shares: Self::ShareSet, blinder_shares: Self::ShareSet, feldman_verifier_set: Self::FeldmanVerifierSet, pedersen_verifier_set: Self::PedersenVerifierSet) -> Self {
+        Self {
+            blinder,
+            secret_shares,
+            blinder_shares,
+            feldman_verifier_set,
+            pedersen_verifier_set,
+        }
     }
-    Ok(PedersenResult {
-        blinding,
-        blind_shares,
-        secret_shares,
-        verifier: PedersenVerifier {
-            generator: h,
-            commitments: pedersen_commitments,
-            feldman_verifier: FeldmanVerifier {
-                generator: g,
-                commitments: feldman_commitments,
-                marker: PhantomData,
-            },
-        },
-    })
+
+    fn blinder(&self) -> G::Scalar {
+        self.blinder
+    }
+
+    fn secret_shares(&self) -> &Self::ShareSet {
+        &self.secret_shares
+    }
+
+    fn blinder_shares(&self) -> &Self::ShareSet {
+        &self.blinder_shares
+    }
+
+    fn feldman_verifier_set(&self) -> &Self::FeldmanVerifierSet {
+        &self.feldman_verifier_set
+    }
+
+    fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet {
+        &self.pedersen_verifier_set
+    }
 }

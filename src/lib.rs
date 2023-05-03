@@ -138,44 +138,43 @@
 )]
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(feature = "nightly", generic_const_exprs)]
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg_attr(all(feature = "alloc", not(feature = "std")), macro_use)]
 extern crate alloc;
 
 #[cfg(feature = "std")]
 #[cfg_attr(feature = "std", macro_use)]
 extern crate std;
 
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
 #[cfg(test)]
 pub(crate) mod tests;
 
 mod error;
-pub mod feldman;
-pub mod pedersen;
+mod feldman;
+mod pedersen;
 mod polynomial;
-pub mod shamir;
+mod set;
+mod shamir;
 mod share;
 mod util;
-mod verifier;
 
-use heapless::Vec;
-use shamir::*;
 use subtle::*;
 use util::*;
 
 pub use error::*;
-pub use pedersen::PedersenResult;
+pub use feldman::*;
+pub use pedersen::*;
 pub use polynomial::*;
-pub use shamir::{combine_shares, combine_shares_group};
-#[cfg(feature = "const-generics")]
-pub use shamir::{combine_shares_group_const_generics, combine_shares_const_generics};
+pub use shamir::*;
 pub use share::*;
-pub use verifier::*;
-pub use util::MAX_SHARES;
+pub use set::*;
 
-#[cfg(feature = "const-generics")]
-pub mod const_generics;
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
@@ -183,7 +182,6 @@ pub mod curve25519;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
-pub use heapless;
 #[cfg(feature = "curve25519")]
 pub use sha2_9;
 pub use subtle;

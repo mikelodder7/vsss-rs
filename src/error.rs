@@ -13,6 +13,9 @@ pub enum Error {
     /// Error when limit is less than threshold
     #[error("Limit is less than threshold")]
     SharingLimitLessThanThreshold,
+    /// When dealing with fixed size arrays, the caller requested more shares than there is space
+    #[error("Requested more shares than space was provided")]
+    InvalidSizeRequest,
     /// Invalid share identifier
     #[error("An invalid share detected")]
     SharingInvalidIdentifier,
@@ -25,6 +28,9 @@ pub enum Error {
     /// An invalid share was supplied for verification or combine
     #[error("An invalid share was supplied for verification or combine")]
     InvalidShare,
+    /// An invalid generator was supplied for share generation
+    #[error("An invalid generator was supplied for share generation")]
+    InvalidGenerator,
     /// An invalid secret was supplied for split
     #[error("An invalid secret was supplied for split")]
     InvalidSecret,
@@ -37,4 +43,4 @@ pub enum Error {
 }
 
 /// Results returned by this crate
-pub type VsssResult<T> = anyhow::Result<T, Error>;
+pub type VsssResult<T> = Result<T, Error>;
