@@ -30,8 +30,10 @@ where
         rng: impl RngCore + CryptoRng,
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
-        let polynomial = Self::fill(secret, rng, threshold)?;
-        create_shares(&polynomial, threshold, limit)
+        let mut polynomial = Self::fill(secret, rng, threshold)?;
+        let ss = create_shares(&polynomial, threshold, limit)?;
+        polynomial.as_mut().iter_mut().for_each(|c| *c = F::ZERO);
+        Ok(ss)
     }
 }
 

@@ -152,6 +152,11 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::collections::BTreeSet;
+#[cfg(feature = "std")]
+use std::collections::BTreeSet;
+
 #[cfg(test)]
 pub(crate) mod tests;
 

@@ -15,6 +15,7 @@ use elliptic_curve::{
 };
 use rand_core::{CryptoRng, RngCore};
 
+
 /// A secret sharing scheme that uses pedersen commitments as verifiers
 pub trait Pedersen<G, I, S>: Shamir<G::Scalar, I, S>
 where
@@ -59,7 +60,7 @@ where
         }
         let blinder = blinder.unwrap_or_else(|| G::Scalar::random(&mut rng));
 
-        let secret_polynomial = Self::fill(secret, &mut rng, threshold)?;
+        let mut secret_polynomial = Self::fill(secret, &mut rng, threshold)?;
         let blinder_polynomial = Self::fill(blinder, &mut rng, threshold)?;
 
         let mut feldman_verifier_set = Self::FeldmanVerifierSet::create(threshold, g);
@@ -73,6 +74,7 @@ where
             .verifiers_mut()
             .iter_mut()
             .zip(pedersen_verifier_set.verifiers_mut().iter_mut())
+            .take(threshold)
             .enumerate()
         {
             *fvs = g * secret_coefficients[i];
@@ -80,6 +82,7 @@ where
         }
         let secret_shares = create_shares(&secret_polynomial, threshold, limit)?;
         let blinder_shares = create_shares(&blinder_polynomial, threshold, limit)?;
+        secret_polynomial.as_mut().iter_mut().for_each(|s| *s = G::Scalar::ZERO);
         Ok(Self::PedersenResult::new(
             blinder,
             secret_shares,
@@ -129,10 +132,10 @@ where
     fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet;
 }
 
+/// The std result to use when an allocator is available
 #[cfg(any(feature = "alloc", feature = "std"))]
-/// The Default result to use when an allocator is available
-pub struct DefaultPedersenResult<G, I, S>
-    where G: Group + elliptic_curve::group::GroupEncoding + Default,
+pub struct StdPedersenResult<G, I, S>
+    where G: Group + GroupEncoding + Default,
           I: ShareIdentifier,
           S: Share<Identifier = I>,
 {
@@ -144,8 +147,8 @@ pub struct DefaultPedersenResult<G, I, S>
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<G, I, S> PedersenResult<G, I, S> for DefaultPedersenResult<G, I, S>
-    where G: Group + elliptic_curve::group::GroupEncoding + Default,
+impl<G, I, S> PedersenResult<G, I, S> for StdPedersenResult<G, I, S>
+    where G: Group + GroupEncoding + Default,
           I: ShareIdentifier,
           S: Share<Identifier = I>,
 {

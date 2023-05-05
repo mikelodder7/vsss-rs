@@ -15,6 +15,7 @@ use elliptic_curve::{
     generic_array::{GenericArray, typenum},
     hash2curve::ExpandMsgXmd,
 };
+use k256::SecretKey;
 use rstest::*;
 
 #[test]
@@ -23,14 +24,53 @@ fn simple() {
     const SHARES: usize = 5;
     type ScalarShare = GenericArray<u8, typenum::U33>;
 
-
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
 
-    let shares: [ScalarShare; 5] = <[Scalar; 5]>::split_secret(THRESHOLD, SHARES, secret, rng).unwrap();
-    let t = &shares[..THRESHOLD];
-    let secret2 = t.combine_to_field_element::<Scalar, [(Scalar, Scalar); THRESHOLD]>().unwrap();
+    let shares: [ScalarShare; 5] = <[Scalar; 5]>::split_secret(THRESHOLD, SHARES, secret, &mut rng).unwrap();
+    let secret2 = (&shares[..THRESHOLD]).combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>().unwrap();
     assert_eq!(secret, secret2);
+
+    struct Fvss {
+        share_set: [ScalarShare; SHARES],
+        coefficients: [Scalar; THRESHOLD],
+        verifier_set: [G1Projective; THRESHOLD + 1],
+    }
+
+    impl AsRef<[Scalar]> for Fvss {
+        fn as_ref(&self) -> &[Scalar] {
+            &self.coefficients
+        }
+    }
+
+    impl AsMut<[Scalar]> for Fvss {
+        fn as_mut(&mut self) -> &mut [Scalar] {
+            &mut self.coefficients
+        }
+    }
+
+    impl Polynomial<Scalar> for Fvss {
+        fn create(_size_hint: usize) -> Self {
+            Self {
+                share_set: [ScalarShare::default(); SHARES],
+                coefficients: [Scalar::ZERO; THRESHOLD],
+                verifier_set: [G1Projective::IDENTITY; THRESHOLD + 1],
+            }
+        }
+    }
+
+    impl Shamir<Scalar, u8, ScalarShare> for Fvss {
+        type ShareSet = [ScalarShare; SHARES];
+    }
+
+    impl Feldman<G1Projective, u8, ScalarShare> for Fvss {
+        type VerifierSet = [G1Projective; THRESHOLD + 1];
+    }
+
+    let (shares, verifiers) = Fvss::split_secret_with_verifier(THRESHOLD, SHARES, secret, None, &mut rng).unwrap();
+    for s in &shares {
+        assert!(verifiers.verify_share(s).is_ok());
+    }
 }
 
 // #[test]

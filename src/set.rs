@@ -16,7 +16,7 @@ pub trait ReadableShareSet<I: ShareIdentifier, S: Share<Identifier = I>>: AsRef<
         where F: PrimeField,
               C: ShareSetCombiner<I, S, F, F>
     {
-        C::combine(self.get_slice(), |s| s.as_field_element())
+        C::combine(self.as_ref(), |s| s.as_field_element())
     }
 
     /// Convert the given shares into a group element
@@ -24,7 +24,7 @@ pub trait ReadableShareSet<I: ShareIdentifier, S: Share<Identifier = I>>: AsRef<
         where G: Group + GroupEncoding + Default,
               C: ShareSetCombiner<I, S, G::Scalar, G>
     {
-        C::combine(self.get_slice(), |s| s.as_group_element())
+        C::combine(self.as_ref(), |s| s.as_group_element())
     }
 }
 
@@ -35,8 +35,7 @@ pub trait WriteableShareSet<I: ShareIdentifier, S: Share<Identifier = I>>: Reada
     fn create(size_hint: usize) -> Self;
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>, W: ?Sized + WriteableShareSet<I, S>> ReadableShareSet<I, S> for W {
-}
+impl<I: ShareIdentifier, S: Share<Identifier = I>, B: AsRef<[S]>> ReadableShareSet<I, S> for B {}
 
 /// A data store for reconstructing secret shares
 pub trait ShareSetCombiner<I, S, F, G>:
@@ -115,26 +114,26 @@ fn interpolate<F, S>(shares: &[(F, S)]) -> VsssResult<S>
 macro_rules! impl_ga_set {
     ($($size:ident => $num:expr),+$(,)*) => {
         $(
-        impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for GenericArray<S, typenum::$size> {
-            fn create(size_hint: usize) -> Self {
-                GenericArray::from(<[S; $num] as WriteableShareSet<I, S>>::create(size_hint))
-            }
-        }
+            impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for GenericArray<S, typenum::$size> {
+               fn create(size_hint: usize) -> Self {
+                   GenericArray::from(<[S; $num] as WriteableShareSet<I, S>>::create(size_hint))
+               }
+           }
 
-        impl<
-            I: ShareIdentifier,
-            S: Share<Identifier = I>,
-            F: PrimeField,
-            G: Default + Copy + core::ops::AddAssign + core::ops::Mul<F, Output = G>
-        > ShareSetCombiner<I, S, F, G> for GenericArray<(F, G), typenum::$size> {
-            fn create(_size_hint: usize) -> Self {
-                Self::from([(F::default(), G::default()); $num])
-            }
+            impl<
+                I: ShareIdentifier,
+                S: Share<Identifier = I>,
+                F: PrimeField,
+                G: Default + Copy + core::ops::AddAssign + core::ops::Mul<F, Output = G>
+            > ShareSetCombiner<I, S, F, G> for GenericArray<(F, G), typenum::$size> {
+                fn create(_size_hint: usize) -> Self {
+                                           Self::from([(F::default(), G::default()); $num])
+                                           }
 
-            fn duplicate_identifiers_exist(&self) -> bool {
-                dup_checker(self)
+                fn duplicate_identifiers_exist(&self) -> bool {
+                    dup_checker(self)
+                }
             }
-        }
         )+
     };
 }

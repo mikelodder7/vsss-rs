@@ -5,7 +5,7 @@
 //! Feldman's Verifiable secret sharing scheme.
 //! (see <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
 use crate::*;
-use elliptic_curve::group::Group;
+use elliptic_curve::{group::Group, ff::Field};
 use rand_core::{CryptoRng, RngCore};
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
@@ -30,7 +30,7 @@ where
         rng: impl RngCore + CryptoRng,
     ) -> VsssResult<(Self::ShareSet, Self::VerifierSet)> {
         check_params(threshold, limit)?;
-        let polynomial = Self::fill(secret, rng, threshold)?;
+        let mut polynomial = Self::fill(secret, rng, threshold)?;
         let g = generator.unwrap_or_else(G::generator);
         if g.is_identity().into() {
             return Err(Error::InvalidGenerator);
@@ -41,10 +41,11 @@ where
         // Each share is multiple of the polynomial and the specified generator point.
         // {g^p0, g^p1, g^p2, ..., g^pn}
         let coefficients = polynomial.as_ref();
-        for (i, vs) in verifier_set.verifiers_mut().iter_mut().enumerate() {
+        for (i, vs) in verifier_set.verifiers_mut().iter_mut().take(threshold).enumerate() {
             *vs = g * coefficients[i];
         }
         let shares = create_shares(&polynomial, threshold, limit)?;
+        polynomial.as_mut().iter_mut().for_each(|c| *c = G::Scalar::ZERO);
         Ok((shares, verifier_set))
     }
 }

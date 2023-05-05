@@ -14,18 +14,18 @@ version = "3.0.0-pre6"
 
 [features]
 default = ["curve25519"]
-alloc = ["rand_core/alloc", "rand/alloc"]
-curve25519 = ["curve25519-dalek", "sha2-9"]
-std = ["rand_core/std", "rand/std"]
+alloc = ["rand_core/alloc", "rand/alloc", "serde_crate/alloc", "serde"]
+curve25519 = ["curve25519-dalek", "sha2-9", "serde"]
+std = ["rand_core/std", "rand/std", "serde_crate/std", "serde"]
+serde = ["serde_crate"]
 
 [dependencies]
 curve25519-dalek = { version = "3", optional = true }
 elliptic-curve = { version = "0.13", features = ["ecdh"] }
-hex = { version = "0.4", default-features = false }
 rand = { version = "0.8", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 rand_core = "0.6"
-serde = { version = "1.0", default-features = false, features = ["serde_derive"] }
+serde_crate = { version = "1.0", default-features = false, features = ["derive"], optional = true, package = "serde" }
 sha2-9 = { version = "0.9", default-features = false, optional = true, package = "sha2" }
 subtle = { version = "2.4" }
 thiserror-no-std = "2.0"
