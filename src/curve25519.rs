@@ -28,7 +28,7 @@ use elliptic_curve::{
 };
 use rand::Rng;
 use rand_core::RngCore;
-use serde_crate::{
+use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };

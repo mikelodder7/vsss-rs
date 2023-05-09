@@ -2,121 +2,146 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-use crate::{tests::utils::MockRng, util::bytes_to_field, *};
+use super::*;
+use crate::tests::standard::TesterVsss;
+use crate::tests::utils::MockRng;
 use elliptic_curve::{
-    ff::PrimeField,
-    group::{Group, GroupEncoding, ScalarMul},
+    ff::{Field, PrimeField},
+    group::{Group, GroupEncoding},
 };
-use zeroize::Zeroize;
 
-pub fn combine_single<
-    F: PrimeField + Zeroize,
-    G: Group + GroupEncoding + Default + ScalarMul<F>,
->() {
-    let secret: F = bytes_to_field(b"hello").unwrap();
+pub fn combine_single<G: Group + Default>() {
+    let mut repr = <G::Scalar as PrimeField>::Repr::default();
+    repr.as_mut()[..5].copy_from_slice(b"hello");
+    let secret = G::Scalar::from_repr(repr).unwrap();
     let mut rng = MockRng::default();
-    let res = split_secret::<F, _>(2, 3, secret, &mut rng);
+    let res = TesterVsss::<G, u8, ScalarShare>::split_secret(2, 3, secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
-    let res = combine_shares::<F>(&shares);
+    let res = (&shares[..3]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 3]>();
     assert!(res.is_ok());
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 
     // Feldman test
-    let res = feldman::split_secret::<F, G, _>(2, 3, secret, None, &mut rng);
+    let res =
+        TesterVsss::<G, u8, ScalarShare>::split_secret_with_verifier(2, 3, secret, None, &mut rng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
-    for s in &shares {
-        assert!(verifier.verify(s).is_ok());
+    for s in &shares[..3] {
+        assert!(verifier.verify_share(s).is_ok());
     }
-    let res = combine_shares::<F>(&shares);
+    let res = (&shares[..2]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 2]>();
     assert!(res.is_ok());
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 
     // Pedersen test
-    let res = pedersen::split_secret::<F, G, _>(2, 3, secret, None, None, None, &mut rng);
+    let res = TesterVsss::<G, u8, ScalarShare>::split_secret_with_blind_verifier(
+        2, 3, secret, None, None, None, &mut rng,
+    );
     assert!(res.is_ok());
     let p_res = res.unwrap();
-    for (i, s) in p_res.secret_shares.iter().enumerate() {
-        assert!(p_res.verifier.verify(s, &p_res.blind_shares[i]).is_ok());
+    for (s, b) in p_res.secret_shares[..3]
+        .iter()
+        .zip(p_res.blinder_shares[..3].iter())
+    {
+        assert!(p_res
+            .pedersen_verifier_set
+            .verify_share_and_blinder(s, b)
+            .is_ok());
     }
-    let res = combine_shares::<F>(&shares);
+    let res = (&shares[..2]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 2]>();
     assert!(res.is_ok());
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 
     // Zero is a special case so make sure it works
-    let secret = F::ZERO;
-    let res = split_secret::<F, _>(2, 3, secret, &mut rng);
+    let secret = G::Scalar::ZERO;
+    let res = TesterVsss::<G, u8, ScalarShare>::split_secret(2, 3, secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
-    let res = combine_shares::<F>(&shares);
+    let res = (&shares[..2]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 2]>();
     assert!(res.is_ok());
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 
     // Feldman test
-    let res = feldman::split_secret::<F, G, _>(2, 3, secret, None, &mut rng);
+    let res =
+        TesterVsss::<G, u8, ScalarShare>::split_secret_with_verifier(2, 3, secret, None, &mut rng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
-    for s in &shares {
-        assert!(verifier.verify(s).is_ok());
+    for s in &shares[..3] {
+        assert!(verifier.verify_share(s).is_ok());
     }
     // make sure no malicious share works
-    let bad_share = Share(Vec::from_slice(&[1u8; 33]).unwrap());
-    assert!(verifier.verify(&bad_share).is_err());
+    let bad_share = ScalarShare::from([1u8; 33]);
+    assert!(verifier.verify_share(&bad_share).is_err());
 
-    let res = combine_shares::<F>(&shares);
+    let res = (&shares[..2]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 2]>();
     assert!(res.is_ok());
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 
-    let res = pedersen::split_secret::<F, G, _>(2, 3, secret, None, None, None, &mut rng);
+    let res = TesterVsss::<G, u8, ScalarShare>::split_secret_with_blind_verifier(
+        2, 3, secret, None, None, None, &mut rng,
+    );
     assert!(res.is_ok());
     let p_res = res.unwrap();
-    for (i, s) in p_res.secret_shares.iter().enumerate() {
-        assert!(p_res.verifier.verify(s, &p_res.blind_shares[i]).is_ok());
+    for (s, b) in p_res.secret_shares[..3]
+        .iter()
+        .zip(p_res.blinder_shares[..3].iter())
+    {
+        assert!(p_res
+            .pedersen_verifier_set
+            .verify_share_and_blinder(s, b)
+            .is_ok());
     }
-    assert!(p_res.verifier.verify(&bad_share, &bad_share).is_err());
-    let res = combine_shares::<F>(&shares);
+    assert!(p_res
+        .pedersen_verifier_set
+        .verify_share_and_blinder(&bad_share, &bad_share)
+        .is_err());
+
+    let res = (&shares[..2]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 2]>();
     assert!(res.is_ok());
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 }
 
-pub fn combine_all<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default + ScalarMul<F>>() {
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub fn combine_all<G: Group + GroupEncoding + Default>() {
+    use crate::*;
     use rand::rngs::OsRng;
     const THRESHOLD: usize = 3;
     const LIMIT: usize = 5;
 
     let mut rng = OsRng::default();
-    let secret: F = F::random(&mut rng);
+    let secret: G::Scalar = G::Scalar::random(&mut rng);
 
-    let res = split_secret::<F, _>(THRESHOLD, LIMIT, secret, &mut rng);
+    let res = shamir::split_secret(THRESHOLD, LIMIT, secret, &mut rng);
     assert!(res.is_ok());
-    let shares = res.unwrap();
+    let shares: Vec<ScalarShare> = res.unwrap();
 
-    let res = feldman::split_secret::<F, G, _>(THRESHOLD, LIMIT, secret, None, &mut rng);
+    let res = feldman::split_secret::<G, u8, ScalarShare>(THRESHOLD, LIMIT, secret, None, &mut rng);
     assert!(res.is_ok());
     let (feldman_shares, verifier) = res.unwrap();
 
-    let res =
-        pedersen::split_secret::<F, G, _>(THRESHOLD, LIMIT, secret, None, None, None, &mut rng);
+    let res = pedersen::split_secret::<G, u8, ScalarShare>(
+        THRESHOLD, LIMIT, secret, None, None, None, &mut rng,
+    );
     assert!(res.is_ok());
-    let ped_res = res.unwrap();
+    let ped_res: StdPedersenResult<G, u8, ScalarShare> = res.unwrap();
 
     for (i, s) in shares.iter().enumerate() {
-        assert!(verifier.verify(s).is_err());
-        assert!(ped_res.verifier.feldman_verifier.verify(s).is_err());
+        assert!(verifier.verify_share(s).is_err());
+        assert!(ped_res.feldman_verifier_set().verify_share(s).is_err());
 
-        assert!(verifier.verify(&feldman_shares[i]).is_ok());
+        assert!(verifier.verify_share(&feldman_shares[i]).is_ok());
         assert!(ped_res
-            .verifier
-            .verify(&ped_res.secret_shares[i], &ped_res.blind_shares[i])
+            .pedersen_verifier_set()
+            .verify_share_and_blinder(&ped_res.secret_shares()[i], &ped_res.blinder_shares()[i])
             .is_ok());
     }
 
@@ -152,9 +177,9 @@ pub fn combine_all<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default +
                 assert_eq!(secret, secret_1);
 
                 let parts = &[
-                    ped_res.secret_shares[i].clone(),
-                    ped_res.secret_shares[j].clone(),
-                    ped_res.secret_shares[k].clone(),
+                    ped_res.secret_shares()[i].clone(),
+                    ped_res.secret_shares()[j].clone(),
+                    ped_res.secret_shares()[k].clone(),
                 ];
 
                 let res = combine_shares(parts);

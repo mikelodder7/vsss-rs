@@ -152,33 +152,32 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::collections::BTreeSet;
-#[cfg(feature = "std")]
-use std::collections::BTreeSet;
-
 #[cfg(test)]
 pub(crate) mod tests;
 
 mod error;
-mod feldman;
-mod pedersen;
+pub mod feldman;
+pub mod pedersen;
 mod polynomial;
 mod set;
-mod shamir;
+pub mod shamir;
 mod share;
 mod util;
 
+use shamir::{check_params, create_shares};
 use subtle::*;
 use util::*;
 
 pub use error::*;
-pub use feldman::*;
-pub use pedersen::*;
+pub use feldman::Feldman;
+pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;
-pub use shamir::*;
-pub use share::*;
 pub use set::*;
+pub use shamir::Shamir;
+pub use share::*;
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub use pedersen::StdPedersenResult;
 
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
@@ -190,3 +189,170 @@ pub use elliptic_curve;
 #[cfg(feature = "curve25519")]
 pub use sha2_9;
 pub use subtle;
+
+/// Create a no-std verifiable secret sharing scheme with size $num using fixed arrays
+/// The arguments in order are:
+///     The vsss name
+///     The name for a pedersen secret sharing scheme result
+///     The maximum threshold allowed
+///     The maximum number of shares allowed
+#[macro_export]
+macro_rules! vsss_arr_impl {
+    ($name:ident, $result:ident, $max_threshold:expr, $max_shares:expr) => {
+        /// No-std verifiable secret sharing scheme with size $num
+        pub struct $name<G, I, S>
+        where
+            G: elliptic_curve::Group + Default,
+            I: ShareIdentifier,
+            S: Share<Identifier = I>,
+        {
+            /// The computed shares, set to $max_shares since that is the upper limit
+            pub share_set: [S; $max_shares],
+            /// The computed verifiers set to the max number of verifiers
+            pub verifier_set: [G; $max_threshold + 1],
+        }
+
+        impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>
+            Shamir<G::Scalar, I, S> for $name<G, I, S>
+        {
+            type InnerPolynomial = [G::Scalar; $max_threshold];
+            type ShareSet = [S; $max_shares];
+        }
+
+        impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>
+            Feldman<G, I, S> for $name<G, I, S>
+        {
+            type VerifierSet = [G; $max_threshold + 1];
+        }
+
+        impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>
+            Pedersen<G, I, S> for $name<G, I, S>
+        {
+            type FeldmanVerifierSet = [G; $max_threshold + 1];
+            type PedersenVerifierSet = [G; $max_threshold + 2];
+            type PedersenResult = $result<G, I, S>;
+        }
+
+        /// The no-std result to use when an allocator is available with size $num
+        pub struct $result<G, I, S>
+        where
+            G: elliptic_curve::Group + Default,
+            I: ShareIdentifier,
+            S: Share<Identifier = I>,
+        {
+            blinder: G::Scalar,
+            secret_shares: [S; $max_shares],
+            blinder_shares: [S; $max_shares],
+            feldman_verifier_set: [G; $max_threshold + 1],
+            pedersen_verifier_set: [G; $max_threshold + 2],
+        }
+
+        impl<G, I, S> PedersenResult<G, I, S> for $result<G, I, S>
+        where
+            G: elliptic_curve::Group + Default,
+            I: ShareIdentifier,
+            S: Share<Identifier = I>,
+        {
+            type ShareSet = [S; $max_shares];
+            type FeldmanVerifierSet = [G; $max_threshold + 1];
+            type PedersenVerifierSet = [G; $max_threshold + 2];
+
+            fn new(
+                blinder: G::Scalar,
+                secret_shares: Self::ShareSet,
+                blinder_shares: Self::ShareSet,
+                feldman_verifier_set: Self::FeldmanVerifierSet,
+                pedersen_verifier_set: Self::PedersenVerifierSet,
+            ) -> Self {
+                Self {
+                    blinder,
+                    secret_shares,
+                    blinder_shares,
+                    feldman_verifier_set,
+                    pedersen_verifier_set,
+                }
+            }
+
+            fn blinder(&self) -> G::Scalar {
+                self.blinder
+            }
+
+            fn secret_shares(&self) -> &Self::ShareSet {
+                &self.secret_shares
+            }
+
+            fn blinder_shares(&self) -> &Self::ShareSet {
+                &self.blinder_shares
+            }
+
+            fn feldman_verifier_set(&self) -> &Self::FeldmanVerifierSet {
+                &self.feldman_verifier_set
+            }
+
+            fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet {
+                &self.pedersen_verifier_set
+            }
+        }
+    };
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Reconstruct a secret from shares created from split_secret. The X-coordinates operate in F The Y-coordinates operate in F
+pub fn combine_shares<
+    F: elliptic_curve::PrimeField,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
+>(
+    shares: &[S],
+) -> VsssResult<F> {
+    shares.combine_to_field_element::<F, Vec<(F, F)>>()
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Reconstruct a secret from shares created from split_secret. The X-coordinates operate in F The Y-coordinates operate in G
+///
+/// Exists to support operations like threshold BLS where the shares operate in F but the partial signatures operate in G.
+pub fn combine_shares_group<
+    G: elliptic_curve::Group + elliptic_curve::group::GroupEncoding + Default,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
+>(
+    shares: &[S],
+) -> VsssResult<G> {
+    shares.combine_to_group_element::<G, Vec<(G::Scalar, G)>>()
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Standard verifiable secret sharing scheme
+pub struct StdVsss<G, I, S>
+where
+    G: elliptic_curve::Group + Default,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
+{
+    _marker: (core::marker::PhantomData<G>, core::marker::PhantomData<S>),
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>
+    Shamir<G::Scalar, I, S> for StdVsss<G, I, S>
+{
+    type InnerPolynomial = Vec<G::Scalar>;
+    type ShareSet = Vec<S>;
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>
+    Feldman<G, I, S> for StdVsss<G, I, S>
+{
+    type VerifierSet = Vec<G>;
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>
+    Pedersen<G, I, S> for StdVsss<G, I, S>
+{
+    type FeldmanVerifierSet = Vec<G>;
+    type PedersenVerifierSet = Vec<G>;
+    type PedersenResult = StdPedersenResult<G, I, S>;
+}

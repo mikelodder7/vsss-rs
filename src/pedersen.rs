@@ -9,17 +9,14 @@
 //! that both may be needed for other protocols like Gennaro's DKG. Otherwise,
 //! the Feldman verifiers may be discarded.
 use crate::*;
-use elliptic_curve::{
-    ff::Field,
-    group::Group,
-};
+use elliptic_curve::{ff::Field, group::Group};
 use rand_core::{CryptoRng, RngCore};
 
-
 /// A secret sharing scheme that uses pedersen commitments as verifiers
+/// (see https://www.cs.cornell.edu/courses/cs754/2001fa/129.PDF)
 pub trait Pedersen<G, I, S>: Shamir<G::Scalar, I, S>
 where
-    G: Group,
+    G: Group + Default,
     I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
@@ -28,7 +25,10 @@ where
     /// The pedersen verifier set
     type PedersenVerifierSet: PedersenVerifierSet<G>;
     /// The result from running `split_secret_with_verifier`
-    type PedersenResult: PedersenResult<G, I, S,
+    type PedersenResult: PedersenResult<
+        G,
+        I,
+        S,
         ShareSet = <Self as Shamir<G::Scalar, I, S>>::ShareSet,
         FeldmanVerifierSet = Self::FeldmanVerifierSet,
         PedersenVerifierSet = Self::PedersenVerifierSet,
@@ -43,7 +43,7 @@ where
     /// If [`None`], a random generator is used
     ///
     /// Returns the secret shares, blinder, blinder shares, and the verifiers
-    fn split_secret_with_verifier(
+    fn split_secret_with_blind_verifier(
         threshold: usize,
         limit: usize,
         secret: G::Scalar,
@@ -60,16 +60,18 @@ where
         }
         let blinder = blinder.unwrap_or_else(|| G::Scalar::random(&mut rng));
 
-        let mut secret_polynomial = Self::fill(secret, &mut rng, threshold)?;
-        let blinder_polynomial = Self::fill(blinder, &mut rng, threshold)?;
+        let mut secret_polynomial = Self::InnerPolynomial::create(threshold);
+        let mut blinder_polynomial = Self::InnerPolynomial::create(threshold);
+        secret_polynomial.fill(secret, &mut rng, threshold)?;
+        blinder_polynomial.fill(blinder, &mut rng, threshold)?;
 
         let mut feldman_verifier_set = Self::FeldmanVerifierSet::create(threshold, g);
         let mut pedersen_verifier_set = Self::PedersenVerifierSet::create(threshold, g, h);
         // Generate the verifiable commitments to the polynomial for the shares
         // Each share is multiple of the polynomial and the specified generator point.
         // {g^p0, g^p1, g^p2, ..., g^pn}
-        let secret_coefficients = secret_polynomial.as_ref();
-        let blinder_coefficients = blinder_polynomial.as_ref();
+        let secret_coefficients = secret_polynomial.coefficients();
+        let blinder_coefficients = blinder_polynomial.coefficients();
         for (i, (fvs, pvs)) in feldman_verifier_set
             .verifiers_mut()
             .iter_mut()
@@ -82,7 +84,11 @@ where
         }
         let secret_shares = create_shares(&secret_polynomial, threshold, limit)?;
         let blinder_shares = create_shares(&blinder_polynomial, threshold, limit)?;
-        secret_polynomial.as_mut().iter_mut().for_each(|s| *s = G::Scalar::ZERO);
+        secret_polynomial
+            .coefficients_mut()
+            .iter_mut()
+            .take(threshold)
+            .for_each(|s| *s = G::Scalar::ZERO);
         Ok(Self::PedersenResult::new(
             blinder,
             secret_shares,
@@ -135,28 +141,41 @@ where
 /// The std result to use when an allocator is available
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub struct StdPedersenResult<G, I, S>
-    where G: Group + GroupEncoding + Default,
-          I: ShareIdentifier,
-          S: Share<Identifier = I>,
+where
+    G: Group + Default,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
 {
+    /// The blinder used to create pedersen commitments
     blinder: G::Scalar,
+    /// The secret shares
     secret_shares: Vec<S>,
+    /// The blinder shares
     blinder_shares: Vec<S>,
+    /// The feldman verifiers
     feldman_verifier_set: Vec<G>,
+    /// The pedersen verifiers
     pedersen_verifier_set: Vec<G>,
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<G, I, S> PedersenResult<G, I, S> for StdPedersenResult<G, I, S>
-    where G: Group + GroupEncoding + Default,
-          I: ShareIdentifier,
-          S: Share<Identifier = I>,
+where
+    G: Group + Default,
+    I: ShareIdentifier,
+    S: Share<Identifier = I>,
 {
     type ShareSet = Vec<S>;
     type FeldmanVerifierSet = Vec<G>;
     type PedersenVerifierSet = Vec<G>;
 
-    fn new(blinder: G::Scalar, secret_shares: Self::ShareSet, blinder_shares: Self::ShareSet, feldman_verifier_set: Self::FeldmanVerifierSet, pedersen_verifier_set: Self::PedersenVerifierSet) -> Self {
+    fn new(
+        blinder: G::Scalar,
+        secret_shares: Self::ShareSet,
+        blinder_shares: Self::ShareSet,
+        feldman_verifier_set: Self::FeldmanVerifierSet,
+        pedersen_verifier_set: Self::PedersenVerifierSet,
+    ) -> Self {
         Self {
             blinder,
             secret_shares,
@@ -185,4 +204,31 @@ impl<G, I, S> PedersenResult<G, I, S> for StdPedersenResult<G, I, S>
     fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet {
         &self.pedersen_verifier_set
     }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret. [`G::Scalar`] is the prime field blinding is the blinding factor.
+/// If None, a random value is generated in [`G::Scalar`].
+/// `share_generator` is the generator point to use for shares.
+/// If None, the default generator is used.
+/// `blind_factor_generator` is the generator point to use for blinding factor shares.
+/// If None, a random generator is used
+pub fn split_secret<G: Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>(
+    threshold: usize,
+    limit: usize,
+    secret: G::Scalar,
+    blinding: Option<G::Scalar>,
+    share_generator: Option<G>,
+    blind_factor_generator: Option<G>,
+    rng: impl RngCore + CryptoRng,
+) -> VsssResult<StdPedersenResult<G, I, S>> {
+    StdVsss::split_secret_with_blind_verifier(
+        threshold,
+        limit,
+        secret,
+        blinding,
+        share_generator,
+        blind_factor_generator,
+        rng,
+    )
 }

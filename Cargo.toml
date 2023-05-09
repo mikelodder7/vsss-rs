@@ -10,14 +10,13 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "3.0.0-pre6"
+version = "3.0.0-pre7"
 
 [features]
-default = ["curve25519"]
-alloc = ["rand_core/alloc", "rand/alloc", "serde_crate/alloc", "serde"]
+default = ["curve25519", "std"]
+alloc = ["rand_core/alloc", "rand/alloc", "serde/alloc"]
 curve25519 = ["curve25519-dalek", "sha2-9", "serde"]
-std = ["rand_core/std", "rand/std", "serde_crate/std", "serde"]
-serde = ["serde_crate"]
+std = ["rand_core/std", "rand/std", "serde/std"]
 
 [dependencies]
 curve25519-dalek = { version = "3", optional = true }
@@ -25,7 +24,7 @@ elliptic-curve = { version = "0.13", features = ["ecdh"] }
 rand = { version = "0.8", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 rand_core = "0.6"
-serde_crate = { version = "1.0", default-features = false, features = ["derive"], optional = true, package = "serde" }
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 sha2-9 = { version = "0.9", default-features = false, optional = true, package = "sha2" }
 subtle = { version = "2.4" }
 thiserror-no-std = "2.0"
