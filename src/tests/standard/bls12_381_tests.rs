@@ -6,17 +6,15 @@ use super::super::utils::MockRng;
 use super::invalid::*;
 use super::valid::*;
 use super::*;
-use crate::*;
 use bls12_381_plus::{
     multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
 use elliptic_curve::{
     ff::Field,
     generic_array::{typenum, GenericArray},
-    group::{Curve, Group, GroupEncoding},
+    group::{Curve, Group},
     hash2curve::ExpandMsgXmd,
 };
-use k256::SecretKey;
 use rstest::*;
 
 #[test]

@@ -59,8 +59,6 @@ impl<'de> Visitor<'de> for Base64Visitor {
 }
 
 fn serde_base64<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
-    use serde::ser::Error;
-
     let mut space = [0u8; BASE64_SIZE];
     data_encoding::BASE64.encode_mut(bytes, &mut space);
     s.serialize_str(unsafe { core::str::from_utf8_unchecked(&space) })

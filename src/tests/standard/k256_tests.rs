@@ -22,6 +22,7 @@ fn valid_tests() {
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
+#[test]
 fn valid_std_tests() {
     combine_all::<ProjectivePoint>();
 }

@@ -43,12 +43,12 @@
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
-//! let res = shamir::split_secret::<Scalar, _>(2, 3, *nzs.as_ref(), &mut osrng);
+//! let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = combine_shares::<Scalar>(&shares);
+//! let res = combine_shares(&shares);
 //! assert!(res.is_ok());
-//! let scalar = res.unwrap();
+//! let scalar: Scalar = res.unwrap();
 //! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
@@ -64,12 +64,12 @@
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let secret = *sk.to_nonzero_scalar();
-//! let res = shamir::split_secret::<Scalar, _>(2, 3, secret, &mut osrng);
+//! let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = combine_shares::<Scalar>(&shares);
+//! let res = combine_shares(&shares);
 //! assert!(res.is_ok());
-//! let scalar = res.unwrap();
+//! let scalar: Scalar = res.unwrap();
 //! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
@@ -84,15 +84,15 @@
 //!
 //! let mut rng = rand_core::OsRng::default();
 //! let secret = Scalar::random(&mut rng);
-//! let res = feldman::split_secret::<Scalar, G1Projective, _>(2, 3, secret, None, &mut rng);
+//! let res = feldman::split_secret::<G1Projective, u8, Vec<u8>>(2, 3, secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
-//!     assert!(verifier.verify(s).is_ok());
+//!     assert!(verifier.verify_share(s).is_ok());
 //! }
-//! let res = combine_shares::<Scalar>(&shares);
+//! let res = combine_shares(&shares);
 //! assert!(res.is_ok());
-//! let secret_1 = res.unwrap();
+//! let secret_1: Scalar = res.unwrap();
 //! assert_eq!(secret, secret_1);
 //! ```
 //!
@@ -104,21 +104,21 @@
 //!
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
+//! use rand::Rng;
 //! use ed25519_dalek::SecretKey;
 //! use vsss_rs::{curve25519::WrappedScalar, *};
 //! use x25519_dalek::StaticSecret;
 //!
-//! let mut osrng_7 = rand_7::rngs::OsRng::default();
-//! let mut osrng_8 = rand::rngs::OsRng::default();
-//! let sc = Scalar::random(&mut osrng_7);
+//! let mut osrng = rand::rngs::OsRng::default();
+//! let sc = Scalar::hash_from_bytes::<sha2_9::Sha512>(&osrng.gen::<[u8; 32]>());
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-//! let res = shamir::split_secret::<WrappedScalar, _>(2, 3, sc.into(), &mut osrng_8);
+//! let res = shamir::split_secret::<WrappedScalar, u8, Vec<u8>>(2, 3, sc.into(), &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = combine_shares::<WrappedScalar>(&shares);
+//! let res = combine_shares(&shares);
 //! assert!(res.is_ok());
-//! let scalar = res.unwrap();
+//! let scalar: WrappedScalar = res.unwrap();
 //! assert_eq!(scalar.0, sc);
 //! let sk2 = StaticSecret::from(scalar.0.to_bytes());
 //! let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();

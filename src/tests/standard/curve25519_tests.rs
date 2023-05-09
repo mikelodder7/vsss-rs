@@ -11,7 +11,6 @@ use crate::{
 };
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
-use rand::Rng;
 use x25519_dalek::StaticSecret;
 use crate::tests::standard::ScalarShare;
 

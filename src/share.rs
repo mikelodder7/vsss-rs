@@ -143,3 +143,24 @@ macro_rules! impl_share {
 }
 
 impl_share!(U33, U49, U97);
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl Share for Vec<u8> {
+    type Identifier = u8;
+
+    fn identifier(&self) -> Self::Identifier {
+        self[0]
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self[0]
+    }
+
+    fn value(&self) -> &[u8] {
+        &self[1..]
+    }
+
+    fn value_mut(&mut self) -> &mut [u8] {
+        self[1..].as_mut()
+    }
+}
