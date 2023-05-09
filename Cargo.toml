@@ -15,11 +15,12 @@ version = "3.0.0-pre7"
 [features]
 default = ["curve25519", "std"]
 alloc = ["rand_core/alloc", "rand/alloc", "serde/alloc"]
-curve25519 = ["curve25519-dalek", "sha2-9", "serde"]
+curve25519 = ["curve25519-dalek", "sha2-9", "serde", "data-encoding"]
 std = ["rand_core/std", "rand/std", "serde/std"]
 
 [dependencies]
 curve25519-dalek = { version = "3", optional = true }
+data-encoding = { version = "2.3", optional = true }
 elliptic-curve = { version = "0.13", features = ["ecdh"] }
 rand = { version = "0.8", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }

@@ -206,10 +206,7 @@ macro_rules! vsss_arr_impl {
             I: ShareIdentifier,
             S: Share<Identifier = I>,
         {
-            /// The computed shares, set to $max_shares since that is the upper limit
-            pub share_set: [S; $max_shares],
-            /// The computed verifiers set to the max number of verifiers
-            pub verifier_set: [G; $max_threshold + 1],
+            marker: core::marker::PhantomData<(G, I, S)>,
         }
 
         impl<G: elliptic_curve::Group + Default, I: ShareIdentifier, S: Share<Identifier = I>>

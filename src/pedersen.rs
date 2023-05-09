@@ -147,15 +147,15 @@ where
     S: Share<Identifier = I>,
 {
     /// The blinder used to create pedersen commitments
-    blinder: G::Scalar,
+    pub(crate) blinder: G::Scalar,
     /// The secret shares
-    secret_shares: Vec<S>,
+    pub(crate) secret_shares: Vec<S>,
     /// The blinder shares
-    blinder_shares: Vec<S>,
+    pub(crate) blinder_shares: Vec<S>,
     /// The feldman verifiers
-    feldman_verifier_set: Vec<G>,
+    pub(crate) feldman_verifier_set: Vec<G>,
     /// The pedersen verifiers
-    pedersen_verifier_set: Vec<G>,
+    pub(crate) pedersen_verifier_set: Vec<G>,
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]

@@ -143,35 +143,3 @@ macro_rules! impl_share {
 }
 
 impl_share!(U33, U49, U97);
-
-#[cfg(any(feature = "alloc", feature = "std"))]
-/// A standard share for any field or group
-#[derive(Clone, Default, Eq, PartialEq, Hash, Ord, PartialOrd, Zeroize, zeroize::ZeroizeOnDrop)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct StdShare {
-    /// The share identifier
-    pub identifier: u8,
-    /// The share value
-    pub value: Vec<u8>,
-}
-
-#[cfg(any(feature = "alloc", feature = "std"))]
-impl Share for StdShare {
-    type Identifier = u8;
-
-    fn identifier(&self) -> Self::Identifier {
-        self.identifier
-    }
-
-    fn identifier_mut(&mut self) -> &mut Self::Identifier {
-        &mut self.identifier
-    }
-
-    fn value(&self) -> &[u8] {
-        self.value.as_ref()
-    }
-
-    fn value_mut(&mut self) -> &mut [u8] {
-        self.value.as_mut()
-    }
-}

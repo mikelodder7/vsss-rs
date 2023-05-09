@@ -52,9 +52,6 @@ where
     /// Create a new combiner
     fn create(size_hint: usize) -> Self;
 
-    /// Check if duplicates exist in this set
-    fn duplicate_identifiers_exist(&self) -> bool;
-
     /// Combine the secret shares into a single secret
     /// using Lagrange interpolation
     fn combine<B, M>(shares: B, mut m: M) -> VsssResult<G>
@@ -81,10 +78,11 @@ where
                 indexer[i] = (x, y);
             }
         }
-        if values.duplicate_identifiers_exist() {
+        let inner_values = &values.as_ref()[..shares.len()];
+        if dup_checker(inner_values) {
             return Err(Error::SharingDuplicateIdentifier);
         }
-        interpolate(values.as_ref())
+        interpolate(inner_values)
     }
 }
 
@@ -132,10 +130,6 @@ macro_rules! impl_ga_set {
                 fn create(_size_hint: usize) -> Self {
                                            Self::from([(F::default(), G::default()); $num])
                                            }
-
-                fn duplicate_identifiers_exist(&self) -> bool {
-                    dup_checker(self)
-                }
             }
         )+
     };
@@ -2707,10 +2701,6 @@ macro_rules! impl_share_set_combiner_for_arr {
                 fn create(_size_hint: usize) -> Self {
                     [(F::default(), G::default()); $num]
                 }
-
-                fn duplicate_identifiers_exist(&self) -> bool {
-                    dup_checker(self)
-                }
             }
         )+
     };
@@ -2732,10 +2722,6 @@ impl<
 {
     fn create(size_hint: usize) -> Self {
         vec![(F::default(), G::default()); size_hint]
-    }
-
-    fn duplicate_identifiers_exist(&self) -> bool {
-        dup_checker(self)
     }
 }
 
