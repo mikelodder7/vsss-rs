@@ -4,11 +4,11 @@
 */
 use super::invalid::*;
 use super::valid::*;
+use crate::tests::standard::ScalarShare;
 use crate::*;
 use elliptic_curve::ff::PrimeField;
 use k256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
 use rand::rngs::OsRng;
-use crate::tests::standard::ScalarShare;
 
 #[test]
 fn invalid_tests() {

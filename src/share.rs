@@ -54,6 +54,9 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
     /// The identifier type
     type Identifier: ShareIdentifier;
 
+    /// Create a new share with space equal to or greater than the size hint
+    fn create(size_hint: usize) -> Self;
+
     /// True if all value bytes are zero
     fn is_zero(&self) -> Choice {
         ct_is_zero(self.value())
@@ -84,9 +87,9 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
         group: G,
     ) -> VsssResult<Self> {
         let repr = group.to_bytes();
-        let mut me = Self::default();
+        let mut me = Self::create(repr.as_ref().len());
         *(me.identifier_mut()) = identifier;
-        if me.value().len() != repr.as_ref().len() {
+        if me.value().len() < repr.as_ref().len() {
             return Err(Error::InvalidShareConversion);
         }
         me.value_mut().copy_from_slice(repr.as_ref());
@@ -106,11 +109,11 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
         field: F,
     ) -> VsssResult<Self> {
         let repr = field.to_repr();
-        let mut me = Self::default();
-        *(me.identifier_mut()) = identifier;
-        if me.value().len() != repr.as_ref().len() {
+        let mut me = Self::create(repr.as_ref().len());
+        if me.value().len() < repr.as_ref().len() {
             return Err(Error::InvalidShareConversion);
         }
+        *(me.identifier_mut()) = identifier;
         me.value_mut().copy_from_slice(repr.as_ref());
         Ok(me)
     }
@@ -121,6 +124,10 @@ macro_rules! impl_share {
         $(
         impl Share for GenericArray<u8, $size> {
             type Identifier = u8;
+
+            fn create(_size_hint: usize) -> Self {
+                Self::default()
+            }
 
             fn identifier(&self) -> Self::Identifier {
                 self[0]
@@ -147,6 +154,10 @@ impl_share!(U33, U49, U97);
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl Share for Vec<u8> {
     type Identifier = u8;
+
+    fn create(size_hint: usize) -> Self {
+        vec![0u8; size_hint + 1]
+    }
 
     fn identifier(&self) -> Self::Identifier {
         self[0]

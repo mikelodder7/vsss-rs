@@ -5,6 +5,7 @@
 
 use super::invalid::*;
 use super::valid::*;
+use crate::tests::standard::ScalarShare;
 use crate::{
     curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
     *,
@@ -12,7 +13,6 @@ use crate::{
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
 use x25519_dalek::StaticSecret;
-use crate::tests::standard::ScalarShare;
 
 #[test]
 fn invalid_tests() {
@@ -93,7 +93,10 @@ fn pedersen_verifier_serde_test() {
     let res = serde_json::from_str::<Vec<WrappedEdwards>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
-    assert_eq!(pedersen_verifier_set.secret_generator(), verifier2.secret_generator());
+    assert_eq!(
+        pedersen_verifier_set.secret_generator(),
+        verifier2.secret_generator()
+    );
 
     let res = serde_bare::to_vec(&pedersen_verifier_set);
     assert!(res.is_ok());
@@ -101,5 +104,8 @@ fn pedersen_verifier_serde_test() {
     let res = serde_bare::from_slice::<Vec<WrappedEdwards>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
-    assert_eq!(pedersen_verifier_set.secret_generator(), verifier2.secret_generator());
+    assert_eq!(
+        pedersen_verifier_set.secret_generator(),
+        verifier2.secret_generator()
+    );
 }

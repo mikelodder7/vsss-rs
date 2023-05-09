@@ -9,13 +9,13 @@
 //! to be compliant to work with this library.
 //! The intent is the consumer will not have to use these directly since
 //! the wrappers implement the [`From`] and [`Into`] traits.
+use core::fmt::Formatter;
 use core::{
     borrow::Borrow,
     fmt,
     iter::{Iterator, Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use core::fmt::Formatter;
 use curve25519_dalek::{
     constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
     edwards::{CompressedEdwardsY, EdwardsPoint},
@@ -46,10 +46,15 @@ impl<'de> Visitor<'de> for Base64Visitor {
         write!(f, "a base64 encoded string")
     }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: de::Error {
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
         let mut s = [0u8; 32];
         let mut bytes = [0u8; 33];
-        let decoded = data_encoding::BASE64.decode_mut(v.as_bytes(), &mut bytes).map_err(|_| de::Error::custom("invalid base64"))?;
+        let decoded = data_encoding::BASE64
+            .decode_mut(v.as_bytes(), &mut bytes)
+            .map_err(|_| de::Error::custom("invalid base64"))?;
         if decoded != 32 {
             return Err(de::Error::custom("invalid base64 length"));
         }
@@ -335,12 +340,11 @@ impl<'de> Deserialize<'de> for WrappedRistretto {
     where
         D: Deserializer<'de>,
     {
-        let mut bytes = [0u8; 32];
-        if deserializer.is_human_readable() {
-            bytes = deserializer.deserialize_str(Base64Visitor)?;
+        let bytes= if deserializer.is_human_readable() {
+            deserializer.deserialize_str(Base64Visitor)?
         } else {
-            bytes = <[u8; 32]>::deserialize(deserializer)?;
-        }
+            <[u8; 32]>::deserialize(deserializer)?
+        };
         // deserialize compressed ristretto, then decompress
         if let Some(ep) = CompressedRistretto::from_slice(&bytes).decompress() {
             return Ok(WrappedRistretto(ep));
@@ -641,12 +645,11 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
     where
         D: Deserializer<'de>,
     {
-        let mut bytes = [0u8; 32];
-        if d.is_human_readable() {
-            bytes = d.deserialize_str(Base64Visitor)?;
+        let bytes= if d.is_human_readable() {
+            d.deserialize_str(Base64Visitor)?
         } else {
-            bytes = <[u8; 32]>::deserialize(d)?;
-        }
+            <[u8; 32]>::deserialize(d)?
+        };
         // deserialize compressed edwards y, then decompress
         if let Some(ep) = CompressedEdwardsY::from_slice(&bytes).decompress() {
             return Ok(WrappedEdwards(ep));
@@ -964,12 +967,11 @@ impl<'de> Deserialize<'de> for WrappedScalar {
     where
         D: Deserializer<'de>,
     {
-        let mut bytes = [0u8; 32];
-        if deserializer.is_human_readable() {
-            bytes = deserializer.deserialize_str(Base64Visitor)?;
+        let bytes= if deserializer.is_human_readable() {
+            deserializer.deserialize_str(Base64Visitor)?
         } else {
-            bytes = <[u8; 32]>::deserialize(deserializer)?;
-        }
+            <[u8; 32]>::deserialize(deserializer)?
+        };
         Ok(WrappedScalar(Scalar::from_bits(bytes)))
     }
 }

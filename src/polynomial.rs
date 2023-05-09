@@ -30,8 +30,8 @@ pub trait Polynomial<F: PrimeField>: Sized {
 
         // Assign random coefficients to polynomial
         // Start at 1 since 0 is the intercept and not chosen at random
-        for i in 1..length {
-            repr[i] = F::random(&mut rng);
+        for i in repr.iter_mut().take(length).skip(1) {
+            *i = F::random(&mut rng);
         }
         Ok(())
     }

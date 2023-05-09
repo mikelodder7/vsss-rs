@@ -62,11 +62,11 @@ where
     let indexer = shares.as_mut();
 
     let mut x = F::ONE;
-    for i in 0..limit {
+    for i in indexer.iter_mut().take(limit) {
         let y = polynomial.evaluate(x, threshold);
         let id = I::from_field_element(x)?;
         let share = S::from_field_element(id, y)?;
-        indexer[i] = share;
+        *i = share;
         x += F::ONE;
     }
     Ok(shares)

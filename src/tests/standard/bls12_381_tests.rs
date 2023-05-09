@@ -173,8 +173,10 @@ fn group_combine() {
         let s1 = h1 * sk;
         let s2 = h2 * sk;
 
-        sig_shares1[i] = GenericArray::<u8, typenum::U49>::from_group_element(s.identifier(), s1).unwrap();
-        sig_shares2[i] = GenericArray::<u8, typenum::U97>::from_group_element(s.identifier(), s2).unwrap();
+        sig_shares1[i] =
+            GenericArray::<u8, typenum::U49>::from_group_element(s.identifier(), s1).unwrap();
+        sig_shares2[i] =
+            GenericArray::<u8, typenum::U97>::from_group_element(s.identifier(), s2).unwrap();
     }
 
     let res2 = sig_shares2.combine_to_group_element::<G2Projective, [(Scalar, G2Projective); 5]>();
@@ -229,9 +231,14 @@ fn split_combine_test(#[case] threshold: usize, #[case] limit: usize) {
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
 
-    let shares = TesterVsss::<G1Projective, u8, ScalarShare>::split_secret(threshold, limit, secret, &mut rng).unwrap();
+    let shares = TesterVsss::<G1Projective, u8, ScalarShare>::split_secret(
+        threshold, limit, secret, &mut rng,
+    )
+    .unwrap();
 
-    let secret2 = (&shares[..threshold]).combine_to_field_element::<Scalar, [(Scalar, Scalar); 15]>().unwrap();
+    let secret2 = (&shares[..threshold])
+        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 15]>()
+        .unwrap();
     assert_eq!(secret, secret2);
 
     // let mut sigs_g1 = Vec::<const_generics::Share<G1_SHARE_SIZE>, MAX_TEST_SHARES>::new();
