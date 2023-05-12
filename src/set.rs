@@ -2746,7 +2746,14 @@ where
 /// Feldman verifiers
 pub trait FeldmanVerifierSet<G: Group>: Sized {
     /// Create a new verifier set
-    fn create(size_hint: usize, generator: G) -> Self;
+    fn empty_feldman_set_with_capacity(size_hint: usize, generator: G) -> Self;
+
+    /// Create a verifier set from an existing set of verifiers and generator
+    fn feldman_set_with_generator_and_verifiers(generator: G, verifiers: &[G]) -> Self {
+        let mut set = Self::empty_feldman_set_with_capacity(verifiers.len(), generator);
+        set.verifiers_mut().copy_from_slice(verifiers);
+        set
+    }
 
     /// The generator used for the verifiers
     fn generator(&self) -> G;
@@ -2807,7 +2814,26 @@ pub trait FeldmanVerifierSet<G: Group>: Sized {
 /// Pedersen verifiers
 pub trait PedersenVerifierSet<G: Group>: Sized {
     /// Create a new verifier set
-    fn create(size_hint: usize, secret_generator: G, blinder_generator: G) -> Self;
+    fn empty_pedersen_set_with_capacity(
+        size_hint: usize,
+        secret_generator: G,
+        blinder_generator: G,
+    ) -> Self;
+
+    /// Create a verifier set from an existing set of verifiers and generators
+    fn pedersen_set_with_generators_and_verifiers(
+        secret_generator: G,
+        blinder_generator: G,
+        verifiers: &[G],
+    ) -> Self {
+        let mut set = Self::empty_pedersen_set_with_capacity(
+            verifiers.len(),
+            secret_generator,
+            blinder_generator,
+        );
+        set.blind_verifiers_mut().copy_from_slice(verifiers);
+        set
+    }
 
     /// The generator used for the verifiers of secrets
     fn secret_generator(&self) -> G;
@@ -2816,10 +2842,10 @@ pub trait PedersenVerifierSet<G: Group>: Sized {
     fn blinder_generator(&self) -> G;
 
     /// The verifiers
-    fn verifiers(&self) -> &[G];
+    fn blind_verifiers(&self) -> &[G];
 
     /// The verifiers as writeable
-    fn verifiers_mut(&mut self) -> &mut [G];
+    fn blind_verifiers_mut(&mut self) -> &mut [G];
 
     /// Verify a share and blinder with this set
     fn verify_share_and_blinder<I: ShareIdentifier, S: Share<Identifier = I>>(
@@ -2850,7 +2876,7 @@ pub trait PedersenVerifierSet<G: Group>: Sized {
         // "Algorithm 3.48 Simultaneous multiple point multiplication"
         // without precomputing the addition but still reduces doublings
 
-        let commitments = self.verifiers();
+        let commitments = self.blind_verifiers();
         // c_0
         let mut rhs = commitments[0];
         for v in &commitments[1..] {
@@ -2877,7 +2903,7 @@ macro_rules! impl_feldman_verifier_set {
     ($($size:ident => $num:expr),+$(,)*) => {
         $(
             impl<G: Group> FeldmanVerifierSet<G> for [G; $num] {
-                fn create(_size_hint: usize, generator: G) -> Self {
+                fn empty_feldman_set_with_capacity(_size_hint: usize, generator: G) -> Self {
                     let mut t = [G::identity(); $num];
                     t[0] = generator;
                     t
@@ -2897,7 +2923,7 @@ macro_rules! impl_feldman_verifier_set {
             }
 
             impl<G: Group> FeldmanVerifierSet<G> for GenericArray<G, typenum::$size> {
-                fn create(_size_hint: usize, generator: G) -> Self {
+                fn empty_feldman_set_with_capacity(_size_hint: usize, generator: G) -> Self {
                     let mut t = [G::identity(); $num];
                     t[0] = generator;
                     GenericArray::from(t)
@@ -2961,7 +2987,7 @@ impl_feldman_verifier_set!(
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<G: Group> FeldmanVerifierSet<G> for Vec<G> {
-    fn create(size_hint: usize, generator: G) -> Self {
+    fn empty_feldman_set_with_capacity(size_hint: usize, generator: G) -> Self {
         vec![generator; size_hint + 1]
     }
 
@@ -2982,7 +3008,7 @@ macro_rules! impl_pedersen_verifier_set {
     ($($size:ident => $num:expr),+$(,)*) => {
         $(
             impl<G: Group> PedersenVerifierSet<G> for [G; $num] {
-                fn create(_size_hint: usize, secret_generator: G, blinder_generator: G) -> Self {
+                fn empty_pedersen_set_with_capacity(_size_hint: usize, secret_generator: G, blinder_generator: G) -> Self {
                     let mut t = [G::identity(); $num];
                     t[0] = secret_generator;
                     t[1] = blinder_generator;
@@ -2997,17 +3023,17 @@ macro_rules! impl_pedersen_verifier_set {
                     self[1]
                 }
 
-                fn verifiers(&self) -> &[G] {
+                fn blind_verifiers(&self) -> &[G] {
                     &self[2..]
                 }
 
-                fn verifiers_mut(&mut self) -> &mut [G] {
+                fn blind_verifiers_mut(&mut self) -> &mut [G] {
                     self[2..].as_mut()
                 }
             }
 
             impl<G: Group> PedersenVerifierSet<G> for GenericArray<G, typenum::$size> {
-                fn create(_size_hint: usize, secret_generator: G, blinder_generator: G) -> Self {
+                fn empty_pedersen_set_with_capacity(_size_hint: usize, secret_generator: G, blinder_generator: G) -> Self {
                     let mut t = [G::identity(); $num];
                     t[0] = secret_generator;
                     t[1] = blinder_generator;
@@ -3022,11 +3048,11 @@ macro_rules! impl_pedersen_verifier_set {
                     self[1]
                 }
 
-                fn verifiers(&self) -> &[G] {
+                fn blind_verifiers(&self) -> &[G] {
                     &self[2..]
                 }
 
-                fn verifiers_mut(&mut self) -> &mut [G] {
+                fn blind_verifiers_mut(&mut self) -> &mut [G] {
                     self[2..].as_mut()
                 }
             }
@@ -3075,7 +3101,11 @@ impl_pedersen_verifier_set!(
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<G: Group> PedersenVerifierSet<G> for Vec<G> {
-    fn create(size_hint: usize, secret_generator: G, blinder_generator: G) -> Self {
+    fn empty_pedersen_set_with_capacity(
+        size_hint: usize,
+        secret_generator: G,
+        blinder_generator: G,
+    ) -> Self {
         let mut t = vec![blinder_generator; size_hint + 2];
         t[0] = secret_generator;
         t
@@ -3089,11 +3119,20 @@ impl<G: Group> PedersenVerifierSet<G> for Vec<G> {
         self[1]
     }
 
-    fn verifiers(&self) -> &[G] {
+    fn blind_verifiers(&self) -> &[G] {
         &self[2..]
     }
 
-    fn verifiers_mut(&mut self) -> &mut [G] {
+    fn blind_verifiers_mut(&mut self) -> &mut [G] {
         self[2..].as_mut()
     }
+}
+
+#[test]
+fn test_feldman_with_generator_and_verifiers() {
+    let set = <[k256::ProjectivePoint; 8] as FeldmanVerifierSet<k256::ProjectivePoint>>::feldman_set_with_generator_and_verifiers(
+        k256::ProjectivePoint::GENERATOR,
+        &[k256::ProjectivePoint::IDENTITY; 7]);
+    assert_eq!(k256::ProjectivePoint::GENERATOR, set.generator());
+    assert_eq!([k256::ProjectivePoint::IDENTITY; 7], set.verifiers());
 }

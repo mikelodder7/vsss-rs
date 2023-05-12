@@ -65,8 +65,10 @@ where
         secret_polynomial.fill(secret, &mut rng, threshold)?;
         blinder_polynomial.fill(blinder, &mut rng, threshold)?;
 
-        let mut feldman_verifier_set = Self::FeldmanVerifierSet::create(threshold, g);
-        let mut pedersen_verifier_set = Self::PedersenVerifierSet::create(threshold, g, h);
+        let mut feldman_verifier_set =
+            Self::FeldmanVerifierSet::empty_feldman_set_with_capacity(threshold, g);
+        let mut pedersen_verifier_set =
+            Self::PedersenVerifierSet::empty_pedersen_set_with_capacity(threshold, g, h);
         // Generate the verifiable commitments to the polynomial for the shares
         // Each share is multiple of the polynomial and the specified generator point.
         // {g^p0, g^p1, g^p2, ..., g^pn}
@@ -75,7 +77,7 @@ where
         for (i, (fvs, pvs)) in feldman_verifier_set
             .verifiers_mut()
             .iter_mut()
-            .zip(pedersen_verifier_set.verifiers_mut().iter_mut())
+            .zip(pedersen_verifier_set.blind_verifiers_mut().iter_mut())
             .take(threshold)
             .enumerate()
         {

@@ -37,7 +37,7 @@ where
         }
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
-        let mut verifier_set = Self::VerifierSet::create(threshold, g);
+        let mut verifier_set = Self::VerifierSet::empty_feldman_set_with_capacity(threshold, g);
         // Generate the verifiable commitments to the polynomial for the shares
         // Each share is multiple of the polynomial and the specified generator point.
         // {g^p0, g^p1, g^p2, ..., g^pn}

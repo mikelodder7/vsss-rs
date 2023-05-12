@@ -55,7 +55,15 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
     type Identifier: ShareIdentifier;
 
     /// Create a new share with space equal to or greater than the size hint
-    fn create(size_hint: usize) -> Self;
+    fn empty_share_with_capacity(size_hint: usize) -> Self;
+
+    /// Create a new share with the given identifier and value
+    fn with_identifier_and_value(identifier: Self::Identifier, value: &[u8]) -> Self {
+        let mut me = Self::empty_share_with_capacity(value.len());
+        *(me.identifier_mut()) = identifier;
+        me.value_mut().copy_from_slice(value);
+        me
+    }
 
     /// True if all value bytes are zero
     fn is_zero(&self) -> Choice {
@@ -87,7 +95,7 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
         group: G,
     ) -> VsssResult<Self> {
         let repr = group.to_bytes();
-        let mut me = Self::create(repr.as_ref().len());
+        let mut me = Self::empty_share_with_capacity(repr.as_ref().len());
         *(me.identifier_mut()) = identifier;
         if me.value().len() < repr.as_ref().len() {
             return Err(Error::InvalidShareConversion);
@@ -109,7 +117,7 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
         field: F,
     ) -> VsssResult<Self> {
         let repr = field.to_repr();
-        let mut me = Self::create(repr.as_ref().len());
+        let mut me = Self::empty_share_with_capacity(repr.as_ref().len());
         if me.value().len() < repr.as_ref().len() {
             return Err(Error::InvalidShareConversion);
         }
@@ -125,7 +133,7 @@ macro_rules! impl_share {
         impl Share for GenericArray<u8, $size> {
             type Identifier = u8;
 
-            fn create(_size_hint: usize) -> Self {
+            fn empty_share_with_capacity(_size_hint: usize) -> Self {
                 Self::default()
             }
 
@@ -155,7 +163,7 @@ impl_share!(U33, U49, U97);
 impl Share for Vec<u8> {
     type Identifier = u8;
 
-    fn create(size_hint: usize) -> Self {
+    fn empty_share_with_capacity(size_hint: usize) -> Self {
         vec![0u8; size_hint + 1]
     }
 
@@ -174,4 +182,15 @@ impl Share for Vec<u8> {
     fn value_mut(&mut self) -> &mut [u8] {
         self[1..].as_mut()
     }
+}
+
+#[test]
+fn test_with_identifier_and_value() {
+    let share = GenericArray::<u8, U33>::with_identifier_and_value(1, &[1u8; 32]);
+    assert_eq!(share.identifier(), 1);
+    assert_eq!(share.value(), &[1u8; 32]);
+
+    let share = GenericArray::<u8, U49>::with_identifier_and_value(2, &[1u8; 48]);
+    assert_eq!(share.identifier(), 2);
+    assert_eq!(share.value(), &[1u8; 48]);
 }

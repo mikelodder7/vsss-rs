@@ -340,7 +340,7 @@ impl<'de> Deserialize<'de> for WrappedRistretto {
     where
         D: Deserializer<'de>,
     {
-        let bytes= if deserializer.is_human_readable() {
+        let bytes = if deserializer.is_human_readable() {
             deserializer.deserialize_str(Base64Visitor)?
         } else {
             <[u8; 32]>::deserialize(deserializer)?
@@ -645,7 +645,7 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
     where
         D: Deserializer<'de>,
     {
-        let bytes= if d.is_human_readable() {
+        let bytes = if d.is_human_readable() {
             d.deserialize_str(Base64Visitor)?
         } else {
             <[u8; 32]>::deserialize(d)?
@@ -967,7 +967,7 @@ impl<'de> Deserialize<'de> for WrappedScalar {
     where
         D: Deserializer<'de>,
     {
-        let bytes= if deserializer.is_human_readable() {
+        let bytes = if deserializer.is_human_readable() {
             deserializer.deserialize_str(Base64Visitor)?
         } else {
             <[u8; 32]>::deserialize(deserializer)?
