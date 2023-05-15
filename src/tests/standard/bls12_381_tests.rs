@@ -73,7 +73,7 @@ fn simple() {
 fn simple_std() {
     const THRESHOLD: usize = 3;
     const SHARES: usize = 5;
-    type ScalarShare = GenericArray<u8, typenum::U33>;
+    type ScalarShare = [u8; 33];
 
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);

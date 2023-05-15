@@ -50,7 +50,7 @@ impl ShareIdentifier for u8 {
 }
 
 /// The methods necessary for a secret share
-pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
+pub trait Share: Sized + Clone + Eq + Hash + Ord + Zeroize {
     /// The identifier type
     type Identifier: ShareIdentifier;
 
@@ -128,7 +128,7 @@ pub trait Share: Sized + Default + Clone + Eq + Hash + Ord + Zeroize {
 }
 
 macro_rules! impl_share {
-    ($($size:ident),+$(,)*) => {
+    ($($num:expr => $size:ident),+$(,)*) => {
         $(
         impl Share for GenericArray<u8, $size> {
             type Identifier = u8;
@@ -153,11 +153,35 @@ macro_rules! impl_share {
                 self[1..].as_mut()
             }
         }
+
+        impl Share for [u8; $num] {
+            type Identifier = u8;
+
+            fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                [0u8; $num]
+            }
+
+            fn identifier(&self) -> Self::Identifier {
+                self[0]
+            }
+
+            fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                &mut self[0]
+            }
+
+            fn value(&self) -> &[u8] {
+                &self[1..]
+            }
+
+            fn value_mut(&mut self) -> &mut [u8] {
+                self[1..].as_mut()
+            }
+        }
         )+
     };
 }
 
-impl_share!(U33, U49, U97);
+impl_share!(33 => U33, 49 => U49, 97 => U97);
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl Share for Vec<u8> {
