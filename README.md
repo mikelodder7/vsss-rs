@@ -14,8 +14,59 @@ This crate provides various cryptography verifiable secret sharing schemes when 
 
 ## NOTE if upgrading from Version 2
 
-The standard mode has been split out into [vsss-rs-std](https://docs.rs/vsss-rs-std) to enable both in the same project.
-In addition, the interfaces have been redesigned to be compatible with each other as well as serialization.
+The interfaces have been redesigned to be compatible with each other as well as serialization.
+
+Version 3 defines a set of traits for implementing secret sharing schemes. While the standard mode provides quick
+and easy methods to split and combine secrets, the traits allow for more flexibility and customization especially in
+no-std mode. Previous versions tried to keep the two modes aligned but in doing so resulted in a lot of code duplication
+and stack overflow issues. The new traits allow for a single implementation to be used in both modes and allow
+no-std consumers to use exactly what they need while minimizing code duplication and stack overflows.
+
+## Components
+
+All component traits are implemented for static arrays `[T; N]` and `GenericArray<T, N>` from 2-64 and `Vec<T>` by default.
+Any higher, and its time to use an allocator or the stack might be overrun.
+
+### Shares and Identifiers
+
+There was lots of requests to enable share identifiers to be more than just `u8` values. This is now possible
+by implementing the `ShareIdentifier` trait. The `ShareIdentifier` trait is a simple trait that provides the necessary
+methods for splitting and combining shares. The `ShareIdentifier` trait is implemented for `u8` values by default.
+Other values can be used by implementing the trait for the desired type but keep in might endianness.
+
+`Share` is now a trait so shares can be implemented however consumers need them to be.
+
+### Polynomials
+`Polynomial` holds the coefficients of the polynomial and provides methods to evaluate the polynomial at a given point.
+Polymomials are only used when splitting secrets.
+
+### Share Sets
+A share set is a collection of shares that belong to the same secret. The share set provides methods to combine into
+the original secret or another group. These are offered as `ReadableShareSet` and `WriteableShareSet`. In no-std mode,
+combines require a `ShareSetCombiner`.
+
+`ShareSetCombiner` is the data store used during a secret reconstruct operation.
+
+### Secret Sharing Schemes
+
+Secret sharing schemes are implemented as traits. The traits provide methods to split secrets and if applicable return the 
+verifier set. `Shamir` only splits secrets. `Feldman` returns a verifier set. `Pedersen` returns multiple verifier sets:
+one for itself and one for `Feldman`.
+
+`FeldmanVerifierSet` and `PedersenVerifierSet` are the verifier sets returned by the schemes. They provide methods to
+validate the shares. 
+
+Since `Pedersen` returns a large amount of information after a split the `PedersenResult` trait is used to encapsulate
+the data. `StdPedersenResult` is provided when an allocator is available by default.
+
+### Other noteworthy items
+
+When operating in standard mode, no traits should be necessary to be implemented and there are default functions
+to accomplish what you want just like in previous versions.
+
+`StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets.
+
+If you need custom structs in no-std mode the `vsss_arr_impl` macro will create the necessary implementations for you.
 
 ## [Documentation](https://docs.rs/vsss-rs)
 
@@ -40,40 +91,43 @@ and is available for each scheme for convenience.
 
 This crate is no-std compliant and uses const generics to specify sizes.
 
-This crate supports 255 as the maximum number of shares to be requested.
-Anything higher is pretty ridiculous but if such a use case exists please let me know.
-
-Shares are represented as byte arrays. Shares can represent finite fields or groups
+Shares are represented as byte arrays by default but can be changed by implementing the provided traits.
+When specifying share sizes, use the field size in bytes + 1 for the identifier.
+Shares can represent finite fields or groups
 depending on the use case. The first byte is reserved for the share identifier (x-coordinate)
 and everything else is the actual value of the share (y-coordinate).
 
-When specifying share sizes, use the field size in bytes + 1 for the identifier.
+## Default methods
+
+The default methods for splitting and combining secrets are:
+
+- shamir::split_secret
+- feldman::split_secret
+- pedersen::split_secret
+- combine_shares
+- combine_shares_group
 
 ### P-256
 
 To split a p256 secret using Shamir
 
 ```rust
-use vsss_rs::Shamir;
-use ff::PrimeField;
+use vsss_rs::{*, shamir};
+use elliptic_curve::ff::PrimeField;
 use p256::{NonZeroScalar, Scalar, SecretKey};
-use rand::rngs::OsRng;
 
-fn main() {
-    let mut osrng = OsRng::default();
-    let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
-    // 32 for field size, 1 for identifier = 33
-    let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
-    assert!(res.is_ok());
-    let shares = res.unwrap();
-    let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
-    assert!(res.is_ok());
-    let scalar = res.unwrap();
-    let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
-    let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
-}
+let mut osrng = rand_core::OsRng::default();
+let sk = SecretKey::random(&mut osrng);
+let nzs = sk.to_nonzero_scalar();
+let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
+assert!(res.is_ok());
+let shares = res.unwrap();
+let res = combine_shares(&shares);
+assert!(res.is_ok());
+let scalar: Scalar = res.unwrap();
+let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+let sk_dup = SecretKey::from(nzs_dup);
+assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 ```
 
 ### Secp256k1
@@ -81,51 +135,41 @@ fn main() {
 To split a k256 secret using Shamir
 
 ```rust
-use vsss_rs::Shamir;
-use ff::PrimeField;
-use k256::{NonZeroScalar, Scalar, SecretKey};
-use rand::rngs::OsRng;
+use vsss_rs::{*, shamir};
+use elliptic_curve::ff::PrimeField;
+use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 
-fn main() {
-    let mut osrng = OsRng::default();
-    let sk = SecretKey::random(&mut osrng);
-    let nzs = sk.to_secret_scalar();
-    let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
-    assert!(res.is_ok());
-    let shares = res.unwrap();
-    let res = Shamir::<2, 3>::combine_shares::<Scalar, 33>(&shares);
-    assert!(res.is_ok());
-    let scalar = res.unwrap();
-    let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
-    let sk_dup = SecretKey::from(nzs_dup);
-    assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
-}
+let mut osrng = rand_core::OsRng::default();
+let sk = SecretKey::random(&mut osrng);
+let secret = *sk.to_nonzero_scalar();
+let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, secret, &mut osrng);
+assert!(res.is_ok());
+let shares = res.unwrap();
+let res = combine_shares(&shares);
+assert!(res.is_ok());
+let scalar: Scalar = res.unwrap();
+let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+let sk_dup = SecretKey::from(nzs_dup);
+assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 ```
-
-### BLS12-381
-
-Feldman or Pedersen return extra information for verification using their respective verifiers
-
+or to use feldman
 ```rust
-use vsss_rs::Feldman;
+use vsss_rs::{*, feldman};
 use bls12_381_plus::{Scalar, G1Projective};
-use ff::Field;
-use rand::rngs::OsRng;
+use elliptic_curve::ff::Field;
 
-fn main() {
-    let mut rng = OsRng::default();
-    let secret = Scalar::random(&mut rng);
-    let res = Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(secret, None, &mut rng);
-    assert!(res.is_ok());
-    let (shares, verifier) = res.unwrap();
-    for s in &shares {
-        assert!(verifier.verify(s));
-    }
-    let res = Feldman::<2, 3>::combine_shares::<Scalar, 33>(&shares);
-    assert!(res.is_ok());
-    let secret_1 = res.unwrap();
-    assert_eq!(secret, secret_1);
+let mut rng = rand_core::OsRng::default();
+let secret = Scalar::random(&mut rng);
+let res = feldman::split_secret::<G1Projective, u8, Vec<u8>>(2, 3, secret, None, &mut rng);
+assert!(res.is_ok());
+let (shares, verifier) = res.unwrap();
+for s in &shares {
+    assert!(verifier.verify_share(s).is_ok());
 }
+let res = combine_shares(&shares);
+assert!(res.is_ok());
+let secret_1: Scalar = res.unwrap();
+assert_eq!(secret, secret_1);
 ```
 
 ### Curve25519
@@ -138,28 +182,26 @@ Here's an example of using Ed25519 and x25519
 
 ```rust
 use curve25519_dalek::scalar::Scalar;
+use rand::Rng;
 use ed25519_dalek::SecretKey;
-use vsss_rs::{Shamir, WrappedScalar};
-use rand::rngs::OsRng;
+use vsss_rs::{curve25519::WrappedScalar, *};
 use x25519_dalek::StaticSecret;
 
-fn main() {
-    let mut osrng = rand::rngs::OsRng::default();
-    let sc = Scalar::random(&mut osrng);
-    let sk1 = StaticSecret::from(sc.to_bytes());
-    let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-    let res = Shamir::<2, 3>::split_secret::<WrappedScalar, OsRng, 33>(sc.into(), &mut osrng);
-    assert!(res.is_ok());
-    let shares = res.unwrap();
-    let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
-    assert!(res.is_ok());
-    let scalar = res.unwrap();
-    assert_eq!(scalar.0, sc);
-    let sk2 = StaticSecret::from(scalar.0.to_bytes());
-    let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
-    assert_eq!(sk2.to_bytes(), sk1.to_bytes());
-    assert_eq!(ske1.to_bytes(), ske2.to_bytes());
-}
+let mut osrng = rand::rngs::OsRng::default();
+let sc = Scalar::hash_from_bytes::<sha2_9::Sha512>(&osrng.gen::<[u8; 32]>());
+let sk1 = StaticSecret::from(sc.to_bytes());
+let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
+let res = shamir::split_secret::<WrappedScalar, u8, Vec<u8>>(2, 3, sc.into(), &mut osrng);
+assert!(res.is_ok());
+let shares = res.unwrap();
+let res = combine_shares(&shares);
+assert!(res.is_ok());
+let scalar: WrappedScalar = res.unwrap();
+assert_eq!(scalar.0, sc);
+let sk2 = StaticSecret::from(scalar.0.to_bytes());
+let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
+assert_eq!(sk2.to_bytes(), sk1.to_bytes());
+assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 ```
 
 Either `RistrettoPoint` or `EdwardsPoint` may be used when using Feldman and Pedersen VSSS.

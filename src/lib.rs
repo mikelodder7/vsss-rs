@@ -186,6 +186,7 @@ pub mod curve25519;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
+#[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 #[cfg(feature = "curve25519")]
 pub use sha2_9;
 pub use subtle;
