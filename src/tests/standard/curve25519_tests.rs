@@ -11,7 +11,7 @@ use crate::{
     *,
 };
 use curve25519_dalek::scalar::Scalar;
-use ed25519_dalek::SecretKey;
+use ed25519_dalek::SigningKey;
 use x25519_dalek::StaticSecret;
 
 #[test]
@@ -41,9 +41,9 @@ fn key_tests() {
     use rand::Rng;
 
     let mut osrng = rand::rngs::OsRng::default();
-    let sc = Scalar::hash_from_bytes::<sha2_9::Sha512>(&osrng.gen::<[u8; 32]>());
+    let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
     let sk1 = StaticSecret::from(sc.to_bytes());
-    let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
+    let ske1 = SigningKey::from_bytes(&sc.to_bytes());
     let res = shamir::split_secret::<WrappedScalar, u8, ScalarShare>(2, 3, sc.into(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
@@ -52,7 +52,7 @@ fn key_tests() {
     let scalar: WrappedScalar = res.unwrap();
     assert_eq!(scalar.0, sc);
     let sk2 = StaticSecret::from(scalar.0.to_bytes());
-    let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
+    let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
     assert_eq!(sk2.to_bytes(), sk1.to_bytes());
     assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 }
@@ -63,7 +63,7 @@ fn pedersen_verifier_serde_test() {
     use rand::Rng;
 
     let mut osrng = rand::rngs::OsRng::default();
-    let sk = Scalar::hash_from_bytes::<sha2_9::Sha512>(&osrng.gen::<[u8; 32]>());
+    let sk = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
     let res = pedersen::split_secret::<WrappedEdwards, u8, ScalarShare>(
         2,
         3,

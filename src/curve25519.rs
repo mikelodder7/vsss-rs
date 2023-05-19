@@ -27,7 +27,6 @@ use elliptic_curve::{
     ff::{helpers, Field, PrimeField},
     group::{Group, GroupEncoding},
 };
-use rand::Rng;
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
@@ -346,7 +345,9 @@ impl<'de> Deserialize<'de> for WrappedRistretto {
             <[u8; 32]>::deserialize(deserializer)?
         };
         // deserialize compressed ristretto, then decompress
-        if let Some(ep) = CompressedRistretto::from_slice(&bytes).decompress() {
+        let pt = CompressedRistretto::from_slice(&bytes)
+            .map_err(|e| de::Error::custom(format!("failed to deserialize CompressedRistretto: {}", e)))?;
+        if let Some(ep) = pt.decompress() {
             return Ok(WrappedRistretto(ep));
         }
         Err(de::Error::custom(
@@ -363,9 +364,10 @@ impl Group for WrappedEdwards {
     type Scalar = WrappedScalar;
 
     fn random(mut rng: impl RngCore) -> Self {
-        Self(EdwardsPoint::hash_from_bytes::<sha2_9::Sha512>(
-            &rng.gen::<[u8; 32]>(),
-        ))
+        let mut bytes = [0u8; 64];
+        rng.fill_bytes(&mut bytes);
+        let pt = RistrettoPoint::from_uniform_bytes(&bytes);
+        Self::from(WrappedRistretto(pt))
     }
 
     fn identity() -> Self {
@@ -651,7 +653,9 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
             <[u8; 32]>::deserialize(d)?
         };
         // deserialize compressed edwards y, then decompress
-        if let Some(ep) = CompressedEdwardsY::from_slice(&bytes).decompress() {
+        let pt = CompressedEdwardsY::from_slice(&bytes)
+            .map_err(|e| de::Error::custom(format!("failed to deserialize CompressedEdwardsY: {}", e)))?;
+        if let Some(ep) = pt.decompress() {
             return Ok(WrappedEdwards(ep));
         }
         Err(de::Error::custom(
@@ -978,7 +982,7 @@ impl<'de> Deserialize<'de> for WrappedScalar {
 
 impl Sum for WrappedScalar {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut acc = Scalar::zero();
+        let mut acc = Scalar::ZERO;
         for s in iter {
             acc += s.0;
         }
@@ -988,7 +992,7 @@ impl Sum for WrappedScalar {
 
 impl<'a> Sum<&'a WrappedScalar> for WrappedScalar {
     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
-        let mut acc = Scalar::zero();
+        let mut acc = Scalar::ZERO;
         for s in iter {
             acc += s.0;
         }
@@ -998,7 +1002,7 @@ impl<'a> Sum<&'a WrappedScalar> for WrappedScalar {
 
 impl Product for WrappedScalar {
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut acc = Scalar::one();
+        let mut acc = Scalar::ONE;
         for s in iter {
             acc *= s.0;
         }
@@ -1008,7 +1012,7 @@ impl Product for WrappedScalar {
 
 impl<'a> Product<&'a WrappedScalar> for WrappedScalar {
     fn product<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
-        let mut acc = Scalar::one();
+        let mut acc = Scalar::ONE;
         for s in iter {
             acc *= s.0;
         }
@@ -1018,6 +1022,8 @@ impl<'a> Product<&'a WrappedScalar> for WrappedScalar {
 
 #[test]
 fn ristretto_to_edwards() {
+    use rand::Rng;
+
     let sk = Scalar::from_bits(rand_core::OsRng.gen::<[u8; 32]>());
     let pk = RISTRETTO_BASEPOINT_POINT * sk;
     let ek = WrappedEdwards::from(WrappedRistretto(pk));
