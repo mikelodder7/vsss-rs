@@ -103,6 +103,7 @@
 //! Here's an example of using Ed25519 and x25519
 //!
 //! ```
+//! #[cfg(feature = "curve25519")] {
 //! use curve25519_dalek::scalar::Scalar;
 //! use rand::Rng;
 //! use ed25519_dalek::SigningKey;
@@ -124,6 +125,7 @@
 //! let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
 //! assert_eq!(sk2.to_bytes(), sk1.to_bytes());
 //! assert_eq!(ske1.to_bytes(), ske2.to_bytes());
+//! }
 //! ```
 #![deny(
     missing_docs,
@@ -186,9 +188,6 @@ pub mod curve25519;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
-#[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
-#[cfg(feature = "curve25519")]
-pub use sha2_9;
 pub use subtle;
 
 /// Create a no-std verifiable secret sharing scheme with size $num using fixed arrays

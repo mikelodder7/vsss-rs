@@ -9,10 +9,9 @@
 //! to be compliant to work with this library.
 //! The intent is the consumer will not have to use these directly since
 //! the wrappers implement the [`From`] and [`Into`] traits.
-use core::fmt::Formatter;
+use core::fmt::{self, Formatter, LowerHex, UpperHex};
 use core::{
     borrow::Borrow,
-    fmt,
     iter::{Iterator, Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
@@ -28,45 +27,8 @@ use elliptic_curve::{
     group::{Group, GroupEncoding},
 };
 use rand_core::RngCore;
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
-
-const BASE64_SIZE: usize = 44;
-
-struct Base64Visitor;
-
-impl<'de> Visitor<'de> for Base64Visitor {
-    type Value = [u8; 32];
-
-    fn expecting(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "a base64 encoded string")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        let mut s = [0u8; 32];
-        let mut bytes = [0u8; 33];
-        let decoded = data_encoding::BASE64
-            .decode_mut(v.as_bytes(), &mut bytes)
-            .map_err(|_| de::Error::custom("invalid base64"))?;
-        if decoded != 32 {
-            return Err(de::Error::custom("invalid base64 length"));
-        }
-        s.copy_from_slice(&bytes[..32]);
-        Ok(s)
-    }
-}
-
-fn serde_base64<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
-    let mut space = [0u8; BASE64_SIZE];
-    data_encoding::BASE64.encode_mut(bytes, &mut space);
-    s.serialize_str(unsafe { core::str::from_utf8_unchecked(&space) })
-}
 
 /// Wraps a ristretto25519 point
 #[derive(Copy, Clone, Debug, Eq)]
@@ -324,13 +286,8 @@ impl Serialize for WrappedRistretto {
     where
         S: Serializer,
     {
-        if serializer.is_human_readable() {
-            serde_base64(self.0.compress().as_bytes(), serializer)
-        } else {
-            // serialize as compressed ristretto
-            let t = self.0.compress().to_bytes();
-            t.serialize(serializer)
-        }
+        let bytes = self.0.compress().to_bytes();
+        serialize_arr(&bytes, serializer)
     }
 }
 
@@ -339,20 +296,37 @@ impl<'de> Deserialize<'de> for WrappedRistretto {
     where
         D: Deserializer<'de>,
     {
-        let bytes = if deserializer.is_human_readable() {
-            deserializer.deserialize_str(Base64Visitor)?
-        } else {
-            <[u8; 32]>::deserialize(deserializer)?
-        };
+        let bytes = deserialize_arr(deserializer)?;
         // deserialize compressed ristretto, then decompress
-        let pt = CompressedRistretto::from_slice(&bytes)
-            .map_err(|e| de::Error::custom(format!("failed to deserialize CompressedRistretto: {}", e)))?;
+        let pt = CompressedRistretto::from_slice(&bytes).map_err(|e| {
+            de::Error::custom(format!("failed to deserialize CompressedRistretto: {}", e))
+        })?;
         if let Some(ep) = pt.decompress() {
             return Ok(WrappedRistretto(ep));
         }
         Err(de::Error::custom(
             "failed to deserialize CompressedRistretto",
         ))
+    }
+}
+
+impl LowerHex for WrappedRistretto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let tmp = self.0.compress().to_bytes();
+        for &b in tmp.iter() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl UpperHex for WrappedRistretto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let tmp = self.0.compress().to_bytes();
+        for &b in tmp.iter() {
+            write!(f, "{:02X}", b)?;
+        }
+        Ok(())
     }
 }
 
@@ -632,13 +606,8 @@ impl Serialize for WrappedEdwards {
     where
         S: Serializer,
     {
-        if serializer.is_human_readable() {
-            serde_base64(self.0.compress().as_bytes(), serializer)
-        } else {
-            // serialize as compressed ristretto
-            let t = self.0.compress().to_bytes();
-            t.serialize(serializer)
-        }
+        let bytes = self.0.compress().to_bytes();
+        serialize_arr(&bytes, serializer)
     }
 }
 
@@ -647,20 +616,37 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
     where
         D: Deserializer<'de>,
     {
-        let bytes = if d.is_human_readable() {
-            d.deserialize_str(Base64Visitor)?
-        } else {
-            <[u8; 32]>::deserialize(d)?
-        };
+        let bytes = deserialize_arr(d)?;
         // deserialize compressed edwards y, then decompress
-        let pt = CompressedEdwardsY::from_slice(&bytes)
-            .map_err(|e| de::Error::custom(format!("failed to deserialize CompressedEdwardsY: {}", e)))?;
+        let pt = CompressedEdwardsY::from_slice(&bytes).map_err(|e| {
+            de::Error::custom(format!("failed to deserialize CompressedEdwardsY: {}", e))
+        })?;
         if let Some(ep) = pt.decompress() {
             return Ok(WrappedEdwards(ep));
         }
         Err(de::Error::custom(
             "failed to deserialize CompressedEdwardsY",
         ))
+    }
+}
+
+impl LowerHex for WrappedEdwards {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let tmp = self.0.compress().to_bytes();
+        for &b in tmp.iter() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl UpperHex for WrappedEdwards {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let tmp = self.0.compress().to_bytes();
+        for &b in tmp.iter() {
+            write!(f, "{:02X}", b)?;
+        }
+        Ok(())
     }
 }
 
@@ -958,11 +944,8 @@ impl Serialize for WrappedScalar {
     where
         S: Serializer,
     {
-        if serializer.is_human_readable() {
-            serde_base64(self.0.as_bytes(), serializer)
-        } else {
-            self.0.to_bytes().serialize(serializer)
-        }
+        let bytes = self.0.as_bytes();
+        serialize_arr(bytes, serializer)
     }
 }
 
@@ -971,12 +954,28 @@ impl<'de> Deserialize<'de> for WrappedScalar {
     where
         D: Deserializer<'de>,
     {
-        let bytes = if deserializer.is_human_readable() {
-            deserializer.deserialize_str(Base64Visitor)?
-        } else {
-            <[u8; 32]>::deserialize(deserializer)?
-        };
+        let bytes = deserialize_arr(deserializer)?;
         Ok(WrappedScalar(Scalar::from_bits(bytes)))
+    }
+}
+
+impl LowerHex for WrappedScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let tmp = self.0.to_bytes();
+        for &b in tmp.iter() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl UpperHex for WrappedScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let tmp = self.0.to_bytes();
+        for &b in tmp.iter() {
+            write!(f, "{:02X}", b)?;
+        }
+        Ok(())
     }
 }
 
@@ -1017,6 +1016,30 @@ impl<'a> Product<&'a WrappedScalar> for WrappedScalar {
             acc *= s.0;
         }
         Self(acc)
+    }
+}
+
+fn serialize_arr<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
+    if s.is_human_readable() {
+        let mut space = [0u8; 64];
+        hex::encode_to_slice(bytes, &mut space).unwrap();
+        unsafe { std::str::from_utf8_unchecked(&space) }.serialize(s)
+    } else {
+        bytes.serialize(s)
+    }
+}
+
+fn deserialize_arr<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
+    if d.is_human_readable() {
+        let s = <&str>::deserialize(d)?;
+        if s.len() != 64 {
+            return Err(de::Error::custom("invalid length"));
+        }
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(s, &mut bytes).unwrap();
+        Ok(bytes)
+    } else {
+        <[u8; 32]>::deserialize(d)
     }
 }
 
