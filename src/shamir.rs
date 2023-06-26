@@ -41,6 +41,20 @@ where
             .for_each(|c| *c = F::ZERO);
         Ok(ss)
     }
+
+    /// Create a share generator from a secret.
+    fn split_secret_generator(
+        threshold: usize,
+        secret: F,
+        rng: impl RngCore + CryptoRng,
+    ) -> VsssResult<SecretShareGenerator<F, Self::InnerPolynomial, I, S>> {
+        if threshold < 2 {
+            return Err(Error::SharingMinThreshold);
+        }
+        let mut polynomial = Self::InnerPolynomial::create(threshold);
+        polynomial.fill(secret, rng, threshold)?;
+        Ok(SecretShareGenerator::new(threshold, polynomial))
+    }
 }
 
 /// Create the shares for the specified polynomial

@@ -3,10 +3,7 @@
 //! due to stack allocations
 
 use crate::*;
-use elliptic_curve::{
-    ff::PrimeField,
-    generic_array::{typenum, GenericArray},
-};
+use elliptic_curve::{ff::PrimeField, generic_array::{typenum, GenericArray}, Group, group::GroupEncoding};
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares
@@ -104,6 +101,63 @@ polynomial_arr_impl!(
     U52 => 52, U53 => 53, U54 => 54, U55 => 55, U56 => 56, U57 => 57, U58 => 58,
     U59 => 59, U60 => 60, U61 => 61, U62 => 62, U63 => 63, U64 => 64,
 );
+
+/// A generator that can create any number of secret shares
+pub struct SecretShareGenerator<F: PrimeField, P: Polynomial<F>, I: ShareIdentifier, S: Share<Identifier = I>> {
+    polynomial: P,
+    index: u64,
+    threshold: usize,
+    _markers: (core::marker::PhantomData<F>, core::marker::PhantomData<S>),
+}
+
+impl<F: PrimeField, P: Polynomial<F>, I: ShareIdentifier, S: Share<Identifier = I>> Iterator for SecretShareGenerator<F, P, I, S> {
+    type Item = S;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.index += 1;
+        let x = F::from(self.index);
+        let y = self.polynomial.evaluate(x, self.threshold);
+        let id = I::from_field_element(x).ok()?;
+        let share = S::from_field_element(id, y).ok()?;
+        Some(share)
+    }
+}
+
+impl<F: PrimeField, P: Polynomial<F>, I: ShareIdentifier, S: Share<Identifier = I>> SecretShareGenerator<F, P, I, S> {
+    /// Create a new set generator
+    pub fn new(threshold: usize, polynomial: P) -> Self {
+        Self {
+            polynomial,
+            index: 0,
+            threshold,
+            _markers: (core::marker::PhantomData, core::marker::PhantomData),
+        }
+    }
+
+    /// Get the secret share at `index`
+    pub fn get_secret_share(&self, index: usize) -> Option<S> {
+        let x = F::from((index + 1) as u64);
+        let y = self.polynomial.evaluate(x, self.threshold);
+        let id = I::from_field_element(x).ok()?;
+        let share = S::from_field_element(id, y).ok()?;
+        Some(share)
+    }
+
+    /// Get the public share at `index`
+    pub fn get_public_share<G: Group + GroupEncoding + Default + core::ops::Mul<F, Output = G>>(&self, index: usize) -> Option<S> {
+        let x = F::from((index + 1) as u64);
+        let y = self.polynomial.evaluate(x, self.threshold);
+        let out = G::generator() * y;
+        let id = I::from_field_element(x).ok()?;
+        let share = S::from_group_element(id, out).ok()?;
+        Some(share)
+    }
+
+    /// Returns the threshold
+    pub fn threshold(&self) -> usize {
+        self.threshold
+    }
+}
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<F: PrimeField> Polynomial<F> for Vec<F> {
