@@ -655,11 +655,8 @@ impl UpperHex for WrappedEdwards {
 pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
-    const ZERO: Self = Self(Scalar::from_bits([0u8; 32]));
-    const ONE: Self = Self(Scalar::from_bits([
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
-    ]));
+    const ZERO: Self = Self(Scalar::ZERO);
+    const ONE: Self = Self(Scalar::ONE);
 
     fn random(mut rng: impl RngCore) -> Self {
         let mut seed = [0u8; 64];
@@ -688,7 +685,7 @@ impl PrimeField for WrappedScalar {
     type Repr = [u8; 32];
 
     fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
-        CtOption::new(Self(Scalar::from_bits(bytes)), Choice::from(1u8))
+        Scalar::from_canonical_bytes(bytes).map(Self)
     }
 
     fn to_repr(&self) -> Self::Repr {

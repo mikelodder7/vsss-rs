@@ -8,7 +8,7 @@
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
 
 * **This implementation has not been reviewed or audited. Use at your own risk.**
-* This implementation targets Rust `1.51` or later.
+* This implementation targets Rust `1.65` or later.
 * This implementation does not require the Rust standard library.
 * All operations are constant time unless explicitly noted.
 
