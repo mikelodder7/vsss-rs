@@ -9,7 +9,7 @@
 //! to be compliant to work with this library.
 //! The intent is the consumer will not have to use these directly since
 //! the wrappers implement the [`From`] and [`Into`] traits.
-use core::fmt::{self, Formatter, LowerHex, UpperHex};
+use core::fmt::{self, Display, Formatter, LowerHex, UpperHex};
 use core::{
     borrow::Borrow,
     iter::{Iterator, Product, Sum},
@@ -330,6 +330,24 @@ impl UpperHex for WrappedRistretto {
     }
 }
 
+impl Display for WrappedRistretto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:x}", self)
+    }
+}
+
+impl ConditionallySelectable for WrappedRistretto {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Self(RistrettoPoint::conditional_select(&a.0, &b.0, choice))
+    }
+}
+
+impl ConstantTimeEq for WrappedRistretto {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
+    }
+}
+
 /// Wraps an ed25519 point
 #[derive(Copy, Clone, Debug, Eq)]
 pub struct WrappedEdwards(pub EdwardsPoint);
@@ -647,6 +665,24 @@ impl UpperHex for WrappedEdwards {
             write!(f, "{:02X}", b)?;
         }
         Ok(())
+    }
+}
+
+impl Display for WrappedEdwards {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:x}", self)
+    }
+}
+
+impl ConditionallySelectable for WrappedEdwards {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        Self(EdwardsPoint::conditional_select(&a.0, &b.0, choice))
+    }
+}
+
+impl ConstantTimeEq for WrappedEdwards {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
     }
 }
 
