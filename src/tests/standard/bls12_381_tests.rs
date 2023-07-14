@@ -165,7 +165,7 @@ fn group_combine() {
     for (i, s) in shares[..5].iter().enumerate() {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(s.value());
-        let sk = Scalar::from_bytes(&bytes).unwrap();
+        let sk = Scalar::from_be_bytes(&bytes).unwrap();
 
         let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
         let h2 = G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
