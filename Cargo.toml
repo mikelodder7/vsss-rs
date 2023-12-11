@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "3.3.1"
+version = "3.3.2"
 
 [features]
 default = ["std"]
@@ -19,7 +19,7 @@ curve25519 = ["curve25519-dalek", "serde", "hex"]
 std = ["rand_core/std", "rand/std", "serde/std"]
 
 [dependencies]
-curve25519-dalek = { version = "4.0.0", features = ["digest", "legacy_compatibility", "rand_core"], optional = true }
+curve25519-dalek = { version = "4.1.1", features = ["digest", "legacy_compatibility", "rand_core"], optional = true }
 elliptic-curve = { version = "0.13", features = ["ecdh"] }
 hex = { version = "0.4", default-features = false, optional = true }
 rand = { version = "0.8", default-features = false }
