@@ -722,7 +722,7 @@ impl PrimeField for WrappedScalar {
 
     fn from_repr(mut bytes: Self::Repr) -> CtOption<Self> {
         Scalar::from_canonical_bytes(bytes)
-            .or_else(|_| {
+            .or_else(|| {
                 // Assume big endian like the rest of the Scalars that implement PrimeField
                 bytes.reverse();
                 CtOption::new(Scalar::from_bytes_mod_order(bytes), Choice::from(1u8))
