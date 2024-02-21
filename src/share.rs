@@ -8,7 +8,7 @@ use core::hash::Hash;
 use elliptic_curve::{
     ff::PrimeField,
     generic_array::{
-        typenum::{U33, U49, U97},
+        typenum::{U32, U33, U48, U49, U56, U57, U58, U96, U97},
         GenericArray,
     },
     group::GroupEncoding,
@@ -16,7 +16,7 @@ use elliptic_curve::{
 use zeroize::Zeroize;
 
 /// A value used to represent the identifier for secret shares
-pub trait ShareIdentifier: Sized + Eq + Hash + Ord {
+pub trait ShareIdentifier: Sized + Eq {
     /// Convert an identifier from a field element
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self>;
     /// Convert this share into a field element
@@ -33,9 +33,9 @@ impl ShareIdentifier for u8 {
         // Assume little endian encoding first
         // then try big endian
         let bytes = repr.as_ref();
-        if ct_is_zero(&bytes[1..]).into() {
+        if bytes[1..].ct_is_zero().into() {
             Ok(bytes[0])
-        } else if ct_is_zero(&bytes[..bytes.len() - 2]).into() {
+        } else if bytes[..bytes.len() - 2].ct_is_zero().into() {
             Ok(*bytes.last().unwrap())
         } else {
             Err(Error::InvalidShareConversion)
@@ -47,7 +47,7 @@ impl ShareIdentifier for u8 {
     }
 
     fn is_zero(&self) -> Choice {
-        ct_is_zero(&[*self])
+        self.ct_is_zero()
     }
 
     fn as_bytes(&self) -> &[u8] {
@@ -90,7 +90,7 @@ pub trait Share: Sized + Clone + Eq + Hash + Ord + Zeroize {
 
     /// True if all value bytes are zero
     fn is_zero(&self) -> Choice {
-        ct_is_zero(self.value())
+        self.value().ct_is_zero()
     }
 
     /// The identifier for this share
@@ -204,7 +204,97 @@ macro_rules! impl_share {
     };
 }
 
-impl_share!(33 => U33, 49 => U49, 97 => U97);
+impl_share!(33 => U33, 49 => U49, 57 => U57, 58 => U58, 97 => U97);
+
+macro_rules! impl_share_tuple_ga {
+    ($($small:expr => $size:ident),+$(,)*) => {
+        $(
+            impl Share for (SmallArray<$small>, GenericArray<u8, $size>) {
+            type Identifier = SmallArray<$small>;
+
+            fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                (SmallArray::default(), GenericArray::default())
+            }
+
+            fn identifier(&self) -> Self::Identifier {
+                self.0
+            }
+
+            fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                &mut self.0
+            }
+
+            fn value(&self) -> &[u8] {
+                &self.1
+            }
+
+            fn value_mut(&mut self) -> &mut [u8] {
+                self.1.as_mut()
+            }
+        }
+        )+
+    };
+}
+
+macro_rules! impl_share_tuple_array {
+    ($($small:expr => $arr:expr),+$(,)*) => {
+        $(
+            impl Share for (SmallArray<$small>, [u8; $arr]) {
+                type Identifier = SmallArray<$small>;
+
+                fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                    (SmallArray::<$small>::default(), [0u8; $arr])
+                }
+
+                fn identifier(&self) -> Self::Identifier {
+                    self.0
+                }
+
+                fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                    &mut self.0
+                }
+
+                fn value(&self) -> &[u8] {
+                    &self.1
+                }
+
+                fn value_mut(&mut self) -> &mut [u8] {
+                    self.1.as_mut()
+                }
+            }
+        )+
+    };
+}
+
+impl_share_tuple_ga!(
+    2 => U32, 2 => U48, 2 => U56, 2 => U57, 2 => U96,
+    4 => U32, 4 => U48, 4 => U56, 4 => U57, 4 => U96,
+    8 => U32, 8 => U48, 8 => U56, 8 => U57, 8 => U96,
+    16 => U32, 16 => U48, 16 => U56, 16 => U57, 16 => U96,
+);
+
+impl_share_tuple_array!(
+    2 => 32,
+    2 => 48,
+    2 => 56,
+    2 => 57,
+    2 => 96,
+    4 => 32,
+    4 => 48,
+    4 => 56,
+    4 => 57,
+    4 => 96,
+    8 => 32,
+    8 => 48,
+    8 => 56,
+    8 => 57,
+    8 => 96,
+    16 => 32,
+    16 => 48,
+    16 => 56,
+    16 => 57,
+    16 => 96,
+);
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl Share for Vec<u8> {
@@ -231,6 +321,106 @@ impl Share for Vec<u8> {
     }
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl Share for (SmallArray<2>, Vec<u8>) {
+    type Identifier = SmallArray<2>;
+
+    fn empty_share_with_capacity(size_hint: usize) -> Self {
+        (SmallArray::default(), vec![0u8; size_hint])
+    }
+
+    fn identifier(&self) -> Self::Identifier {
+        self.0
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self.0
+    }
+
+    fn value(&self) -> &[u8] {
+        &self.1
+    }
+
+    fn value_mut(&mut self) -> &mut [u8] {
+        self.1.as_mut()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl Share for (SmallArray<4>, Vec<u8>) {
+    type Identifier = SmallArray<4>;
+
+    fn empty_share_with_capacity(size_hint: usize) -> Self {
+        (SmallArray::default(), vec![0u8; size_hint])
+    }
+
+    fn identifier(&self) -> Self::Identifier {
+        self.0
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self.0
+    }
+
+    fn value(&self) -> &[u8] {
+        &self.1
+    }
+
+    fn value_mut(&mut self) -> &mut [u8] {
+        self.1.as_mut()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl Share for (SmallArray<8>, Vec<u8>) {
+    type Identifier = SmallArray<8>;
+
+    fn empty_share_with_capacity(size_hint: usize) -> Self {
+        (SmallArray::default(), vec![0u8; size_hint])
+    }
+
+    fn identifier(&self) -> Self::Identifier {
+        self.0
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self.0
+    }
+
+    fn value(&self) -> &[u8] {
+        &self.1
+    }
+
+    fn value_mut(&mut self) -> &mut [u8] {
+        self.1.as_mut()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl Share for (SmallArray<16>, Vec<u8>) {
+    type Identifier = SmallArray<16>;
+
+    fn empty_share_with_capacity(size_hint: usize) -> Self {
+        (SmallArray::default(), vec![0u8; size_hint])
+    }
+
+    fn identifier(&self) -> Self::Identifier {
+        self.0
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self.0
+    }
+
+    fn value(&self) -> &[u8] {
+        &self.1
+    }
+
+    fn value_mut(&mut self) -> &mut [u8] {
+        self.1.as_mut()
+    }
+}
+
 #[test]
 fn test_with_identifier_and_value() {
     let share = GenericArray::<u8, U33>::with_identifier_and_value(1, &[1u8; 32]);
@@ -242,4 +432,22 @@ fn test_with_identifier_and_value() {
     assert_eq!(share.identifier(), 2);
     assert_eq!(share.identifier().as_bytes(), [2u8]);
     assert_eq!(share.value(), &[1u8; 48]);
+}
+
+#[test]
+fn test_small_vec_shares() {
+    let share = (SmallArray::from(2000u16), [1u8; 32]);
+    assert_eq!(share.identifier(), 2000u16);
+    assert_eq!(share.identifier().as_bytes(), 2000u16.to_be_bytes());
+    assert_eq!(share.value(), &[1u8; 32]);
+
+    let share = (SmallArray::from(10000u16), [1u8; 48]);
+    assert_eq!(share.identifier(), 10000u16);
+    assert_eq!(share.identifier().as_bytes(), 10000u16.to_be_bytes());
+    assert_eq!(share.value(), &[1u8; 48]);
+
+    let share = (SmallArray::from(435123523u32), [1u8; 56]);
+    assert_eq!(share.identifier(), 435123523u32);
+    assert_eq!(share.identifier().as_bytes(), 435123523u32.to_be_bytes());
+    assert_eq!(share.value(), &[1u8; 56]);
 }

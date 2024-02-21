@@ -150,7 +150,7 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -164,6 +164,7 @@ mod polynomial;
 mod set;
 pub mod shamir;
 mod share;
+mod smallarray;
 mod util;
 
 use shamir::{check_params, create_shares};
@@ -177,6 +178,7 @@ pub use polynomial::*;
 pub use set::*;
 pub use shamir::Shamir;
 pub use share::*;
+pub use smallarray::*;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use pedersen::StdPedersenResult;
