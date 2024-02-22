@@ -4,27 +4,26 @@
 */
 use super::invalid::*;
 use super::valid::*;
-use crate::tests::standard::ScalarShare;
 use crate::*;
-use elliptic_curve::ff::PrimeField;
+use elliptic_curve::ff::{Field, PrimeField};
 use k256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
 use rand::rngs::OsRng;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<ProjectivePoint>();
+    split_invalid_args::<ProjectivePoint, [u8; 1], u8, [u8; 33]>();
     combine_invalid::<Scalar>();
 }
 
 #[test]
 fn valid_tests() {
-    combine_single::<ProjectivePoint>();
+    combine_single::<ProjectivePoint, [u8; 1], u8, [u8; 33]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<ProjectivePoint>();
+    combine_all::<ProjectivePoint, [u8; 1], u8, Vec<u8>>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -33,7 +32,7 @@ fn key_tests() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
     let secret = *sk.to_nonzero_scalar();
-    let res = shamir::split_secret::<Scalar, u8, ScalarShare>(2, 3, secret, &mut osrng);
+    let res = shamir::split_secret::<Scalar, [u8; 1], u8, [u8; 33]>(2, 3, secret, &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = combine_shares(&shares);
@@ -42,4 +41,41 @@ fn key_tests() {
     let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
     let sk_dup = SecretKey::from(nzs_dup);
     assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+}
+
+#[test]
+fn share_tuples() {
+    let mut osrng = OsRng::default();
+    let sk = Scalar::random(&mut osrng);
+
+    let res = shamir::split_secret::<Scalar, [u8; 1], u8, (u8, [u8; 32])>(2, 3, sk, &mut osrng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+    let res = combine_shares::<Scalar, [u8; 1], u8, (u8, [u8; 32])>(&shares);
+    assert!(res.is_ok());
+
+    let res = shamir::split_secret::<Scalar, [u8; 2], u16, (u16, [u8; 32])>(2, 3, sk, &mut osrng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+    let res = combine_shares::<Scalar, [u8; 2], u16, (u16, [u8; 32])>(&shares);
+    assert!(res.is_ok());
+
+    let res = shamir::split_secret::<Scalar, [u8; 4], u32, (u32, [u8; 32])>(2, 3, sk, &mut osrng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+    let res = combine_shares::<Scalar, [u8; 4], u32, (u32, [u8; 32])>(&shares);
+    assert!(res.is_ok());
+
+    let res = shamir::split_secret::<Scalar, [u8; 8], u64, (u64, [u8; 32])>(2, 3, sk, &mut osrng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+    let res = combine_shares::<Scalar, [u8; 8], u64, (u64, [u8; 32])>(&shares);
+    assert!(res.is_ok());
+
+    let res =
+        shamir::split_secret::<Scalar, [u8; 8], usize, (usize, [u8; 32])>(2, 3, sk, &mut osrng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+    let res = combine_shares::<Scalar, [u8; 8], usize, (usize, [u8; 32])>(&shares);
+    assert!(res.is_ok());
 }

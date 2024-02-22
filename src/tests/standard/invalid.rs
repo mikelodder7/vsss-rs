@@ -9,69 +9,63 @@ use elliptic_curve::{
     group::{Group, GroupEncoding},
 };
 
-pub fn split_invalid_args<G: Group + GroupEncoding + Default>() {
+pub fn split_invalid_args<
+    G: Group + GroupEncoding + Default,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+>() {
     let secret = G::Scalar::ONE;
     let mut rng = MockRng::default();
-    assert!(TesterVsss::<G, u8, ScalarShare>::split_secret(0, 0, secret, &mut rng).is_err());
-    assert!(TesterVsss::<G, u8, ScalarShare>::split_secret(3, 2, secret, &mut rng).is_err());
-    assert!(TesterVsss::<G, u8, ScalarShare>::split_secret(1, 8, secret, &mut rng).is_err());
+    assert!(TesterVsss::<G, B, I, S>::split_secret(0, 0, secret, &mut rng).is_err());
+    assert!(TesterVsss::<G, B, I, S>::split_secret(3, 2, secret, &mut rng).is_err());
+    assert!(TesterVsss::<G, B, I, S>::split_secret(1, 8, secret, &mut rng).is_err());
 
     assert!(
-        TesterVsss::<G, u8, ScalarShare>::split_secret_with_verifier(0, 0, secret, None, &mut rng)
-            .is_err()
+        TesterVsss::<G, B, I, S>::split_secret_with_verifier(0, 0, secret, None, &mut rng).is_err()
     );
     assert!(
-        TesterVsss::<G, u8, ScalarShare>::split_secret_with_verifier(3, 2, secret, None, &mut rng)
-            .is_err()
+        TesterVsss::<G, B, I, S>::split_secret_with_verifier(3, 2, secret, None, &mut rng).is_err()
     );
     assert!(
-        TesterVsss::<G, u8, ScalarShare>::split_secret_with_verifier(1, 8, secret, None, &mut rng)
-            .is_err()
+        TesterVsss::<G, B, I, S>::split_secret_with_verifier(1, 8, secret, None, &mut rng).is_err()
     );
 
-    assert!(
-        TesterVsss::<G, u8, ScalarShare>::split_secret_with_blind_verifier(
-            0, 0, secret, None, None, None, &mut rng
-        )
-        .is_err()
-    );
-    assert!(
-        TesterVsss::<G, u8, ScalarShare>::split_secret_with_blind_verifier(
-            3, 2, secret, None, None, None, &mut rng
-        )
-        .is_err()
-    );
-    assert!(
-        TesterVsss::<G, u8, ScalarShare>::split_secret_with_blind_verifier(
-            1, 8, secret, None, None, None, &mut rng
-        )
-        .is_err()
-    );
+    assert!(TesterVsss::<G, B, I, S>::split_secret_with_blind_verifier(
+        0, 0, secret, None, None, None, &mut rng
+    )
+    .is_err());
+    assert!(TesterVsss::<G, B, I, S>::split_secret_with_blind_verifier(
+        3, 2, secret, None, None, None, &mut rng
+    )
+    .is_err());
+    assert!(TesterVsss::<G, B, I, S>::split_secret_with_blind_verifier(
+        1, 8, secret, None, None, None, &mut rng
+    )
+    .is_err());
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub fn combine_invalid_vec<F: PrimeField>() {
-    let mut shares = Vec::<ScalarShare>::new();
+    let mut shares = Vec::<[u8; 33]>::new();
     assert!(shares.combine_to_field_element::<F, [(F, F); 3]>().is_err());
-    shares.push(ScalarShare::from([0u8; 33]));
+    shares.push([0u8; 33]);
     assert!(shares.combine_to_field_element::<F, [(F, F); 3]>().is_err());
 }
 
 pub fn combine_invalid<F: PrimeField>() {
     // No secret
-    let mut share = ScalarShare::default();
+    let mut share = [0u8; 33];
     // Invalid identifier
-    assert!([share.clone(), ScalarShare::from([2u8; 33])]
+    assert!([share.clone(), [2u8; 33]]
         .combine_to_field_element::<F, [(F, F); 3]>()
         .is_err());
     share[0] = 1u8;
-    assert!([share, ScalarShare::from([2u8; 33])]
+    assert!([share, [2u8; 33]]
         .combine_to_field_element::<F, [(F, F); 3]>()
         .is_err());
     // Duplicate shares
-    assert!(
-        [ScalarShare::from([1u8; 33]), ScalarShare::from([1u8; 33]),]
-            .combine_to_field_element::<F, [(F, F); 3]>()
-            .is_err()
-    );
+    assert!([[1u8; 33], [1u8; 33],]
+        .combine_to_field_element::<F, [(F, F); 3]>()
+        .is_err());
 }

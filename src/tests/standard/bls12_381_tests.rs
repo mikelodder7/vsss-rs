@@ -25,8 +25,8 @@ fn simple() {
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
 
-    let shares: [ScalarShare; 5] =
-        <[ScalarShare; SHARES]>::split_secret(THRESHOLD, SHARES, secret, &mut rng).unwrap();
+    let shares: [[u8; 33]; 5] =
+        <[[u8; 33]; SHARES]>::split_secret(THRESHOLD, SHARES, secret, &mut rng).unwrap();
     let secret2 = (&shares[..THRESHOLD])
         .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
         .unwrap();
@@ -52,12 +52,12 @@ fn simple() {
         }
     }
 
-    impl Shamir<Scalar, u8, ScalarShare> for Fvss {
+    impl Shamir<Scalar, [u8; 1], u8, [u8; 33]> for Fvss {
         type InnerPolynomial = [Scalar; THRESHOLD];
-        type ShareSet = [ScalarShare; SHARES];
+        type ShareSet = [[u8; 33]; SHARES];
     }
 
-    impl Feldman<G1Projective, u8, ScalarShare> for Fvss {
+    impl Feldman<G1Projective, [u8; 1], u8, [u8; 33]> for Fvss {
         type VerifierSet = [G1Projective; THRESHOLD + 1];
     }
 
@@ -73,20 +73,20 @@ fn simple() {
 fn simple_std() {
     const THRESHOLD: usize = 3;
     const SHARES: usize = 5;
-    type ScalarShare = [u8; 33];
 
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
 
-    let shares: Vec<ScalarShare> =
-        <StdVsss<G1Projective, u8, ScalarShare>>::split_secret(THRESHOLD, SHARES, secret, &mut rng)
-            .unwrap();
+    let shares: Vec<Vec<u8>> = <StdVsss<G1Projective, [u8; 1], u8, Vec<u8>>>::split_secret(
+        THRESHOLD, SHARES, secret, &mut rng,
+    )
+    .unwrap();
     let secret2 = (&shares[..THRESHOLD])
         .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
         .unwrap();
     assert_eq!(secret, secret2);
 
-    let (shares, verifiers): (Vec<ScalarShare>, Vec<G1Projective>) =
+    let (shares, verifiers): (Vec<Vec<u8>>, Vec<G1Projective>) =
         StdVsss::split_secret_with_verifier(
             THRESHOLD,
             SHARES,
@@ -99,7 +99,7 @@ fn simple_std() {
         assert!(verifiers.verify_share(s).is_ok());
     }
 
-    let ped_res: StdPedersenResult<G1Projective, u8, ScalarShare> =
+    let ped_res: StdPedersenResult<G1Projective, [u8; 1], u8, Vec<u8>> =
         StdVsss::split_secret_with_blind_verifier(
             THRESHOLD,
             SHARES,
@@ -125,8 +125,8 @@ fn simple_std() {
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<G1Projective>();
-    split_invalid_args::<G2Projective>();
+    split_invalid_args::<G1Projective, [u8; 1], u8, [u8; 48]>();
+    split_invalid_args::<G2Projective, [u8; 2], u16, (u16, [u8; 96])>();
     combine_invalid::<Scalar>();
 }
 
@@ -138,22 +138,23 @@ fn invalid_test_std() {
 
 #[test]
 fn valid_tests() {
-    combine_single::<G1Projective>();
-    combine_single::<G2Projective>();
+    combine_single::<G1Projective, [u8; 1], u8, [u8; 33]>();
+    combine_single::<G2Projective, [u8; 1], u8, [u8; 33]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<G1Projective>();
-    combine_all::<G2Projective>();
+    combine_all::<G1Projective, [u8; 1], u8, Vec<u8>>();
+    combine_all::<G2Projective, [u8; 1], u8, Vec<u8>>();
 }
 
 #[test]
 fn group_combine() {
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
-    let res = TesterVsss::<G1Projective, u8, ScalarShare>::split_secret(3, 5, secret, &mut rng);
+    let res =
+        TesterVsss::<G1Projective, [u8; 1], u8, [u8; 33]>::split_secret(3, 5, secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
@@ -231,7 +232,7 @@ fn split_combine_test(#[case] threshold: usize, #[case] limit: usize) {
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
 
-    let shares = TesterVsss::<G1Projective, u8, ScalarShare>::split_secret(
+    let shares = TesterVsss::<G1Projective, [u8; 1], u8, [u8; 33]>::split_secret(
         threshold, limit, secret, &mut rng,
     )
     .unwrap();
@@ -277,4 +278,42 @@ fn split_combine_test(#[case] threshold: usize, #[case] limit: usize) {
     // for s in &shares {
     //     assert!(verifier.verify_const_generics(s).is_ok());
     // }
+}
+
+#[test]
+fn point_combine() {
+    let mut rng = MockRng::default();
+    let secret = Scalar::random(&mut rng);
+    let res =
+        TesterVsss::<G1Projective, [u8; 1], u8, [u8; 33]>::split_secret(2, 3, secret, &mut rng);
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+
+    let sigs_g1 = shares
+        .iter()
+        .map(|s| {
+            let ff = s.as_field_element::<Scalar>().unwrap();
+            let pt = G1Projective::GENERATOR * ff;
+            <[u8; 49]>::with_identifier_and_value(s.identifier(), &pt.to_compressed())
+        })
+        .collect::<Vec<[u8; 49]>>();
+
+    let sig_g1 =
+        combine_shares_group::<G1Projective, [u8; 1], u8, [u8; 49]>(&sigs_g1[..2]).unwrap();
+    assert_eq!(sig_g1, G1Projective::GENERATOR * secret);
+}
+
+#[test]
+fn big_integer_identifier() {
+    let mut rng = MockRng::default();
+    let secret = Scalar::random(&mut rng);
+    let res =
+        TesterVsss::<G1Projective, [u8; 2], u16, (u16, GenericArray<u8, typenum::U32>)>::split_secret(
+            2, 3, secret, &mut rng,
+        );
+    assert!(res.is_ok());
+    let shares = res.unwrap();
+
+    let secret2 = combine_shares(&shares[..2]).unwrap();
+    assert_eq!(secret, secret2);
 }

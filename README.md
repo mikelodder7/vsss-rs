@@ -3,7 +3,6 @@
 [![Crate][crate-image]][crate-link]
 [![Docs][docs-image]][docs-link]
 ![Apache 2.0][license-image]
-[![Build status](https://ci.appveyor.com/api/projects/status/cxxv4bng7ss5f09d?svg=true)](https://ci.appveyor.com/project/mikelodder7/vsss-rs-std)
 
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
 
@@ -22,6 +21,30 @@ no-std mode. Previous versions tried to keep the two modes aligned but in doing 
 and stack overflow issues. The new traits allow for a single implementation to be used in both modes and allow
 no-std consumers to use exactly what they need while minimizing code duplication and stack overflows.
 
+## NOte if upgrading from Version 3
+
+The `ShareIdentifier` trait has been modified as follows:
+
+- fn as_bytes(&self) -> &[u8] has been removed and replaced with
+- fn to_repr(&self) -> ByteRepr which returns the byte representation of the identifier
+
+The following has been added to `ShareIdentifier`
+
+- type ByteRepr: AsRef<[u8]> + AsMut<[u8]> which is the byte representation of the identifier
+- fn from_repr(repr: ByteRepr) -> Self which creates the identifier from the byte representation
+
+### Why this change?
+
+The previous method was not flexible enough to handle different types of identifiers such as u16, u32, u64, etc. 
+because as_bytes returned &[u8] and there was no safe method to convert the byte representation from the identifier
+when using u16, u32, etc. So the option was to either continue as is but use unsafe code with Statics (not good), 
+or implement a wrapper struct that would handle the conversion but needed to implement the same methods and traits
+as the primitives would (also not good and results in a lot of boiler plate).
+
+### Other changes
+
+Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all sizes from 2-200 are implemented.
+
 ## Components
 
 All component traits are implemented for static arrays `[T; N]` and `GenericArray<T, N>` from 2-64 and `Vec<T>` by default.
@@ -31,10 +54,23 @@ Any higher, and its time to use an allocator or the stack might be overrun.
 
 There was lots of requests to enable share identifiers to be more than just `u8` values. This is now possible
 by implementing the `ShareIdentifier` trait. The `ShareIdentifier` trait is a simple trait that provides the necessary
-methods for splitting and combining shares. The `ShareIdentifier` trait is implemented for `u8` values by default.
-Other values can be used by implementing the trait for the desired type but keep in might endianness.
+methods for splitting and combining shares. The `ShareIdentifier` trait is implemented for 
+primitive integer values by default. Other values can be used by implementing the trait for the desired type 
+but keep in might endianness. By default, primitive types represented as big-endian byte sequences.
 
 `Share` is now a trait so shares can be implemented however consumers need them to be.
+
+The following also implement `Share`:
+
+- ({primitive integer type}, \[u8; N\])
+- ({primitive integer type}, GenericArray<u8, N>) 
+- ({primitive integer type}, Vec<u8>) when used with the `std` or `alloc` feature
+
+If the share identifier is `u8` then the additional implementations exist.
+
+- \[u8; N+1\] where N is the share size and the first byte is the identifier
+- GenericArray<u8, N+1> where N is the share size and the first byte is the identifier
+- Vec<u8> where the first byte is the identifier
 
 ### Polynomials
 `Polynomial` holds the coefficients of the polynomial and provides methods to evaluate the polynomial at a given point.
@@ -64,7 +100,9 @@ the data. `StdPedersenResult` is provided when an allocator is available by defa
 When operating in standard mode, no traits should be necessary to be implemented and there are default functions
 to accomplish what you want just like in previous versions.
 
-`StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets.
+`StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets but requires
+specifying lots of generic parameters. If you need to use a specific field, `DefaultStdVsss` is provided to make
+the process easier. `DefaultStdVsss` assumes the identifier is `u8` and the share is a `Vec<u8>`.
 
 If you need custom structs in no-std mode the `vsss_arr_impl` macro will create the necessary implementations for you.
 
@@ -130,6 +168,22 @@ let sk_dup = SecretKey::from(nzs_dup);
 assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 ```
 
+Or using the `DefaultStdVsss` struct
+
+```rust
+ use elliptic_curve::ff::Field;
+
+let mut osrng = rand_core::OsRng::default();
+let secret = p256::Scalar::random(&mut osrng);
+let res = DefaultStdVsss::<p256::ProjectivePoint>::split_secret(2, 3, secret, &mut osrng);
+assert!(res.is_ok());
+let shares = res.unwrap();
+let res = combine_shares(&shares);
+assert!(res.is_ok());
+let scalar: p256::Scalar = res.unwrap();
+assert_eq!(secret, scalar);
+```
+
 ### Secp256k1
 
 To split a k256 secret using Shamir
@@ -142,7 +196,7 @@ use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 let mut osrng = rand_core::OsRng::default();
 let sk = SecretKey::random(&mut osrng);
 let secret = *sk.to_nonzero_scalar();
-let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, secret, &mut osrng);
+let res = shamir::split_secret::<Scalar, [u8; 1], u8, Vec<u8>>(2, 3, secret, &mut osrng);
 assert!(res.is_ok());
 let shares = res.unwrap();
 let res = combine_shares(&shares);
@@ -160,7 +214,7 @@ use elliptic_curve::ff::Field;
 
 let mut rng = rand_core::OsRng::default();
 let secret = Scalar::random(&mut rng);
-let res = feldman::split_secret::<G1Projective, u8, Vec<u8>>(2, 3, secret, None, &mut rng);
+let res = feldman::split_secret::<G1Projective, [u8; 1], u8, Vec<u8>>(2, 3, secret, None, &mut rng);
 assert!(res.is_ok());
 let (shares, verifier) = res.unwrap();
 for s in &shares {
@@ -188,10 +242,10 @@ use vsss_rs::{curve25519::WrappedScalar, *};
 use x25519_dalek::StaticSecret;
 
 let mut osrng = rand::rngs::OsRng::default();
-let sc = Scalar::hash_from_bytes::<sha2_9::Sha512>(&osrng.gen::<[u8; 32]>());
+let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
 let sk1 = StaticSecret::from(sc.to_bytes());
 let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-let res = shamir::split_secret::<WrappedScalar, u8, Vec<u8>>(2, 3, sc.into(), &mut osrng);
+let res = shamir::split_secret::<WrappedScalar, [u8; 1], u8, Vec<u8>>(2, 3, sc.into(), &mut osrng);
 assert!(res.is_ok());
 let shares = res.unwrap();
 let res = combine_shares(&shares);

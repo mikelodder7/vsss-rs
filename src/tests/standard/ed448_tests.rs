@@ -5,56 +5,55 @@
 
 use super::invalid::*;
 use super::valid::*;
-use crate::{
-    curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
-    *,
-};
-use curve25519_dalek::scalar::Scalar;
-use ed25519_dalek::SigningKey;
-use x25519_dalek::StaticSecret;
+use crate::*;
+use ed448_goldilocks_plus::{EdwardsPoint, Scalar};
+use elliptic_curve::hash2curve::ExpandMsgXmd;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<WrappedRistretto, [u8; 1], u8, [u8; 33]>();
-    combine_invalid::<WrappedScalar>();
-    split_invalid_args::<WrappedEdwards, [u8; 1], u8, [u8; 33]>();
-    combine_invalid::<WrappedScalar>();
+    split_invalid_args::<EdwardsPoint, [u8; 1], u8, [u8; 58]>();
+    let mut share = [0u8; 58];
+    // Invalid identifier
+    assert!([share.clone(), [2u8; 58]]
+        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
+        .is_err());
+    share[0] = 1u8;
+    assert!([share, [2u8; 58]]
+        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
+        .is_err());
+    // Duplicate shares
+    assert!([[1u8; 58], [1u8; 58],]
+        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
+        .is_err());
 }
 
 #[test]
 fn valid_tests() {
-    combine_single::<WrappedRistretto, [u8; 1], u8, [u8; 33]>();
-    combine_single::<WrappedEdwards, [u8; 1], u8, [u8; 33]>();
+    combine_single::<EdwardsPoint, [u8; 1], u8, [u8; 58]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<WrappedRistretto, [u8; 1], u8, [u8; 33]>();
-    combine_all::<WrappedEdwards, [u8; 1], u8, [u8; 33]>();
+    combine_all::<EdwardsPoint, [u8; 1], u8, [u8; 58]>();
 }
 
-#[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
     use rand::Rng;
 
     let mut osrng = rand::rngs::OsRng::default();
-    let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
-    let sk1 = StaticSecret::from(sc.to_bytes());
-    let ske1 = SigningKey::from_bytes(&sc.to_bytes());
-    let res =
-        shamir::split_secret::<WrappedScalar, [u8; 1], u8, [u8; 33]>(2, 3, sc.into(), &mut osrng);
+    let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
+        &osrng.gen::<[u8; 32]>(),
+        b"edwards_XMD:SHA-512_ELL2_RO_",
+    );
+    let res = shamir::split_secret::<Scalar, [u8; 1], u8, [u8; 58]>(2, 3, sc.into(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = combine_shares(&shares);
     assert!(res.is_ok());
-    let scalar: WrappedScalar = res.unwrap();
-    assert_eq!(scalar.0, sc);
-    let sk2 = StaticSecret::from(scalar.0.to_bytes());
-    let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
-    assert_eq!(sk2.to_bytes(), sk1.to_bytes());
-    assert_eq!(ske1.to_bytes(), ske2.to_bytes());
+    let scalar: Scalar = res.unwrap();
+    assert_eq!(scalar, sc);
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -63,8 +62,11 @@ fn pedersen_verifier_serde_test() {
     use rand::Rng;
 
     let mut osrng = rand::rngs::OsRng::default();
-    let sk = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
-    let res = pedersen::split_secret::<WrappedEdwards, [u8; 1], u8, [u8; 33]>(
+    let sk = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
+        &osrng.gen::<[u8; 32]>(),
+        b"edwards_XMD:SHA-512_ELL2_RO_",
+    );
+    let res = pedersen::split_secret::<EdwardsPoint, [u8; 1], u8, [u8; 58]>(
         2,
         3,
         sk.into(),
@@ -90,7 +92,7 @@ fn pedersen_verifier_serde_test() {
     let res = serde_json::to_string(&pedersen_verifier_set);
     assert!(res.is_ok());
     let v_str = res.unwrap();
-    let res = serde_json::from_str::<Vec<WrappedEdwards>>(&v_str);
+    let res = serde_json::from_str::<Vec<EdwardsPoint>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(
@@ -101,7 +103,7 @@ fn pedersen_verifier_serde_test() {
     let res = serde_bare::to_vec(&pedersen_verifier_set);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res = serde_bare::from_slice::<Vec<WrappedEdwards>>(&v_bytes);
+    let res = serde_bare::from_slice::<Vec<EdwardsPoint>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(

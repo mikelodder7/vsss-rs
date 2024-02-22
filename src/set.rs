@@ -11,12 +11,17 @@ use elliptic_curve::{
 };
 
 /// Represents a readable data store for secret shares
-pub trait ReadableShareSet<I: ShareIdentifier, S: Share<Identifier = I>>: AsRef<[S]> {
+pub trait ReadableShareSet<
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+>: AsRef<[S]>
+{
     /// Convert the given shares into a field element
     fn combine_to_field_element<F, C>(&self) -> VsssResult<F>
     where
         F: PrimeField,
-        C: ShareSetCombiner<I, S, F, F>,
+        C: ShareSetCombiner<B, I, S, F, F>,
     {
         C::combine(self.as_ref(), |s| s.as_field_element())
     }
@@ -25,26 +30,37 @@ pub trait ReadableShareSet<I: ShareIdentifier, S: Share<Identifier = I>>: AsRef<
     fn combine_to_group_element<G, C>(&self) -> VsssResult<G>
     where
         G: Group + GroupEncoding + Default,
-        C: ShareSetCombiner<I, S, G::Scalar, G>,
+        C: ShareSetCombiner<B, I, S, G::Scalar, G>,
     {
         C::combine(self.as_ref(), |s| s.as_group_element())
     }
 }
 
 /// Represents a data store for secret shares
-pub trait WriteableShareSet<I: ShareIdentifier, S: Share<Identifier = I>>:
-    ReadableShareSet<I, S> + AsMut<[S]>
+pub trait WriteableShareSet<
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+>: ReadableShareSet<B, I, S> + AsMut<[S]>
 {
     /// Create a new share set
     fn create(size_hint: usize) -> Self;
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>, B: AsRef<[S]>> ReadableShareSet<I, S> for B {}
+impl<
+        BB: AsRef<[u8]> + AsMut<[u8]>,
+        I: ShareIdentifier<ByteRepr = BB>,
+        S: Share<Identifier = I>,
+        B: AsRef<[S]>,
+    > ReadableShareSet<BB, I, S> for B
+{
+}
 
 /// A data store for reconstructing secret shares
-pub trait ShareSetCombiner<I, S, F, G>: Sized + AsRef<[(F, G)]> + AsMut<[(F, G)]>
+pub trait ShareSetCombiner<B, I, S, F, G>: Sized + AsRef<[(F, G)]> + AsMut<[(F, G)]>
 where
-    I: ShareIdentifier,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
     S: Share<Identifier = I>,
     F: PrimeField,
     G: Default + Copy + core::ops::AddAssign + core::ops::Mul<F, Output = G>,
@@ -54,9 +70,9 @@ where
 
     /// Combine the secret shares into a single secret
     /// using Lagrange interpolation
-    fn combine<B, M>(shares: B, mut m: M) -> VsssResult<G>
+    fn combine<BB, M>(shares: BB, mut m: M) -> VsssResult<G>
     where
-        B: AsRef<[S]>,
+        BB: AsRef<[S]>,
         M: FnMut(&S) -> VsssResult<G>,
     {
         let shares = shares.as_ref();
@@ -115,18 +131,19 @@ where
 macro_rules! impl_ga_set {
     ($($size:ident => $num:expr),+$(,)*) => {
         $(
-            impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for GenericArray<S, typenum::$size> {
+            impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>> WriteableShareSet<B, I, S> for GenericArray<S, typenum::$size> {
                fn create(size_hint: usize) -> Self {
-                   GenericArray::from(<[S; $num] as WriteableShareSet<I, S>>::create(size_hint))
+                   GenericArray::from(<[S; $num] as WriteableShareSet<B, I, S>>::create(size_hint))
                }
            }
 
             impl<
-                I: ShareIdentifier,
+                B: AsRef<[u8]> + AsMut<[u8]>,
+                I: ShareIdentifier<ByteRepr = B>,
                 S: Share<Identifier = I>,
                 F: PrimeField,
                 G: Default + Copy + core::ops::AddAssign + core::ops::Mul<F, Output = G>
-            > ShareSetCombiner<I, S, F, G> for GenericArray<(F, G), typenum::$size> {
+            > ShareSetCombiner<B, I, S, F, G> for GenericArray<(F, G), typenum::$size> {
                 fn create(_size_hint: usize) -> Self {
                                            Self::from([(F::default(), G::default()); $num])
                                            }
@@ -174,7 +191,9 @@ impl_ga_set!(
     U59 => 59, U60 => 60, U61 => 61, U62 => 62, U63 => 63, U64 => 64,
 );
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 2] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 2]
+{
     fn create(_size_hint: usize) -> Self {
         [
             S::empty_share_with_capacity(0),
@@ -183,7 +202,9 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 3] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 3]
+{
     fn create(_size_hint: usize) -> Self {
         [
             S::empty_share_with_capacity(0),
@@ -193,7 +214,9 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 4] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 4]
+{
     fn create(_size_hint: usize) -> Self {
         [
             S::empty_share_with_capacity(0),
@@ -204,22 +227,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 5] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 5]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-        ]
-    }
-}
-
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 6] {
-    fn create(_size_hint: usize) -> Self {
-        [
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -229,25 +241,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 7] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 6]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
-        ]
-    }
-}
-
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 8] {
-    fn create(_size_hint: usize) -> Self {
-        [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -258,11 +256,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 9] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 7]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -274,11 +272,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 10] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 8]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -291,11 +289,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 11] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 9]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -309,11 +307,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 12] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 10]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -328,11 +326,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 13] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 11]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -348,11 +346,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 14] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 12]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -369,11 +367,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 15] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 13]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -391,11 +389,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 16] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 14]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -414,11 +412,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 17] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 15]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -438,11 +436,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 18] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 16]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -463,11 +461,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 19] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 17]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -489,11 +487,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 20] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 18]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -516,11 +514,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 21] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 19]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -544,11 +542,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 22] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 20]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -573,11 +571,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 23] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 21]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -603,11 +601,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 24] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 22]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -634,11 +632,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 25] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 23]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -666,11 +664,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 26] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 24]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -699,11 +697,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 27] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 25]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -733,11 +731,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 28] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 26]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -768,11 +766,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 29] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 27]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -804,11 +802,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 30] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 28]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -841,11 +839,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 31] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 29]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -879,11 +877,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 32] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 30]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -918,11 +916,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 33] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 31]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -958,11 +956,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 34] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 32]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -999,11 +997,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 35] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 33]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1041,11 +1039,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 36] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 34]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1084,11 +1082,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 37] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 35]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1128,11 +1126,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 38] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 36]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1173,11 +1171,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 39] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 37]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1219,11 +1217,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 40] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 38]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1266,11 +1264,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 41] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 39]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1314,11 +1312,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 42] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 40]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1363,11 +1361,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 43] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 41]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1413,11 +1411,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 44] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 42]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1464,11 +1462,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 45] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 43]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1516,11 +1514,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 46] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 44]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1569,11 +1567,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 47] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 45]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1623,11 +1621,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 48] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 46]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1678,11 +1676,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 49] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 47]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1734,11 +1732,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 50] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 48]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1791,11 +1789,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 51] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 49]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1849,11 +1847,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 52] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 50]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1908,11 +1906,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 53] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 51]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -1968,11 +1966,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 54] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 52]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2029,11 +2027,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 55] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 53]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2091,11 +2089,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 56] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 54]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2154,11 +2152,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 57] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 55]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2218,11 +2216,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 58] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 56]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2283,11 +2281,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 59] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 57]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2349,11 +2347,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 60] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 58]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2416,11 +2414,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 61] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 59]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2484,11 +2482,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 62] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 60]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2553,11 +2551,11 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 63] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 61]
+{
     fn create(_size_hint: usize) -> Self {
         [
-            S::empty_share_with_capacity(0),
-            S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
             S::empty_share_with_capacity(0),
@@ -2623,7 +2621,152 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
     }
 }
 
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [S; 64] {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 62]
+{
+    fn create(_size_hint: usize) -> Self {
+        [
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+        ]
+    }
+}
+
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 63]
+{
+    fn create(_size_hint: usize) -> Self {
+        [
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+            S::empty_share_with_capacity(0),
+        ]
+    }
+}
+
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for [S; 64]
+{
     fn create(_size_hint: usize) -> Self {
         [
             S::empty_share_with_capacity(0),
@@ -2695,7 +2838,9 @@ impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for [
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<I: ShareIdentifier, S: Share<Identifier = I>> WriteableShareSet<I, S> for Vec<S> {
+impl<B: AsRef<[u8]> + AsMut<[u8]>, I: ShareIdentifier<ByteRepr = B>, S: Share<Identifier = I>>
+    WriteableShareSet<B, I, S> for Vec<S>
+{
     fn create(size_hint: usize) -> Self {
         vec![S::empty_share_with_capacity(0); size_hint]
     }
@@ -2705,11 +2850,12 @@ macro_rules! impl_share_set_combiner_for_arr {
     ($($num:expr),+$(,)*) => {
         $(
             impl<
-                I: ShareIdentifier,
+                B: AsRef<[u8]> + AsMut<[u8]>,
+                I: ShareIdentifier<ByteRepr = B>,
                 S: Share<Identifier = I>,
                 F: PrimeField,
                 G: Default + Copy + core::ops::AddAssign + core::ops::Mul<F, Output = G>
-            > ShareSetCombiner<I, S, F, G> for [(F, G); $num] {
+            > ShareSetCombiner<B, I, S, F, G> for [(F, G); $num] {
                 fn create(_size_hint: usize) -> Self {
                     [(F::default(), G::default()); $num]
                 }
@@ -2726,11 +2872,12 @@ impl_share_set_combiner_for_arr!(
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<
-        I: ShareIdentifier,
+        B: AsRef<[u8]> + AsMut<[u8]>,
+        I: ShareIdentifier<ByteRepr = B>,
         S: Share<Identifier = I>,
         F: PrimeField,
         G: Default + Copy + core::ops::AddAssign + core::ops::Mul<F, Output = G>,
-    > ShareSetCombiner<I, S, F, G> for Vec<(F, G)>
+    > ShareSetCombiner<B, I, S, F, G> for Vec<(F, G)>
 {
     fn create(size_hint: usize) -> Self {
         vec![(F::default(), G::default()); size_hint]
@@ -2777,7 +2924,11 @@ pub trait FeldmanVerifierSet<G: Group>: Sized {
     fn verifiers_mut(&mut self) -> &mut [G];
 
     /// Verify a share with this set
-    fn verify_share<I: ShareIdentifier, S: Share<Identifier = I>>(
+    fn verify_share<
+        B: AsRef<[u8]> + AsMut<[u8]>,
+        I: ShareIdentifier<ByteRepr = B>,
+        S: Share<Identifier = I>,
+    >(
         &self,
         share: &S,
     ) -> VsssResult<()> {
@@ -2860,7 +3011,11 @@ pub trait PedersenVerifierSet<G: Group>: Sized {
     fn blind_verifiers_mut(&mut self) -> &mut [G];
 
     /// Verify a share and blinder with this set
-    fn verify_share_and_blinder<I: ShareIdentifier, S: Share<Identifier = I>>(
+    fn verify_share_and_blinder<
+        B: AsRef<[u8]> + AsMut<[u8]>,
+        I: ShareIdentifier<ByteRepr = B>,
+        S: Share<Identifier = I>,
+    >(
         &self,
         share: &S,
         blinder: &S,

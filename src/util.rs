@@ -103,6 +103,13 @@ impl CtIsZero for i128 {
     }
 }
 
+impl CtIsZero for usize {
+    fn ct_is_zero(&self) -> subtle::Choice {
+        let t = *self as isize;
+        subtle::Choice::from((((t | -t) >> (usize::BITS - 1)) + 1) as u8)
+    }
+}
+
 impl CtIsNotZero for &[u8] {
     fn ct_is_not_zero(&self) -> subtle::Choice {
         let mut t = 0i8;
@@ -192,5 +199,12 @@ impl CtIsNotZero for i128 {
     fn ct_is_not_zero(&self) -> subtle::Choice {
         let t = *self;
         subtle::Choice::from(-((t | -t) >> 127) as u8)
+    }
+}
+
+impl CtIsNotZero for usize {
+    fn ct_is_not_zero(&self) -> subtle::Choice {
+        let t = *self as isize;
+        subtle::Choice::from(-((t | -t) >> (usize::BITS - 1)) as u8)
     }
 }

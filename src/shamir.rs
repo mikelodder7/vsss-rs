@@ -12,16 +12,17 @@ use elliptic_curve::{
 use rand_core::{CryptoRng, RngCore};
 
 /// A Polynomial that can create secret shares
-pub trait Shamir<F, I, S>
+pub trait Shamir<F, B, I, S>
 where
     F: PrimeField,
-    I: ShareIdentifier,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
     S: Share<Identifier = I>,
 {
     /// The polynomial for the coefficients
     type InnerPolynomial: Polynomial<F>;
     /// The set of secret shares
-    type ShareSet: WriteableShareSet<I, S>;
+    type ShareSet: WriteableShareSet<B, I, S>;
 
     /// Create shares from a secret.
     /// `F` is the prime field
@@ -58,7 +59,7 @@ where
 }
 
 /// Create the shares for the specified polynomial
-pub(crate) fn create_shares<F, P, I, S, SS>(
+pub(crate) fn create_shares<F, P, B, I, S, SS>(
     polynomial: &P,
     threshold: usize,
     limit: usize,
@@ -66,9 +67,10 @@ pub(crate) fn create_shares<F, P, I, S, SS>(
 where
     F: PrimeField,
     P: Polynomial<F>,
-    I: ShareIdentifier,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
     S: Share<Identifier = I>,
-    SS: WriteableShareSet<I, S>,
+    SS: WriteableShareSet<B, I, S>,
 {
     // Generate the shares of (x, y) coordinates
     // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
@@ -100,17 +102,19 @@ macro_rules! shamir_impl {
     ($($size:ident => $num:expr),+$(,)*) => {
         $(
             impl<F: PrimeField,
-                 I: ShareIdentifier,
+                 B: AsRef<[u8]> + AsMut<[u8]>,
+                 I: ShareIdentifier<ByteRepr = B>,
                  S: Share<Identifier = I>,
-            > Shamir<F, I, S> for [S; $num] {
+            > Shamir<F, B, I, S> for [S; $num] {
                 type InnerPolynomial = [F; $num];
                 type ShareSet = [S; $num];
             }
 
             impl<F: PrimeField,
-                 I: ShareIdentifier,
+                 B: AsRef<[u8]> + AsMut<[u8]>,
+                 I: ShareIdentifier<ByteRepr = B>,
                  S: Share<Identifier = I>,
-            > Shamir<F, I, S> for GenericArray<F, typenum::$size> {
+            > Shamir<F, B, I, S> for GenericArray<F, typenum::$size> {
                 type InnerPolynomial = GenericArray<F, typenum::$size>;
                 type ShareSet = GenericArray<S, typenum::$size>;
             }
@@ -158,14 +162,25 @@ shamir_impl!(
 );
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<F: PrimeField, I: ShareIdentifier, S: Share<Identifier = I>> Shamir<F, I, S> for Vec<F> {
+impl<
+        F: PrimeField,
+        B: AsRef<[u8]> + AsMut<[u8]>,
+        I: ShareIdentifier<ByteRepr = B>,
+        S: Share<Identifier = I>,
+    > Shamir<F, B, I, S> for Vec<F>
+{
     type InnerPolynomial = Vec<F>;
     type ShareSet = Vec<S>;
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret.
-pub fn split_secret<F: PrimeField, I: ShareIdentifier, S: Share<Identifier = I>>(
+pub fn split_secret<
+    F: PrimeField,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+>(
     threshold: usize,
     limit: usize,
     secret: F,
@@ -175,13 +190,22 @@ pub fn split_secret<F: PrimeField, I: ShareIdentifier, S: Share<Identifier = I>>
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-struct StdVsssShamir<F: PrimeField, I: ShareIdentifier, S: Share<Identifier = I>> {
+struct StdVsssShamir<
+    F: PrimeField,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+> {
     _marker: (core::marker::PhantomData<F>, core::marker::PhantomData<S>),
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<F: PrimeField, I: ShareIdentifier, S: Share<Identifier = I>> Shamir<F, I, S>
-    for StdVsssShamir<F, I, S>
+impl<
+        F: PrimeField,
+        B: AsRef<[u8]> + AsMut<[u8]>,
+        I: ShareIdentifier<ByteRepr = B>,
+        S: Share<Identifier = I>,
+    > Shamir<F, B, I, S> for StdVsssShamir<F, B, I, S>
 {
     type InnerPolynomial = Vec<F>;
     type ShareSet = Vec<S>;
