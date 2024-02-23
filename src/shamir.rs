@@ -67,20 +67,6 @@ where
             .for_each(|c| *c = F::ZERO);
         Ok(ss)
     }
-
-    // /// Create a share generator from a secret.
-    // fn split_secret_generator(
-    //     threshold: usize,
-    //     secret: F,
-    //     rng: impl RngCore + CryptoRng,
-    // ) -> VsssResult<SequentialNumberShareGenerator<F, Self::InnerPolynomial, I, S>> {
-    //     if threshold < 2 {
-    //         return Err(Error::SharingMinThreshold);
-    //     }
-    //     let mut polynomial = Self::InnerPolynomial::create(threshold);
-    //     polynomial.fill(secret, rng, threshold)?;
-    //     Ok(SequentialNumberShareGenerator::new(threshold, polynomial))
-    // }
 }
 
 pub(crate) fn create_shares_with_participant_generator<F, P, B, I, S, SS, PP>(

@@ -9,6 +9,7 @@ use sha3::{
     digest::{Update, XofReader},
     Shake256,
 };
+use std::num::{NonZeroU64, NonZeroUsize};
 
 /// A trait for generating participant numbers
 pub trait ParticipantNumberGenerator<F: PrimeField>: Iterator<Item = F> {
@@ -19,7 +20,9 @@ pub trait ParticipantNumberGenerator<F: PrimeField>: Iterator<Item = F> {
 #[derive(Debug, Clone)]
 /// A generator that can create any number of secret shares
 pub struct SequentialParticipantNumberGenerator<F: PrimeField> {
-    index: u64,
+    index: usize,
+    start: u64,
+    increment: u64,
     limit: usize,
     _markers: PhantomData<F>,
 }
@@ -28,26 +31,34 @@ impl<F: PrimeField> Iterator for SequentialParticipantNumberGenerator<F> {
     type Item = F;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.limit as u64 {
+        if self.index >= self.limit {
             return None;
         }
+        let f = self.get_participant_id(self.index);
         self.index += 1;
-        Some(F::from(self.index))
+        Some(f)
     }
 }
 
 impl<F: PrimeField> ParticipantNumberGenerator<F> for SequentialParticipantNumberGenerator<F> {
     fn get_participant_id(&self, index: usize) -> F {
-        F::from((index + 1) as u64)
+        let index = index as u64;
+        F::from(index * self.increment + self.start)
     }
 }
 
 impl<F: PrimeField> SequentialParticipantNumberGenerator<F> {
     /// Create a new set generator
-    pub fn new(limit: usize) -> Self {
+    pub fn new(
+        start: Option<NonZeroU64>,
+        increment: Option<NonZeroU64>,
+        limit: NonZeroUsize,
+    ) -> Self {
         Self {
+            start: start.map(|s| s.get()).unwrap_or(1),
+            increment: increment.map(|s| s.get()).unwrap_or(1),
             index: 0,
-            limit,
+            limit: limit.get(),
             _markers: PhantomData,
         }
     }
@@ -83,13 +94,13 @@ impl<F: PrimeField> ParticipantNumberGenerator<F> for RandomParticipantNumberGen
 
 impl<F: PrimeField> RandomParticipantNumberGenerator<F> {
     /// Create a new random participant number generator
-    pub fn new(limit: usize, mut rng: impl RngCore + CryptoRng) -> Self {
+    pub fn new(limit: NonZeroUsize, mut rng: impl RngCore + CryptoRng) -> Self {
         let mut dst = [0u8; 32];
         rng.fill_bytes(&mut dst);
         Self {
             dst,
             index: 0,
-            limit,
+            limit: limit.get(),
             _markers: PhantomData,
         }
     }
@@ -174,7 +185,7 @@ impl<'a, F: PrimeField> ParticipantNumberGenerator<F>
 
 impl<'a, F: PrimeField> ListAndRandomParticipantNumberGenerator<'a, F> {
     /// Create a new list and random generator
-    pub fn new(list: &'a [F], limit: usize, rng: impl RngCore + CryptoRng) -> Self {
+    pub fn new(list: &'a [F], limit: NonZeroUsize, rng: impl RngCore + CryptoRng) -> Self {
         let mut rng = RandomParticipantNumberGenerator::new(limit, rng);
         rng.index = list.len();
         Self {
@@ -186,7 +197,7 @@ impl<'a, F: PrimeField> ListAndRandomParticipantNumberGenerator<'a, F> {
 
 #[derive(Debug, Clone)]
 /// A generator that creates participant identifiers from a known list and then sequential numbers
-/// after the list is exhausted
+/// after the list is exhausted.
 pub struct ListAndSequentialParticipantNumberGenerator<'a, F: PrimeField> {
     list: ListParticipantNumberGenerator<'a, F>,
     seq: SequentialParticipantNumberGenerator<F>,
@@ -217,12 +228,15 @@ impl<'a, F: PrimeField> ParticipantNumberGenerator<F>
 
 impl<'a, F: PrimeField> ListAndSequentialParticipantNumberGenerator<'a, F> {
     /// Create a new list and sequential generator
-    pub fn new(list: &'a [F], limit: usize) -> Self {
-        let mut seq = SequentialParticipantNumberGenerator::new(limit);
-        seq.index = list.len() as u64;
+    pub fn new(
+        list: &'a [F],
+        start: Option<NonZeroU64>,
+        end: Option<NonZeroU64>,
+        limit: NonZeroUsize,
+    ) -> Self {
         Self {
             list: ListParticipantNumberGenerator::new(list),
-            seq,
+            seq: SequentialParticipantNumberGenerator::new(start, end, limit),
         }
     }
 }
@@ -271,7 +285,11 @@ mod tests {
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn test_sequential_participant_number_generator() {
-        let gen = SequentialParticipantNumberGenerator::<Scalar>::new(5);
+        let gen = SequentialParticipantNumberGenerator::<Scalar>::new(
+            None,
+            None,
+            NonZeroUsize::new(5).unwrap(),
+        );
         let list: Vec<_> = gen.collect();
         assert_eq!(list.len(), 5);
         assert_eq!(list[0], Scalar::from(1u64));
@@ -285,7 +303,10 @@ mod tests {
     #[test]
     fn test_random_participant_number_generator() {
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([1u8; 32]);
-        let gen = RandomParticipantNumberGenerator::<Scalar>::new(5, &mut rng);
+        let gen = RandomParticipantNumberGenerator::<Scalar>::new(
+            NonZeroUsize::new(5).unwrap(),
+            &mut rng,
+        );
         let list: Vec<_> = gen.collect();
         assert_eq!(list.len(), 5);
         let mut repr = FieldBytes::default();
@@ -334,7 +355,12 @@ mod tests {
             Scalar::from(40u64),
             Scalar::from(50u64),
         ];
-        let gen = ListAndSequentialParticipantNumberGenerator::new(&list, 10);
+        let gen = ListAndSequentialParticipantNumberGenerator::new(
+            &list,
+            Some(NonZeroU64::new(51).unwrap()),
+            None,
+            NonZeroUsize::new(5).unwrap(),
+        );
         let list: Vec<_> = gen.collect();
         assert_eq!(list.len(), 10);
         assert_eq!(list[0], Scalar::from(10u64));
@@ -342,11 +368,11 @@ mod tests {
         assert_eq!(list[2], Scalar::from(30u64));
         assert_eq!(list[3], Scalar::from(40u64));
         assert_eq!(list[4], Scalar::from(50u64));
-        assert_eq!(list[5], Scalar::from(6u64));
-        assert_eq!(list[6], Scalar::from(7u64));
-        assert_eq!(list[7], Scalar::from(8u64));
-        assert_eq!(list[8], Scalar::from(9u64));
-        assert_eq!(list[9], Scalar::from(10u64));
+        assert_eq!(list[5], Scalar::from(51u64));
+        assert_eq!(list[6], Scalar::from(52u64));
+        assert_eq!(list[7], Scalar::from(53u64));
+        assert_eq!(list[8], Scalar::from(54u64));
+        assert_eq!(list[9], Scalar::from(55u64));
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -360,7 +386,11 @@ mod tests {
             Scalar::from(50u64),
         ];
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([1u8; 32]);
-        let gen = ListAndRandomParticipantNumberGenerator::new(&list, 10, &mut rng);
+        let gen = ListAndRandomParticipantNumberGenerator::new(
+            &list,
+            NonZeroUsize::new(10).unwrap(),
+            &mut rng,
+        );
         let list: Vec<_> = gen.collect();
         assert_eq!(list.len(), 10);
         assert_eq!(list[0], Scalar::from(10u64));
