@@ -20,7 +20,6 @@ use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
-    traits::{Identity, IsIdentity},
 };
 use elliptic_curve::{
     ff::{helpers, Field, PrimeField},
@@ -44,7 +43,7 @@ impl Group for WrappedRistretto {
     }
 
     fn identity() -> Self {
-        Self(RistrettoPoint::identity())
+        Self(RistrettoPoint::default())
     }
 
     fn generator() -> Self {
@@ -52,7 +51,7 @@ impl Group for WrappedRistretto {
     }
 
     fn is_identity(&self) -> Choice {
-        Choice::from(u8::from(self.0.is_identity()))
+        Group::is_identity(&self.0)
     }
 
     fn double(&self) -> Self {
@@ -249,7 +248,7 @@ impl GroupEncoding for WrappedRistretto {
     fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
         let p = CompressedRistretto(*bytes);
         match p.decompress() {
-            None => CtOption::new(Self(RistrettoPoint::identity()), Choice::from(0u8)),
+            None => CtOption::new(Self(RistrettoPoint::default()), Choice::from(0u8)),
             Some(rp) => CtOption::new(Self(rp), Choice::from(1u8)),
         }
     }
@@ -265,7 +264,7 @@ impl GroupEncoding for WrappedRistretto {
 
 impl Default for WrappedRistretto {
     fn default() -> Self {
-        Self(RistrettoPoint::identity())
+        Self(RistrettoPoint::default())
     }
 }
 
@@ -363,7 +362,7 @@ impl Group for WrappedEdwards {
     }
 
     fn identity() -> Self {
-        Self(EdwardsPoint::identity())
+        Self(EdwardsPoint::default())
     }
 
     fn generator() -> Self {
@@ -371,7 +370,7 @@ impl Group for WrappedEdwards {
     }
 
     fn is_identity(&self) -> Choice {
-        Choice::from(u8::from(self.0.is_identity()))
+        Group::is_identity(&self.0)
     }
 
     fn double(&self) -> Self {
@@ -568,7 +567,7 @@ impl GroupEncoding for WrappedEdwards {
     fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
         let p = CompressedEdwardsY(*bytes);
         match p.decompress() {
-            None => CtOption::new(Self(EdwardsPoint::identity()), Choice::from(0u8)),
+            None => CtOption::new(Self(EdwardsPoint::default()), Choice::from(0u8)),
             Some(rp) => CtOption::new(Self(rp), Choice::from(1u8)),
         }
     }
@@ -584,7 +583,7 @@ impl GroupEncoding for WrappedEdwards {
 
 impl Default for WrappedEdwards {
     fn default() -> Self {
-        Self(EdwardsPoint::identity())
+        Self(EdwardsPoint::default())
     }
 }
 
@@ -971,7 +970,10 @@ impl<'de> Deserialize<'de> for WrappedScalar {
         D: Deserializer<'de>,
     {
         let bytes = deserialize_arr(deserializer)?;
-        Ok(WrappedScalar(Scalar::from_bits(bytes)))
+        let sc = Option::from(Scalar::from_canonical_bytes(bytes)).ok_or_else(|| {
+            de::Error::custom("failed to deserialize Scalar from canonical bytes")
+        })?;
+        Ok(WrappedScalar(sc))
     }
 }
 
@@ -1063,7 +1065,7 @@ fn deserialize_arr<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error
 fn ristretto_to_edwards() {
     use rand::Rng;
 
-    let sk = Scalar::from_bits(rand_core::OsRng.gen::<[u8; 32]>());
+    let sk = Scalar::from_bytes_mod_order(rand_core::OsRng.gen::<[u8; 32]>());
     let pk = RISTRETTO_BASEPOINT_POINT * sk;
     let ek = WrappedEdwards::from(WrappedRistretto(pk));
     assert!(ek.0.is_torsion_free());
