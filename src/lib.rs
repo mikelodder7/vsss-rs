@@ -164,6 +164,7 @@ pub(crate) mod tests;
 
 mod error;
 pub mod feldman;
+mod numbering;
 pub mod pedersen;
 mod polynomial;
 mod set;
@@ -177,6 +178,7 @@ use util::*;
 
 pub use error::*;
 pub use feldman::Feldman;
+pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;
 pub use set::*;

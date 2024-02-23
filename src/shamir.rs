@@ -43,19 +43,74 @@ where
         Ok(ss)
     }
 
-    /// Create a share generator from a secret.
-    fn split_secret_generator(
+    /// Create shares from a secret and a participant number generator.
+    /// `F` is the prime field
+    fn split_secret_with_participant_generator<P: ParticipantNumberGenerator<F>>(
         threshold: usize,
+        limit: usize,
         secret: F,
         rng: impl RngCore + CryptoRng,
-    ) -> VsssResult<SecretShareGenerator<F, Self::InnerPolynomial, I, S>> {
-        if threshold < 2 {
-            return Err(Error::SharingMinThreshold);
-        }
+        participant_generator: P,
+    ) -> VsssResult<Self::ShareSet> {
+        check_params(threshold, limit)?;
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
-        Ok(SecretShareGenerator::new(threshold, polynomial))
+        let ss = create_shares_with_participant_generator(
+            &polynomial,
+            threshold,
+            limit,
+            &participant_generator,
+        )?;
+        polynomial
+            .coefficients_mut()
+            .iter_mut()
+            .for_each(|c| *c = F::ZERO);
+        Ok(ss)
     }
+
+    // /// Create a share generator from a secret.
+    // fn split_secret_generator(
+    //     threshold: usize,
+    //     secret: F,
+    //     rng: impl RngCore + CryptoRng,
+    // ) -> VsssResult<SequentialNumberShareGenerator<F, Self::InnerPolynomial, I, S>> {
+    //     if threshold < 2 {
+    //         return Err(Error::SharingMinThreshold);
+    //     }
+    //     let mut polynomial = Self::InnerPolynomial::create(threshold);
+    //     polynomial.fill(secret, rng, threshold)?;
+    //     Ok(SequentialNumberShareGenerator::new(threshold, polynomial))
+    // }
+}
+
+pub(crate) fn create_shares_with_participant_generator<F, P, B, I, S, SS, PP>(
+    polynomial: &P,
+    threshold: usize,
+    limit: usize,
+    participant_generator: &PP,
+) -> VsssResult<SS>
+where
+    F: PrimeField,
+    P: Polynomial<F>,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+    SS: WriteableShareSet<B, I, S>,
+    PP: ParticipantNumberGenerator<F>,
+{
+    // Generate the shares of (x, y) coordinates
+    // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
+    let mut shares = SS::create(limit);
+    let indexer = shares.as_mut();
+
+    for (i, s) in indexer.iter_mut().enumerate().take(limit) {
+        let x = participant_generator.get_participant_id(i);
+        let y = polynomial.evaluate(x, threshold);
+        let id = I::from_field_element(x)?;
+        let share = S::from_field_element(id, y)?;
+        *s = share;
+    }
+    Ok(shares)
 }
 
 /// Create the shares for the specified polynomial
@@ -187,6 +242,31 @@ pub fn split_secret<
     rng: impl RngCore + CryptoRng,
 ) -> VsssResult<Vec<S>> {
     StdVsssShamir::split_secret(threshold, limit, secret, rng)
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret and a participant number generator.
+pub fn split_secret_with_participant_generator<F, B, I, S, P>(
+    threshold: usize,
+    limit: usize,
+    secret: F,
+    rng: impl RngCore + CryptoRng,
+    participant_generator: P,
+) -> VsssResult<Vec<S>>
+where
+    F: PrimeField,
+    B: AsRef<[u8]> + AsMut<[u8]>,
+    I: ShareIdentifier<ByteRepr = B>,
+    S: Share<Identifier = I>,
+    P: ParticipantNumberGenerator<F>,
+{
+    StdVsssShamir::split_secret_with_participant_generator(
+        threshold,
+        limit,
+        secret,
+        rng,
+        participant_generator,
+    )
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]

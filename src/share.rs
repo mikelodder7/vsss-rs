@@ -4,13 +4,41 @@
 */
 
 use crate::*;
-use core::hash::Hash;
 use elliptic_curve::{
     ff::PrimeField,
     generic_array::{typenum, GenericArray},
     group::GroupEncoding,
 };
 use zeroize::Zeroize;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// A value used to represent the prime field.
+/// When used with ShareIdentifier, ideally the field elements should be the same
+/// as the prime field used in the secret sharing scheme.
+pub struct PrimeFieldImpl<F: PrimeField>(pub F);
+
+impl<F: PrimeField> core::hash::Hash for PrimeFieldImpl<F> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.to_repr().as_ref().hash(state);
+    }
+}
+
+impl<F: PrimeField> PartialOrd for PrimeFieldImpl<F> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<F: PrimeField> Ord for PrimeFieldImpl<F> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.to_repr().as_ref().cmp(other.0.to_repr().as_ref())
+    }
+}
+
+impl<F: PrimeField> Zeroize for PrimeFieldImpl<F> {
+    fn zeroize(&mut self) {
+        self.0 = F::ZERO;
+    }
+}
 
 /// A value used to represent the identifier for secret shares
 pub trait ShareIdentifier: Sized + Eq {
@@ -330,8 +358,38 @@ impl ShareIdentifier for Vec<u8> {
     }
 }
 
+impl<F: PrimeField> ShareIdentifier for PrimeFieldImpl<F> {
+    type ByteRepr = F::Repr;
+
+    fn from_field_element<FF: PrimeField>(element: FF) -> VsssResult<Self> {
+        let mut repr = F::Repr::default();
+        repr.as_mut().copy_from_slice(element.to_repr().as_ref());
+        Self::from_repr(repr)
+    }
+
+    fn as_field_element<FF: PrimeField>(&self) -> VsssResult<FF> {
+        let mut repr = FF::Repr::default();
+        repr.as_mut().copy_from_slice(self.0.to_repr().as_ref());
+        Option::<FF>::from(FF::from_repr(repr)).ok_or(Error::InvalidShareConversion)
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.0.is_zero()
+    }
+
+    fn to_repr(&self) -> Self::ByteRepr {
+        self.0.to_repr()
+    }
+
+    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
+        Ok(PrimeFieldImpl(
+            Option::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)?,
+        ))
+    }
+}
+
 /// The methods necessary for a secret share
-pub trait Share: Sized + Clone + Eq + Hash + Ord + Zeroize {
+pub trait Share: Sized + Clone + Eq + core::hash::Hash + Ord + Zeroize {
     /// The identifier type
     type Identifier: ShareIdentifier;
 

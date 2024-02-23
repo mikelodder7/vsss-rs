@@ -8,6 +8,7 @@
 //! Pedersen returns both Pedersen verifiers and Feldman verifiers for the purpose
 //! that both may be needed for other protocols like Gennaro's DKG. Otherwise,
 //! the Feldman verifiers may be discarded.
+use crate::shamir::create_shares_with_participant_generator;
 use crate::*;
 use elliptic_curve::{ff::Field, group::Group};
 use rand_core::{CryptoRng, RngCore};
@@ -88,6 +89,85 @@ where
         }
         let secret_shares = create_shares(&secret_polynomial, threshold, limit)?;
         let blinder_shares = create_shares(&blinder_polynomial, threshold, limit)?;
+        secret_polynomial
+            .coefficients_mut()
+            .iter_mut()
+            .take(threshold)
+            .for_each(|s| *s = G::Scalar::ZERO);
+        Ok(Self::PedersenResult::new(
+            blinder,
+            secret_shares,
+            blinder_shares,
+            feldman_verifier_set,
+            pedersen_verifier_set,
+        ))
+    }
+
+    /// Create shares from a secret and a participant number generator.
+    /// `blinder` is the blinding factor.
+    /// If [`None`], a random value is generated in G::Scalar.
+    /// `secret_generator` is the generator point to use for shares.
+    /// If [`None`], the default generator is used.
+    /// `blinder_generator` is the generator point to use for blinder shares.
+    /// If [`None`], a random generator is used
+    ///
+    /// Returns the secret shares, blinder, blinder shares, and the verifiers
+    fn split_secret_with_participant_generator_and_blind_verifiers<
+        P: ParticipantNumberGenerator<G::Scalar>,
+    >(
+        threshold: usize,
+        limit: usize,
+        secret: G::Scalar,
+        blinder: Option<G::Scalar>,
+        secret_generator: Option<G>,
+        blinder_generator: Option<G>,
+        mut rng: impl RngCore + CryptoRng,
+        participant_generator: P,
+    ) -> VsssResult<Self::PedersenResult> {
+        check_params(threshold, limit)?;
+        let g = secret_generator.unwrap_or_else(G::generator);
+        let h = blinder_generator.unwrap_or_else(|| G::random(&mut rng));
+        if (g.is_identity() | h.is_identity()).into() {
+            return Err(Error::InvalidGenerator);
+        }
+        let blinder = blinder.unwrap_or_else(|| G::Scalar::random(&mut rng));
+
+        let mut secret_polynomial = Self::InnerPolynomial::create(threshold);
+        let mut blinder_polynomial = Self::InnerPolynomial::create(threshold);
+        secret_polynomial.fill(secret, &mut rng, threshold)?;
+        blinder_polynomial.fill(blinder, &mut rng, threshold)?;
+
+        let mut feldman_verifier_set =
+            Self::FeldmanVerifierSet::empty_feldman_set_with_capacity(threshold, g);
+        let mut pedersen_verifier_set =
+            Self::PedersenVerifierSet::empty_pedersen_set_with_capacity(threshold, g, h);
+        // Generate the verifiable commitments to the polynomial for the shares
+        // Each share is multiple of the polynomial and the specified generator point.
+        // {g^p0, g^p1, g^p2, ..., g^pn}
+        let secret_coefficients = secret_polynomial.coefficients();
+        let blinder_coefficients = blinder_polynomial.coefficients();
+        for (i, (fvs, pvs)) in feldman_verifier_set
+            .verifiers_mut()
+            .iter_mut()
+            .zip(pedersen_verifier_set.blind_verifiers_mut().iter_mut())
+            .take(threshold)
+            .enumerate()
+        {
+            *fvs = g * secret_coefficients[i];
+            *pvs = *fvs + h * blinder_coefficients[i];
+        }
+        let secret_shares = create_shares_with_participant_generator(
+            &secret_polynomial,
+            threshold,
+            limit,
+            &participant_generator,
+        )?;
+        let blinder_shares = create_shares_with_participant_generator(
+            &blinder_polynomial,
+            threshold,
+            limit,
+            &participant_generator,
+        )?;
         secret_polynomial
             .coefficients_mut()
             .iter_mut()

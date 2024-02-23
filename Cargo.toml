@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "4.0.0-rc0"
+version = "4.0.0-rc1"
 
 [features]
 default = ["std"]
@@ -19,14 +19,14 @@ curve25519 = ["curve25519-dalek", "serde", "hex"]
 std = ["rand_core/std", "rand/std", "serde/std"]
 
 [dependencies]
-curve25519-dalek = { version = "4.1.2", features = ["digest", "legacy_compatibility", "rand_core"], optional = true }
+curve25519-dalek = { version = "4.1.2", features = ["digest", "rand_core", "group"], optional = true }
 elliptic-curve = { version = "0.13", features = ["ecdh"] }
 hex = { version = "0.4", default-features = false, optional = true }
-rand = { version = "0.8", default-features = false }
-rand_chacha = { version = "0.3", default-features = false }
+rand_chacha = "0.3.1"
 rand_core = "0.6"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.5" }
+sha3 = { version = "0.10", default-features = false }
 thiserror-no-std = "2.0"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
@@ -34,10 +34,12 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 bls12_381_plus = "0.8"
 ed25519-dalek = "2.1.1"
 ed448-goldilocks-plus = "0.11.2"
+hex = "0.4"
 k256 = { version = "0.13", features = ["arithmetic", "bits"] }
 p256 = { version = "0.13", features = ["arithmetic", "bits"] }
 p384 = { version = "0.13", features = ["arithmetic", "bits"] }
 p521 = { version = "0.13", features = ["arithmetic"] }
+rand = { version = "0.8", default-features = false }
 rand_xorshift = "0.3"
 rstest = "0.18"
 serde_json = "1.0"
