@@ -94,6 +94,11 @@ where
             .iter_mut()
             .take(threshold)
             .for_each(|s| *s = G::Scalar::ZERO);
+        blinder_polynomial
+            .coefficients_mut()
+            .iter_mut()
+            .take(threshold)
+            .for_each(|s| *s = G::Scalar::ZERO);
         Ok(Self::PedersenResult::new(
             blinder,
             secret_shares,
@@ -169,6 +174,11 @@ where
             &participant_generator,
         )?;
         secret_polynomial
+            .coefficients_mut()
+            .iter_mut()
+            .take(threshold)
+            .for_each(|s| *s = G::Scalar::ZERO);
+        blinder_polynomial
             .coefficients_mut()
             .iter_mut()
             .take(threshold)

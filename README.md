@@ -60,7 +60,7 @@ but keep in might endianness. By default, primitive types represented as big-end
 
 `Share` is now a trait so shares can be implemented however consumers need them to be.
 
-The following also implement `Share`:
+The following tuples also implement `Share`:
 
 - ({primitive integer type}, \[u8; N\])
 - ({primitive integer type}, GenericArray<u8, N>) 
