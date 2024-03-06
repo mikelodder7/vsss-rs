@@ -263,7 +263,8 @@ impl RngCore for XofRng {
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
-        Ok(self.0.read(dest))
+        self.0.read(dest);
+        Ok(())
     }
 }
 

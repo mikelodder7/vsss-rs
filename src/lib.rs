@@ -178,6 +178,7 @@ use util::*;
 
 pub use error::*;
 pub use feldman::Feldman;
+pub use identifier::*;
 pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;
@@ -191,6 +192,7 @@ pub use pedersen::StdPedersenResult;
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
+mod identifier;
 
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
