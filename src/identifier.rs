@@ -2,9 +2,13 @@ use crate::util::CtIsZero;
 use crate::Vec;
 use crate::{Error, PrimeFieldImpl, VsssResult};
 use core::cmp;
-use crypto_bigint::{Encoding, Zero, U64, U128, U192, U256, U384, U448, U512, U576, U768, U896, U1024, U2048, U3072, U4096, U8192, U16384, U32768};
+use crypto_bigint::{
+    Encoding, Zero, U1024, U128, U16384, U192, U2048, U256, U3072, U32768, U384, U4096, U448, U512,
+    U576, U64, U768, U8192, U896,
+};
 use elliptic_curve::{
-    PrimeField, generic_array::{GenericArray, ArrayLength},
+    generic_array::{ArrayLength, GenericArray},
+    PrimeField,
 };
 use subtle::Choice;
 
@@ -414,7 +418,6 @@ impl_share_identifier_big_int!(
     U16384 => 2048,
     U32768 => 4096,
 );
-
 
 impl<const L: usize> ShareIdentifier for [u8; L] {
     type ByteRepr = Self;
