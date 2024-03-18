@@ -292,7 +292,7 @@ fn point_combine() {
     let sigs_g1 = shares
         .iter()
         .map(|s| {
-            let ff = s.as_field_element::<Scalar>().unwrap();
+            let ff = Share::as_field_element::<Scalar>(s).unwrap();
             let pt = G1Projective::GENERATOR * ff;
             <[u8; 49]>::with_identifier_and_value(s.identifier(), &pt.to_compressed())
         })

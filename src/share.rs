@@ -172,7 +172,7 @@ macro_rules! impl_share {
     };
 }
 
-macro_rules! impl_big_int_share {
+macro_rules! impl_array_share {
     ($(TYPE = $type:ident, ARRAY = $num:expr, GA = $size:path),+$(,)*) => {
         $(
             impl Share for ($type, [u8; $num]) {
@@ -222,7 +222,6 @@ macro_rules! impl_big_int_share {
                                                     self.1.as_mut()
                                                     }
             }
-
         )+
     };
 }
@@ -428,7 +427,7 @@ impl_share!(
     200 => typenum::U200,
 );
 
-impl_big_int_share!(
+impl_array_share!(
     TYPE = u8,
     ARRAY = 1,
     GA = typenum::U1,
@@ -1031,7 +1030,7 @@ impl_big_int_share!(
     GA = typenum::U200,
 );
 
-impl_big_int_share!(
+impl_array_share!(
     TYPE = u16,
     ARRAY = 1,
     GA = typenum::U1,
@@ -1634,7 +1633,7 @@ impl_big_int_share!(
     GA = typenum::U200,
 );
 
-impl_big_int_share!(
+impl_array_share!(
     TYPE = u32,
     ARRAY = 1,
     GA = typenum::U1,
@@ -2237,7 +2236,7 @@ impl_big_int_share!(
     GA = typenum::U200,
 );
 
-impl_big_int_share!(
+impl_array_share!(
     TYPE = u64,
     ARRAY = 1,
     GA = typenum::U1,
@@ -2841,7 +2840,7 @@ impl_big_int_share!(
 );
 
 #[cfg(target_pointer_width = "64")]
-impl_big_int_share!(
+impl_array_share!(
     TYPE = u128,
     ARRAY = 1,
     GA = typenum::U1,
@@ -3444,7 +3443,7 @@ impl_big_int_share!(
     GA = typenum::U200,
 );
 
-impl_big_int_share!(
+impl_array_share!(
     TYPE = usize,
     ARRAY = 1,
     GA = typenum::U1,
@@ -4097,7 +4096,7 @@ impl Share for (Vec<u8>, Vec<u8>) {
     }
 }
 
-macro_rules! impl_big_int_vec_share {
+macro_rules! impl_int_vec_share {
     ($($type:ident),+$(,)*) => {
         $(
             impl Share for ($type, Vec<u8>) {
@@ -4127,7 +4126,11 @@ macro_rules! impl_big_int_vec_share {
     };
 }
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl_big_int_vec_share!(u8, u16, u32, u64, u128, usize);
+impl_int_vec_share!(u8, u16, u32, u64, u128, usize);
+
+macro_rules! impl_big_int_share {
+    ($(),+$(,)*) => {};
+}
 
 #[test]
 fn test_with_identifier_and_value() {
