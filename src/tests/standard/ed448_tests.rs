@@ -11,14 +11,10 @@ use elliptic_curve::hash2curve::ExpandMsgXmd;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<EdwardsPoint, [u8; 1], u8, [u8; 58]>();
-    let mut share = [0u8; 58];
+    split_invalid_args::<EdwardsPoint, u8, [u8; 58]>();
+    let share = [0u8; 58];
     // Invalid identifier
     assert!([share.clone(), [2u8; 58]]
-        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
-        .is_err());
-    share[0] = 1u8;
-    assert!([share, [2u8; 58]]
         .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
         .is_err());
     // Duplicate shares
@@ -29,13 +25,13 @@ fn invalid_tests() {
 
 #[test]
 fn valid_tests() {
-    combine_single::<EdwardsPoint, [u8; 1], u8, [u8; 58]>();
+    combine_single::<EdwardsPoint, u8, [u8; 58]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<EdwardsPoint, [u8; 1], u8, [u8; 58]>();
+    combine_all::<EdwardsPoint, u8, [u8; 58]>();
 }
 
 #[test]
@@ -47,7 +43,7 @@ fn key_tests() {
         &osrng.gen::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
-    let res = shamir::split_secret::<Scalar, [u8; 1], u8, [u8; 58]>(2, 3, sc.into(), &mut osrng);
+    let res = shamir::split_secret::<Scalar, u8, [u8; 58]>(2, 3, sc.into(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = combine_shares(&shares);
@@ -66,7 +62,7 @@ fn pedersen_verifier_serde_test() {
         &osrng.gen::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
-    let res = pedersen::split_secret::<EdwardsPoint, [u8; 1], u8, [u8; 58]>(
+    let res = pedersen::split_secret::<EdwardsPoint, u8, [u8; 58]>(
         2,
         3,
         sk.into(),

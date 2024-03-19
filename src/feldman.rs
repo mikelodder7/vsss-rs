@@ -11,11 +11,10 @@ use rand_core::{CryptoRng, RngCore};
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
 /// (see https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf)
-pub trait Feldman<G, B, I, S>: Shamir<G::Scalar, B, I, S>
+pub trait Feldman<G, I, S>: Shamir<G::Scalar, I, S>
 where
-    G: Group,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     /// The verifier set
@@ -114,7 +113,7 @@ where
 /// Create shares from a secret.
 /// `generator` is the point to use for computing feldman verifiers.
 /// If None, the default generator is used.
-pub fn split_secret<G, B, I, S>(
+pub fn split_secret<G, I, S>(
     threshold: usize,
     limit: usize,
     secret: G::Scalar,
@@ -122,9 +121,8 @@ pub fn split_secret<G, B, I, S>(
     rng: impl RngCore + CryptoRng,
 ) -> VsssResult<(Vec<S>, Vec<G>)>
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     StdVsss::split_secret_with_verifier(threshold, limit, secret, generator, rng)
@@ -132,7 +130,7 @@ where
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret and a participant number generator.
-pub fn split_secret_with_participant_generator<G, B, I, S, P>(
+pub fn split_secret_with_participant_generator<G, I, S, P>(
     threshold: usize,
     limit: usize,
     secret: G::Scalar,
@@ -141,9 +139,8 @@ pub fn split_secret_with_participant_generator<G, B, I, S, P>(
     participant_generator: P,
 ) -> VsssResult<(Vec<S>, Vec<G>)>
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
     P: ParticipantNumberGenerator<G::Scalar>,
 {

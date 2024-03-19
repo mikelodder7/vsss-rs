@@ -3,6 +3,9 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
+use crate::{Error, VsssResult};
+use crypto_bigint::Uint;
+
 pub trait CtIsZero {
     fn ct_is_zero(&self) -> subtle::Choice;
 }
@@ -207,4 +210,22 @@ impl CtIsNotZero for usize {
         let t = *self as isize;
         subtle::Choice::from(-((t | -t) >> (usize::BITS - 1)) as u8)
     }
+}
+
+pub fn uint_to_be_byte_array<const LIMBS: usize>(
+    u: &Uint<LIMBS>,
+    buffer: &mut [u8],
+) -> VsssResult<()> {
+    let mut i = buffer.iter_mut();
+    for limb in u.as_words() {
+        let bytes = (*limb).to_be_bytes();
+        for byte in bytes.iter() {
+            if let Some(b) = i.next() {
+                *b = *byte;
+            } else {
+                return Err(Error::InvalidShareConversion);
+            }
+        }
+    }
+    Ok(())
 }

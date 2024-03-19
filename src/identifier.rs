@@ -1,37 +1,27 @@
-use crate::util::CtIsZero;
+use crate::util::*;
 use crate::Vec;
-use crate::{Error, PrimeFieldImpl, VsssResult};
+use crate::{Error, VsssResult};
 use core::cmp;
-use crypto_bigint::{
-    Encoding, Zero, U1024, U128, U16384, U192, U2048, U256, U3072, U32768, U384, U4096, U448, U512,
-    U576, U64, U768, U8192, U896,
-};
-use elliptic_curve::{
-    generic_array::{ArrayLength, GenericArray},
-    PrimeField,
-};
+use crypto_bigint::{Uint, Zero};
+use elliptic_curve::PrimeField;
+use generic_array::{ArrayLength, GenericArray};
 use subtle::Choice;
 
 /// A value used to represent the identifier for secret shares
 pub trait ShareIdentifier: Sized + Eq {
-    /// The byte representation of the identifier
-    type ByteRepr: AsRef<[u8]> + AsMut<[u8]>;
-
     /// Convert an identifier from a field element
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self>;
     /// Convert this share into a field element
     fn as_field_element<F: PrimeField>(&self) -> VsssResult<F>;
     /// True if all value bytes are zero
     fn is_zero(&self) -> Choice;
-    /// Return a byte sequence representing the identifier
-    fn to_repr(&self) -> Self::ByteRepr;
-    /// Return a byte sequence representing the identifier
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self>;
+    /// Write the byte representation of this identifier to a buffer
+    fn to_buffer<M: AsMut<[u8]>>(&self, buffer: M) -> VsssResult<()>;
+    /// Read the byte representation of an identifier from a buffer
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self>;
 }
 
 impl ShareIdentifier for u8 {
-    type ByteRepr = [u8; 1];
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         // Assume little endian encoding first
@@ -54,18 +44,22 @@ impl ShareIdentifier for u8 {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        [*self]
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < 1 {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[0] = *self;
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
         Ok(repr[0])
     }
 }
 
 impl ShareIdentifier for u16 {
-    type ByteRepr = [u8; 2];
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         // Assume little endian encoding first
@@ -89,18 +83,25 @@ impl ShareIdentifier for u16 {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.to_be_bytes()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < 2 {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer.copy_from_slice(&self.to_be_bytes()[..]);
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let repr: [u8; 2] = repr[..2]
+            .try_into()
+            .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u16::from_be_bytes(repr))
     }
 }
 
 impl ShareIdentifier for u32 {
-    type ByteRepr = [u8; 4];
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         // Assume little endian encoding first
@@ -129,18 +130,25 @@ impl ShareIdentifier for u32 {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.to_be_bytes()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < 4 {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer.copy_from_slice(&self.to_be_bytes()[..]);
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let repr: [u8; 4] = repr[..4]
+            .try_into()
+            .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u32::from_be_bytes(repr))
     }
 }
 
 impl ShareIdentifier for u64 {
-    type ByteRepr = [u8; 8];
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         // Assume little endian encoding first
@@ -175,19 +183,26 @@ impl ShareIdentifier for u64 {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.to_be_bytes()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < 8 {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[..8].copy_from_slice(&self.to_be_bytes()[..]);
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let repr: [u8; 8] = repr[..8]
+            .try_into()
+            .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u64::from_be_bytes(repr))
     }
 }
 
 #[cfg(target_pointer_width = "64")]
 impl ShareIdentifier for u128 {
-    type ByteRepr = [u8; 16];
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         // Assume little endian encoding first
@@ -232,21 +247,25 @@ impl ShareIdentifier for u128 {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.to_be_bytes()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < 16 {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[..16].copy_from_slice(&self.to_be_bytes()[..]);
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let repr: [u8; 16] = repr[..16]
+            .try_into()
+            .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u128::from_be_bytes(repr))
     }
 }
 
 impl ShareIdentifier for usize {
-    #[cfg(target_pointer_width = "32")]
-    type ByteRepr = [u8; 4];
-    #[cfg(target_pointer_width = "64")]
-    type ByteRepr = [u8; 8];
-
     #[cfg(target_pointer_width = "32")]
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let r = u32::from_field_element::<F>(element)? as usize;
@@ -275,33 +294,31 @@ impl ShareIdentifier for usize {
     }
 
     #[cfg(target_pointer_width = "32")]
-    fn to_repr(&self) -> Self::ByteRepr {
+    fn to_buffer<M: AsMut<[u8]>>(&self, buffer: M) -> VsssResult<()> {
         let r = *self as u32;
-        r.to_repr()
+        <u32 as ShareIdentifier>::to_buffer(&r, buffer)
     }
     #[cfg(target_pointer_width = "64")]
-    fn to_repr(&self) -> Self::ByteRepr {
+    fn to_buffer<M: AsMut<[u8]>>(&self, buffer: M) -> VsssResult<()> {
         let r = *self as u64;
-        r.to_repr()
+        <u64 as ShareIdentifier>::to_buffer(&r, buffer)
     }
 
     #[cfg(target_pointer_width = "32")]
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-        let r = u32::from_repr(repr)? as usize;
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let r = <u32 as ShareIdentifier>::from_buffer(repr)? as usize;
         Ok(r)
     }
 
     #[cfg(target_pointer_width = "64")]
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-        let r = u64::from_repr(repr)? as usize;
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let r = <u64 as ShareIdentifier>::from_buffer(repr)? as usize;
         Ok(r)
     }
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl ShareIdentifier for Vec<u8> {
-    type ByteRepr = Vec<u8>;
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         let bytes = repr.as_ref();
@@ -321,107 +338,57 @@ impl ShareIdentifier for Vec<u8> {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.clone()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < self.len() {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[..self.len()].copy_from_slice(self.as_slice());
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-        Ok(repr)
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        Ok(repr.as_ref().to_vec())
     }
 }
 
-impl<F: PrimeField> ShareIdentifier for PrimeFieldImpl<F> {
-    type ByteRepr = F::Repr;
-
-    fn from_field_element<FF: PrimeField>(element: FF) -> VsssResult<Self> {
-        let mut repr = F::Repr::default();
-        repr.as_mut().copy_from_slice(element.to_repr().as_ref());
-        Self::from_repr(repr)
+impl<const LIMBS: usize> ShareIdentifier for Uint<LIMBS> {
+    fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
+        let repr = element.to_repr();
+        let bytes = repr.as_ref();
+        let len = cmp::min(Uint::<LIMBS>::BYTES, bytes.len());
+        Ok(Uint::<LIMBS>::from_be_slice(&bytes[0..len]))
     }
 
-    fn as_field_element<FF: PrimeField>(&self) -> VsssResult<FF> {
-        let mut repr = FF::Repr::default();
-        repr.as_mut().copy_from_slice(self.0.to_repr().as_ref());
-        Option::<FF>::from(FF::from_repr(repr)).ok_or(Error::InvalidShareConversion)
+    fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
+        let mut repr = F::Repr::default();
+        if repr.as_ref().len() < Uint::<LIMBS>::BYTES {
+            return Err(Error::InvalidShareConversion);
+        }
+        uint_to_be_byte_array(self, repr.as_mut())?;
+        Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.is_zero()
+        Zero::is_zero(self)
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.0.to_repr()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < Uint::<LIMBS>::BYTES {
+            return Err(Error::InvalidShareConversion);
+        }
+        uint_to_be_byte_array(self, buffer)
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-        Ok(PrimeFieldImpl(
-            Option::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)?,
-        ))
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let len = cmp::min(Uint::<LIMBS>::BYTES, repr.len());
+        Ok(Uint::<LIMBS>::from_be_slice(&repr[0..len]))
     }
 }
-
-macro_rules! impl_share_identifier_big_int {
-    ($($name:ident => $bytes:expr),+$(,)*) => {
-        $(
-            impl ShareIdentifier for $name {
-                type ByteRepr = [u8; $bytes];
-
-                fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
-                    let repr = element.to_repr();
-                    let bytes = repr.as_ref();
-                    let mut r = [0u8; $bytes];
-                    let len = cmp::min(r.len(), bytes.len());
-                    r.copy_from_slice(&bytes[0..len]);
-                    Ok(Self::from_be_bytes(r))
-                }
-
-                fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
-                    let mut repr = F::Repr::default();
-                    let bytes = self.to_be_bytes();
-                    let len = cmp::min(repr.as_ref().len(), bytes.len());
-                    repr.as_mut().copy_from_slice(&bytes[..len]);
-                    Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
-                }
-
-                fn is_zero(&self) -> Choice {
-                    <Self as Zero>::is_zero(self)
-                }
-
-                fn to_repr(&self) -> Self::ByteRepr {
-                    self.to_be_bytes()
-                }
-
-                fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-                    Ok(Self::from_be_bytes(repr))
-                }
-            }
-        )+
-    };
-}
-
-impl_share_identifier_big_int!(
-    U64 => 8,
-    U128 => 16,
-    U192 => 24,
-    U256 => 32,
-    U384 => 48,
-    U448 => 56,
-    U512 => 64,
-    U576 => 72,
-    U768 => 96,
-    U896 => 112,
-    U1024 => 128,
-    U2048 => 256,
-    U3072 => 384,
-    U4096 => 512,
-    U8192 => 1024,
-    U16384 => 2048,
-    U32768 => 4096,
-);
 
 impl<const L: usize> ShareIdentifier for [u8; L] {
-    type ByteRepr = Self;
-
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         let bytes = repr.as_ref();
@@ -442,18 +409,25 @@ impl<const L: usize> ShareIdentifier for [u8; L] {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        *self
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < self.len() {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[..self.len()].copy_from_slice(self);
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-        Ok(repr)
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let mut r = [0u8; L];
+        let len = cmp::min(L, repr.len());
+        r[..len].copy_from_slice(&repr[..len]);
+        Ok(r)
     }
 }
 
-impl<L: ArrayLength<u8>> ShareIdentifier for GenericArray<u8, L> {
-    type ByteRepr = Self;
-
+impl<L: ArrayLength> ShareIdentifier for GenericArray<u8, L> {
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         let bytes = repr.as_ref();
@@ -474,12 +448,21 @@ impl<L: ArrayLength<u8>> ShareIdentifier for GenericArray<u8, L> {
         self.ct_is_zero()
     }
 
-    fn to_repr(&self) -> Self::ByteRepr {
-        self.clone()
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < self.len() {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[..self.len()].copy_from_slice(self);
+        Ok(())
     }
 
-    fn from_repr(repr: Self::ByteRepr) -> VsssResult<Self> {
-        Ok(repr)
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let mut r = Self::default();
+        let len = cmp::min(r.len(), repr.len());
+        r[..len].copy_from_slice(&repr[..len]);
+        Ok(r)
     }
 }
 
@@ -496,6 +479,8 @@ mod tests {
 
     #[test]
     fn ga() {
+        use elliptic_curve::generic_array::typenum;
+
         let mut a = GenericArray::<u8, typenum::U18>::default();
         a[0] = 1;
         let res = ShareIdentifier::as_field_element::<k256::Scalar>(&a);

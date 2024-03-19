@@ -15,11 +15,10 @@ use rand_core::{CryptoRng, RngCore};
 
 /// A secret sharing scheme that uses pedersen commitments as verifiers
 /// (see https://www.cs.cornell.edu/courses/cs754/2001fa/129.PDF)
-pub trait Pedersen<G, B, I, S>: Shamir<G::Scalar, B, I, S>
+pub trait Pedersen<G, I, S>: Shamir<G::Scalar, I, S>
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     /// The feldman verifier set
@@ -29,10 +28,9 @@ where
     /// The result from running `split_secret_with_verifier`
     type PedersenResult: PedersenResult<
         G,
-        B,
         I,
         S,
-        ShareSet = <Self as Shamir<G::Scalar, B, I, S>>::ShareSet,
+        ShareSet = <Self as Shamir<G::Scalar, I, S>>::ShareSet,
         FeldmanVerifierSet = Self::FeldmanVerifierSet,
         PedersenVerifierSet = Self::PedersenVerifierSet,
     >;
@@ -194,15 +192,14 @@ where
 }
 
 /// A result output from splitting a secret with [`Pedersen`]
-pub trait PedersenResult<G, B, I, S>: Sized
+pub trait PedersenResult<G, I, S>: Sized
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     /// The secret shares
-    type ShareSet: ReadableShareSet<B, I, S>;
+    type ShareSet: ReadableShareSet<I, S>;
     /// The feldman verifier set
     type FeldmanVerifierSet: FeldmanVerifierSet<G>;
     /// The pedersen verifier set
@@ -235,11 +232,10 @@ where
 
 /// The std result to use when an allocator is available
 #[cfg(any(feature = "alloc", feature = "std"))]
-pub struct StdPedersenResult<G, B, I, S>
+pub struct StdPedersenResult<G, I, S>
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     /// The blinder used to create pedersen commitments
@@ -255,11 +251,10 @@ where
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<G, B, I, S> PedersenResult<G, B, I, S> for StdPedersenResult<G, B, I, S>
+impl<G, I, S> PedersenResult<G, I, S> for StdPedersenResult<G, I, S>
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     type ShareSet = Vec<S>;
@@ -310,7 +305,7 @@ where
 /// If None, the default generator is used.
 /// `blind_factor_generator` is the generator point to use for blinding factor shares.
 /// If None, a random generator is used
-pub fn split_secret<G, B, I, S>(
+pub fn split_secret<G, I, S>(
     threshold: usize,
     limit: usize,
     secret: G::Scalar,
@@ -318,11 +313,10 @@ pub fn split_secret<G, B, I, S>(
     share_generator: Option<G>,
     blind_factor_generator: Option<G>,
     rng: impl RngCore + CryptoRng,
-) -> VsssResult<StdPedersenResult<G, B, I, S>>
+) -> VsssResult<StdPedersenResult<G, I, S>>
 where
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 {
     StdVsss::split_secret_with_blind_verifier(

@@ -6,30 +6,25 @@ use super::invalid::*;
 use super::valid::*;
 use crate::*;
 use elliptic_curve::ff::PrimeField;
+use generic_array::{typenum, GenericArray};
 use p256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
 use rand::rngs::OsRng;
-use sha2::digest::generic_array::GenericArray;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<
-        ProjectivePoint,
-        [u8; 1],
-        u8,
-        GenericArray<u8, elliptic_curve::generic_array::typenum::U33>,
-    >();
+    split_invalid_args::<ProjectivePoint, u8, GenericArray<u8, typenum::U33>>();
     combine_invalid::<Scalar>();
 }
 
 #[test]
 fn valid_tests() {
-    combine_single::<ProjectivePoint, [u8; 1], u8, [u8; 33]>();
+    combine_single::<ProjectivePoint, u8, [u8; 33]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<ProjectivePoint, [u8; 1], u8, Vec<u8>>();
+    combine_all::<ProjectivePoint, u8, Vec<u8>>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -41,7 +36,7 @@ fn std_tests() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
-    let res = shamir::split_secret::<Scalar, [u8; 1], u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
+    let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = combine_shares(&shares);
@@ -58,8 +53,7 @@ fn key_tests() {
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
-    let res =
-        shamir::split_secret::<Scalar, [u8; 1], u8, [u8; 33]>(2, 3, *nzs.as_ref(), &mut osrng);
+    let res = shamir::split_secret::<Scalar, u8, [u8; 33]>(2, 3, *nzs.as_ref(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = combine_shares(&shares);

@@ -22,6 +22,7 @@ std = ["rand_core/std", "rand/std", "serde/std"]
 crypto-bigint = "0.5"
 curve25519-dalek = { version = "4.1.2", features = ["digest", "rand_core", "group"], optional = true }
 elliptic-curve = { version = "0.13", features = ["ecdh"] }
+generic-array = "1"
 hex = { version = "0.4", default-features = false, optional = true }
 rand_chacha = "0.3.1"
 rand_core = "0.6"

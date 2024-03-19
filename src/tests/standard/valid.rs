@@ -11,16 +11,15 @@ use elliptic_curve::{
 };
 
 pub fn combine_single<
-    G: Group + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    G: Group + GroupEncoding + Default,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 >() {
     let mut repr = <G::Scalar as PrimeField>::Repr::default();
     repr.as_mut()[..5].copy_from_slice(b"hello");
     let secret = G::Scalar::from_repr(repr).unwrap();
     let mut rng = MockRng::default();
-    let res = TesterVsss::<G, B, I, S>::split_secret(2, 3, secret, &mut rng);
+    let res = TesterVsss::<G, I, S>::split_secret(2, 3, secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
@@ -30,7 +29,7 @@ pub fn combine_single<
     assert_eq!(secret, secret_1);
 
     // Feldman test
-    let res = TesterVsss::<G, B, I, S>::split_secret_with_verifier(2, 3, secret, None, &mut rng);
+    let res = TesterVsss::<G, I, S>::split_secret_with_verifier(2, 3, secret, None, &mut rng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares[..3] {
@@ -42,7 +41,7 @@ pub fn combine_single<
     assert_eq!(secret, secret_1);
 
     // Pedersen test
-    let res = TesterVsss::<G, B, I, S>::split_secret_with_blind_verifier(
+    let res = TesterVsss::<G, I, S>::split_secret_with_blind_verifier(
         2, 3, secret, None, None, None, &mut rng,
     );
     assert!(res.is_ok());
@@ -63,7 +62,7 @@ pub fn combine_single<
 
     // Zero is a special case so make sure it works
     let secret = G::Scalar::ZERO;
-    let res = TesterVsss::<G, B, I, S>::split_secret(2, 3, secret, &mut rng);
+    let res = TesterVsss::<G, I, S>::split_secret(2, 3, secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
@@ -73,7 +72,7 @@ pub fn combine_single<
     assert_eq!(secret, secret_1);
 
     // Feldman test
-    let res = TesterVsss::<G, B, I, S>::split_secret_with_verifier(2, 3, secret, None, &mut rng);
+    let res = TesterVsss::<G, I, S>::split_secret_with_verifier(2, 3, secret, None, &mut rng);
     assert!(res.is_ok());
     let (shares, verifier) = res.unwrap();
     for s in &shares[..3] {
@@ -81,9 +80,8 @@ pub fn combine_single<
     }
     // make sure no malicious share works
     let mut bad_share = shares[0].clone();
-    for b in bad_share.value_mut() {
-        *b = 1u8;
-    }
+    repr.as_mut().iter_mut().for_each(|b| *b = 1u8);
+    bad_share.value_mut(repr.as_ref()).unwrap();
     assert!(verifier.verify_share(&bad_share).is_err());
 
     let res = (&shares[..2]).combine_to_field_element::<G::Scalar, [(G::Scalar, G::Scalar); 2]>();
@@ -91,7 +89,7 @@ pub fn combine_single<
     let secret_1 = res.unwrap();
     assert_eq!(secret, secret_1);
 
-    let res = TesterVsss::<G, B, I, S>::split_secret_with_blind_verifier(
+    let res = TesterVsss::<G, I, S>::split_secret_with_blind_verifier(
         2, 3, secret, None, None, None, &mut rng,
     );
     assert!(res.is_ok());
@@ -119,8 +117,7 @@ pub fn combine_single<
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub fn combine_all<
     G: Group + GroupEncoding + Default,
-    B: AsRef<[u8]> + AsMut<[u8]>,
-    I: ShareIdentifier<ByteRepr = B>,
+    I: ShareIdentifier,
     S: Share<Identifier = I>,
 >() {
     use crate::*;
@@ -135,14 +132,13 @@ pub fn combine_all<
     assert!(res.is_ok());
     let shares: Vec<S> = res.unwrap();
 
-    let res = feldman::split_secret::<G, B, I, S>(THRESHOLD, LIMIT, secret, None, &mut rng);
+    let res = feldman::split_secret::<G, I, S>(THRESHOLD, LIMIT, secret, None, &mut rng);
     assert!(res.is_ok());
     let (feldman_shares, verifier) = res.unwrap();
 
-    let res =
-        pedersen::split_secret::<G, B, I, S>(THRESHOLD, LIMIT, secret, None, None, None, &mut rng);
+    let res = pedersen::split_secret(THRESHOLD, LIMIT, secret, None, None, None, &mut rng);
     assert!(res.is_ok());
-    let ped_res: StdPedersenResult<G, B, I, S> = res.unwrap();
+    let ped_res: StdPedersenResult<G, I, S> = res.unwrap();
 
     for (i, s) in shares.iter().enumerate() {
         assert!(verifier.verify_share(s).is_err());

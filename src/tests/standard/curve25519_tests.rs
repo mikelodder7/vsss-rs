@@ -15,23 +15,23 @@ use x25519_dalek::StaticSecret;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<WrappedRistretto, [u8; 1], u8, [u8; 33]>();
+    split_invalid_args::<WrappedRistretto, u8, [u8; 33]>();
     combine_invalid::<WrappedScalar>();
-    split_invalid_args::<WrappedEdwards, [u8; 1], u8, [u8; 33]>();
+    split_invalid_args::<WrappedEdwards, u8, [u8; 33]>();
     combine_invalid::<WrappedScalar>();
 }
 
 #[test]
 fn valid_tests() {
-    combine_single::<WrappedRistretto, [u8; 1], u8, [u8; 33]>();
-    combine_single::<WrappedEdwards, [u8; 1], u8, [u8; 33]>();
+    combine_single::<WrappedRistretto, u8, [u8; 33]>();
+    combine_single::<WrappedEdwards, u8, [u8; 33]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<WrappedRistretto, [u8; 1], u8, [u8; 33]>();
-    combine_all::<WrappedEdwards, [u8; 1], u8, [u8; 33]>();
+    combine_all::<WrappedRistretto, u8, [u8; 33]>();
+    combine_all::<WrappedEdwards, u8, [u8; 33]>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -43,8 +43,7 @@ fn key_tests() {
     let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SigningKey::from_bytes(&sc.to_bytes());
-    let res =
-        shamir::split_secret::<WrappedScalar, [u8; 1], u8, [u8; 33]>(2, 3, sc.into(), &mut osrng);
+    let res = shamir::split_secret::<WrappedScalar, u8, [u8; 33]>(2, 3, sc.into(), &mut osrng);
     assert!(res.is_ok());
     let shares = res.unwrap();
     let res = combine_shares(&shares);
@@ -64,7 +63,7 @@ fn pedersen_verifier_serde_test() {
 
     let mut osrng = rand::rngs::OsRng::default();
     let sk = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
-    let res = pedersen::split_secret::<WrappedEdwards, [u8; 1], u8, [u8; 33]>(
+    let res = pedersen::split_secret::<WrappedEdwards, u8, [u8; 33]>(
         2,
         3,
         sk.into(),

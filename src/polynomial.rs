@@ -3,15 +3,13 @@
 //! due to stack allocations
 
 use crate::*;
-use elliptic_curve::{
-    ff::PrimeField,
-    generic_array::{typenum, GenericArray},
-};
+use elliptic_curve::PrimeField;
+use generic_array::{ArrayLength, GenericArray};
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares
-pub trait Polynomial<F: PrimeField>: Sized {
-    /// Create a new empty polynomial with the specified size
+pub trait Polynomial<F: PrimeField> {
+    /// Create a new polynomial with a size hint
     fn create(size_hint: usize) -> Self;
 
     /// Generate the polynomial coefficients
@@ -59,56 +57,38 @@ pub trait Polynomial<F: PrimeField>: Sized {
     fn coefficients_mut(&mut self) -> &mut [F];
 }
 
-macro_rules! polynomial_arr_impl {
-    ($($size:ident => $num:expr),+$(,)*) => {
-        $(
-        impl<F: PrimeField> Polynomial<F> for [F; $num] {
-            fn create(_size_hint: usize) -> Self {
-                [F::default(); $num]
-            }
+impl<F: PrimeField, const L: usize> Polynomial<F> for [F; L] {
+    fn create(_size_hint: usize) -> Self {
+        [F::ZERO; L]
+    }
 
-            fn coefficients(&self) -> &[F] {
-                self
-            }
+    fn coefficients(&self) -> &[F] {
+        self
+    }
 
-            fn coefficients_mut(&mut self) -> &mut [F] {
-                self
-            }
-        }
-
-        impl<F: PrimeField> Polynomial<F> for GenericArray<F, typenum::$size> {
-            fn create(_size_hint: usize) -> Self {
-                Self::from([F::default(); $num])
-            }
-
-            fn coefficients(&self) -> &[F] {
-                self.as_ref()
-            }
-
-            fn coefficients_mut(&mut self) -> &mut [F] {
-                self.as_mut()
-            }
-        }
-        )+
-    };
+    fn coefficients_mut(&mut self) -> &mut [F] {
+        self
+    }
 }
 
-polynomial_arr_impl!(
-    U2 => 2, U3 => 3, U4 => 4, U5 => 5, U6 => 6, U7 => 7, U8 => 8, U9 => 9,
-    U10 => 10, U11 => 11, U12 => 12, U13 => 13, U14 => 14, U15 => 15, U16 => 16,
-    U17 => 17, U18 => 18, U19 => 19, U20 => 20, U21 => 21, U22 => 22, U23 => 23,
-    U24 => 24, U25 => 25, U26 => 26, U27 => 27, U28 => 28, U29 => 29, U30 => 30,
-    U31 => 31, U32 => 32, U33 => 33, U34 => 34, U35 => 35, U36 => 36, U37 => 37,
-    U38 => 38, U39 => 39, U40 => 40, U41 => 41, U42 => 42, U43 => 43, U44 => 44,
-    U45 => 45, U46 => 46, U47 => 47, U48 => 48, U49 => 49, U50 => 50, U51 => 51,
-    U52 => 52, U53 => 53, U54 => 54, U55 => 55, U56 => 56, U57 => 57, U58 => 58,
-    U59 => 59, U60 => 60, U61 => 61, U62 => 62, U63 => 63, U64 => 64,
-);
+impl<F: PrimeField, L: ArrayLength> Polynomial<F> for GenericArray<F, L> {
+    fn create(_size_hint: usize) -> Self {
+        Self::default()
+    }
+
+    fn coefficients(&self) -> &[F] {
+        self.as_ref()
+    }
+
+    fn coefficients_mut(&mut self) -> &mut [F] {
+        self.as_mut()
+    }
+}
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<F: PrimeField> Polynomial<F> for Vec<F> {
     fn create(size_hint: usize) -> Self {
-        vec![F::default(); size_hint]
+        vec![F::ZERO; size_hint]
     }
 
     fn coefficients(&self) -> &[F] {
