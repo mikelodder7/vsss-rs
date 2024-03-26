@@ -45,10 +45,12 @@ as the primitives would (also not good and results in a lot of boiler plate).
 
 Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all sizes from 2-200 are implemented.
 
+Gf256 has been added as a field for secret sharing schemes with just byte sequences. All operations are constant time.
+
 ## Components
 
 All component traits are implemented for static arrays `[T; N]` and `GenericArray<T, N>` from 2-64 and `Vec<T>` by default.
-Any higher, and its time to use an allocator or the stack might be overrun.
+Any higher, and it's time to use an allocator or the stack might be overrun.
 
 ### Shares and Identifiers
 
