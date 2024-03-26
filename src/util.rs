@@ -136,7 +136,8 @@ impl CtIsNotZero for [u8] {
 impl CtIsNotZero for u8 {
     fn ct_is_not_zero(&self) -> subtle::Choice {
         let t = *self as i8;
-        subtle::Choice::from(-((t | -t) >> 7) as u8)
+        let a = ((t | t.wrapping_neg()) >> 7).wrapping_neg();
+        subtle::Choice::from(a as u8)
     }
 }
 

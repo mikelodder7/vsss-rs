@@ -19,6 +19,9 @@ pub trait ShareIdentifier: Sized + Eq {
     fn to_buffer<M: AsMut<[u8]>>(&self, buffer: M) -> VsssResult<()>;
     /// Read the byte representation of an identifier from a buffer
     fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self>;
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Convert this identifier to a vector of bytes
+    fn to_vec(&self) -> Vec<u8>;
 }
 
 impl ShareIdentifier for u8 {
@@ -46,7 +49,7 @@ impl ShareIdentifier for u8 {
 
     fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
         let buffer = buffer.as_mut();
-        if buffer.len() < 1 {
+        if buffer.is_empty() {
             return Err(Error::InvalidShareConversion);
         }
         buffer[0] = *self;
@@ -56,6 +59,11 @@ impl ShareIdentifier for u8 {
     fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
         let repr = repr.as_ref();
         Ok(repr[0])
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        [*self].to_vec()
     }
 }
 
@@ -98,6 +106,11 @@ impl ShareIdentifier for u16 {
             .try_into()
             .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u16::from_be_bytes(repr))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
@@ -145,6 +158,11 @@ impl ShareIdentifier for u32 {
             .try_into()
             .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u32::from_be_bytes(repr))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
@@ -198,6 +216,11 @@ impl ShareIdentifier for u64 {
             .try_into()
             .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u64::from_be_bytes(repr))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
@@ -263,6 +286,11 @@ impl ShareIdentifier for u128 {
             .map_err(|_| Error::InvalidShareConversion)?;
         Ok(u128::from_be_bytes(repr))
     }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
 }
 
 impl ShareIdentifier for usize {
@@ -315,6 +343,21 @@ impl ShareIdentifier for usize {
         let r = <u64 as ShareIdentifier>::from_buffer(repr)? as usize;
         Ok(r)
     }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        match core::mem::size_of::<usize>() {
+            4 => {
+                let r = *self as u32;
+                r.to_vec()
+            }
+            8 => {
+                let r = *self as u64;
+                r.to_vec()
+            }
+            _ => Vec::new(),
+        }
+    }
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -349,6 +392,10 @@ impl ShareIdentifier for Vec<u8> {
 
     fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
         Ok(repr.as_ref().to_vec())
+    }
+
+    fn to_vec(&self) -> Vec<u8> {
+        self.clone()
     }
 }
 
@@ -385,6 +432,13 @@ impl<const LIMBS: usize> ShareIdentifier for Uint<LIMBS> {
         let repr = repr.as_ref();
         let len = cmp::min(Uint::<LIMBS>::BYTES, repr.len());
         Ok(Uint::<LIMBS>::from_be_slice(&repr[0..len]))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        let mut b = vec![0u8; Uint::<LIMBS>::BYTES];
+        uint_to_be_byte_array(self, &mut b).expect("buffer is the correct size");
+        b
     }
 }
 
@@ -425,6 +479,11 @@ impl<const L: usize> ShareIdentifier for [u8; L] {
         r[..len].copy_from_slice(&repr[..len]);
         Ok(r)
     }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self[..].to_vec()
+    }
 }
 
 impl<L: ArrayLength> ShareIdentifier for GenericArray<u8, L> {
@@ -463,6 +522,11 @@ impl<L: ArrayLength> ShareIdentifier for GenericArray<u8, L> {
         let len = cmp::min(r.len(), repr.len());
         r[..len].copy_from_slice(&repr[..len]);
         Ok(r)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self[..].to_vec()
     }
 }
 

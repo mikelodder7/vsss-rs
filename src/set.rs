@@ -65,9 +65,6 @@ where
                 if s.identifier().is_zero().into() {
                     return Err(Error::SharingInvalidIdentifier);
                 }
-                if s.is_zero().into() {
-                    return Err(Error::InvalidShare);
-                }
                 let x = s.identifier().as_field_element()?;
                 let y = m(s)?;
                 indexer[i] = (x, y);

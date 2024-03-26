@@ -164,6 +164,9 @@ pub(crate) mod tests;
 
 mod error;
 pub mod feldman;
+#[allow(clippy::suspicious_arithmetic_impl)]
+#[allow(clippy::suspicious_op_assign_impl)]
+pub mod gf256;
 mod numbering;
 pub mod pedersen;
 mod polynomial;

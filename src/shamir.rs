@@ -112,13 +112,14 @@ where
     let mut shares = SS::create(limit);
     let indexer = shares.as_mut();
 
-    let mut x = F::ONE;
+    let mut x = 1u64;
     for i in indexer.iter_mut().take(limit) {
-        let y = polynomial.evaluate(x, threshold);
-        let id = I::from_field_element(x)?;
+        let xp = F::from(x);
+        let y = polynomial.evaluate(xp, threshold);
+        let id = I::from_field_element(xp)?;
         let share = S::from_field_element(id, y)?;
         *i = share;
-        x += F::ONE;
+        x += 1;
     }
     Ok(shares)
 }

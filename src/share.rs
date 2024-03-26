@@ -42,6 +42,10 @@ pub trait Share: Sized + Clone + Eq + core::hash::Hash + Ord {
     /// The writeable raw byte value of the share excluding the identifier
     fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()>;
 
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// The byte representation value of the share excluding the identifier
+    fn value_vec(&self) -> Vec<u8>;
+
     /// Convert this share into a group element
     fn as_group_element<G: GroupEncoding>(&self) -> VsssResult<G> {
         let mut repr = G::Repr::default();
@@ -115,6 +119,11 @@ impl<const L: usize> Share for [u8; L] {
         self[1..].copy_from_slice(&buffer[..L - 1]);
         Ok(())
     }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn value_vec(&self) -> Vec<u8> {
+        self[1..].to_vec()
+    }
 }
 
 impl<L: ArrayLength> Share for GenericArray<u8, L> {
@@ -152,6 +161,11 @@ impl<L: ArrayLength> Share for GenericArray<u8, L> {
         let len = L::to_usize() - 1;
         self[1..].copy_from_slice(&buffer[..len]);
         Ok(())
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn value_vec(&self) -> Vec<u8> {
+        self[1..].to_vec()
     }
 }
 
@@ -192,6 +206,11 @@ macro_rules! impl_array_share {
                     self.1.copy_from_slice(&buffer[..L]);
                     Ok(())
                 }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    self.1.to_vec()
+                }
             }
 
             impl<L: ArrayLength> Share for ($type, GenericArray<u8, L>) {
@@ -228,6 +247,11 @@ macro_rules! impl_array_share {
                     self.1.copy_from_slice(&buffer[..L::to_usize()]);
                     Ok(())
                 }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    self.1.to_vec()
+                }
             }
 
             impl<const LIMBS: usize> Share for ($type, Uint<LIMBS>) {
@@ -263,6 +287,13 @@ macro_rules! impl_array_share {
                     self.1 = Uint::<LIMBS>::from_be_slice(buffer);
                     Ok(())
                 }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    let mut buffer = vec![0u8; Uint::<LIMBS>::BYTES];
+                    uint_to_be_byte_array(&self.1, &mut buffer).expect("buffer is the correct size");
+                    buffer
+                }
             }
 
             #[cfg(any(feature = "alloc", feature = "std"))]
@@ -296,6 +327,10 @@ macro_rules! impl_array_share {
                 fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
                     self.1 = buffer.to_vec();
                     Ok(())
+                }
+
+                fn value_vec(&self) -> Vec<u8> {
+                    self.1.clone()
                 }
             }
         )+
@@ -343,6 +378,10 @@ impl Share for Vec<u8> {
         self[1..].copy_from_slice(&buffer[..len]);
         Ok(())
     }
+
+    fn value_vec(&self) -> Vec<u8> {
+        self.clone()
+    }
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -376,6 +415,10 @@ impl Share for (Vec<u8>, Vec<u8>) {
     fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
         self.1 = buffer.to_vec();
         Ok(())
+    }
+
+    fn value_vec(&self) -> Vec<u8> {
+        self.1.clone()
     }
 }
 
