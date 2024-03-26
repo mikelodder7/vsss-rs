@@ -8,6 +8,7 @@
 //! 3. Ensure data access patterns are independent of secret data
 
 use crate::util::CtIsNotZero;
+use core::borrow::Borrow;
 use core::{
     fmt::{self, Binary, Display, Formatter, LowerHex, UpperHex},
     iter::{Product, Sum},
@@ -27,7 +28,7 @@ pub struct Gf256(pub u8);
 
 impl Display for Gf256 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:02x}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -377,27 +378,15 @@ impl BitXorAssign<&Gf256> for Gf256 {
     }
 }
 
-impl Sum for Gf256 {
-    fn sum<I: Iterator<Item = Gf256>>(iter: I) -> Self {
-        iter.fold(Self(0), |acc, x| acc + x)
+impl<T: Borrow<Gf256>> Sum<T> for Gf256 {
+    fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
+        iter.fold(Self(0), |acc, x| acc + x.borrow())
     }
 }
 
-impl<'a> Sum<&'a Gf256> for Gf256 {
-    fn sum<I: Iterator<Item = &'a Gf256>>(iter: I) -> Self {
-        iter.fold(Self(0), |acc, x| acc + *x)
-    }
-}
-
-impl Product for Gf256 {
-    fn product<I: Iterator<Item = Gf256>>(iter: I) -> Self {
-        iter.fold(Self(1), |acc, x| acc * x)
-    }
-}
-
-impl<'a> Product<&'a Gf256> for Gf256 {
-    fn product<I: Iterator<Item = &'a Gf256>>(iter: I) -> Self {
-        iter.fold(Self(1), |acc, x| acc * *x)
+impl<T: Borrow<Gf256>> Product<T> for Gf256 {
+    fn product<I: Iterator<Item = T>>(iter: I) -> Self {
+        iter.fold(Self(1), |acc, x| acc * x.borrow())
     }
 }
 

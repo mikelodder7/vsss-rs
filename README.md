@@ -6,8 +6,7 @@
 
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
 
-* **This implementation has not been reviewed or audited. Use at your own risk.**
-* This implementation targets Rust `1.65` or later.
+* **This implementation is currently under audit and results will be published when completed. Until then use at your own risk.**
 * This implementation does not require the Rust standard library.
 * All operations are constant time unless explicitly noted.
 
@@ -25,13 +24,9 @@ no-std consumers to use exactly what they need while minimizing code duplication
 
 The `ShareIdentifier` trait has been modified as follows:
 
-- fn as_bytes(&self) -> &[u8] has been removed and replaced with
-- fn to_repr(&self) -> ByteRepr which returns the byte representation of the identifier
-
-The following has been added to `ShareIdentifier`
-
-- type ByteRepr: AsRef<[u8]> + AsMut<[u8]> which is the byte representation of the identifier
-- fn from_repr(repr: ByteRepr) -> Self which creates the identifier from the byte representation
+- fn to_buffer which receives a byte buffer and fills the contents with the byte representation of the identifier
+- fn from_buffer which receives a byte buffer and creates the identifier from the byte representation
+- to_vec which returns the byte representation as a Vec<u8> if features=alloc or std is enabled.
 
 ### Why this change?
 
@@ -39,28 +34,53 @@ The previous method was not flexible enough to handle different types of identif
 because as_bytes returned &[u8] and there was no safe method to convert the byte representation from the identifier
 when using u16, u32, etc. So the option was to either continue as is but use unsafe code with Statics (not good), 
 or implement a wrapper struct that would handle the conversion but needed to implement the same methods and traits
-as the primitives would (also not good and results in a lot of boiler plate).
+as the primitives would (also not good and results in a lot of boilerplate).
+
+The `Share` trait has been modified as follows:
+
+- value and value_mut now mirror to_buffer and from_buffer in ShareIdentifier
+- value_vec mirrors to_vec in ShareIdentifier
 
 ### Other changes
 
-Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all sizes from 2-200 are implemented.
+Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all array sizes are supported. 
+
+In addition, GenericArray of any size is supported.
+`crypto-bigint` Uint types are supported as well.
+
+Now tuples with the identifier as `.0` and the share as `.1` are supported.
 
 Gf256 has been added as a field for secret sharing schemes with just byte sequences. All operations are constant time.
+Most implementations comparatively are not constant time due to: runtime is dependent on the value of the secret such as
+using if statements and looping with break statements, or using lookup tables that allow an attacker to monitor code or
+data access patterns. While great for performance, they are not constant time which is desirable for cryptographic operations.
+This implementation has been cross-checked for compatibility with other libraries and also implements the necessary
+traits to function with this library.
 
-## Components
+### Numbering
 
-All component traits are implemented for static arrays `[T; N]` and `GenericArray<T, N>` from 2-64 and `Vec<T>` by default.
-Any higher, and it's time to use an allocator or the stack might be overrun.
+Share numbering methods have been added. The default method has been to use incrementing numbers starting at 1. While
+simple enough, again it's not flexible enough for all use cases. The following numbering methods are available:
+
+- SequentialParticipantNumberGenerator: index for the share identifiers starts at a specified number and incrementing by a specified value until a limit is reached. The default is starting at 1 and incrementing by 1 until 255 is reached
+- RandomParticipantNumberGenerator: index for the share identifiers is random. The random number generator is based on the desired index, a domain separator which are hashed using [Shake256](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-208.pdf).
+- ListParticipantNumberGenerator: index for the share identifiers is based on a list. The provided list must be at least as long as the number of shares to be generated. This is useful when the share identifiers are known ahead of time like in the case of [proactive secret sharing](https://eprint.iacr.org/2017/719).
+- ListAndRandomParticipantNumberGenerator: a combination of the above two methods. The list is used first and then random numbers are used after the list is exhausted.
+- ListAndSequentialParticipantNumberGenerator: a combination of the above two methods. The list is used first and then sequential numbers are used after the list is exhausted.
+
+The new method `split_secret_with_participant_generator` enables the use of the above methods. If you don't need
+the new flexible methods, the old method `split_secret` is still available which uses SequentialParticipantNumberGenerator starting at 1 and incrementing by 1.
 
 ### Shares and Identifiers
 
-There was lots of requests to enable share identifiers to be more than just `u8` values. This is now possible
+There was lots of requests to enable share identifiers to be more than just integer values. This is now possible
 by implementing the `ShareIdentifier` trait. The `ShareIdentifier` trait is a simple trait that provides the necessary
 methods for splitting and combining shares. The `ShareIdentifier` trait is implemented for 
 primitive integer values by default. Other values can be used by implementing the trait for the desired type 
-but keep in might endianness. By default, primitive types represented as big-endian byte sequences.
-
-`Share` is now a trait so shares can be implemented however consumers need them to be.
+but keep in might endianness. By default, primitive types represented as big-endian byte sequences. As explained
+earlier, `Share` is implemented for [u8; N], GenericArray<u8, N>, Uint<LIMBS>, Vec<u8>, and ShareIdentifier for all unsigned integer types.
+Tuples such as {primitive integer type, [u8; N]} are also supported.
+Both traits can be implemented however consumers need them to be.
 
 The following tuples also implement `Share`:
 
@@ -261,12 +281,6 @@ assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 ```
 
 Either `RistrettoPoint` or `EdwardsPoint` may be used when using Feldman and Pedersen VSSS.
-
-## Testing
-
-Due to no_std mode, this requires a larger stack than the current default.
-
-`RUST_MIN_STACK=4964353 cargo test`
 
 # License
 

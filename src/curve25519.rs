@@ -30,7 +30,7 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a ristretto25519 point
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, Default, Eq)]
 pub struct WrappedRistretto(pub RistrettoPoint);
 
 impl Group for WrappedRistretto {
@@ -262,12 +262,6 @@ impl GroupEncoding for WrappedRistretto {
     }
 }
 
-impl Default for WrappedRistretto {
-    fn default() -> Self {
-        Self(RistrettoPoint::default())
-    }
-}
-
 impl From<WrappedRistretto> for RistrettoPoint {
     fn from(p: WrappedRistretto) -> RistrettoPoint {
         p.0
@@ -348,7 +342,7 @@ impl ConstantTimeEq for WrappedRistretto {
 }
 
 /// Wraps an ed25519 point
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, Default, Eq)]
 pub struct WrappedEdwards(pub EdwardsPoint);
 
 impl Group for WrappedEdwards {
@@ -578,12 +572,6 @@ impl GroupEncoding for WrappedEdwards {
 
     fn to_bytes(&self) -> Self::Repr {
         self.0.compress().0
-    }
-}
-
-impl Default for WrappedEdwards {
-    fn default() -> Self {
-        Self(EdwardsPoint::default())
     }
 }
 

@@ -17,7 +17,7 @@ pub trait ParticipantNumberGenerator<F: PrimeField>: Iterator<Item = F> {
     fn get_participant_id(&self, index: usize) -> F;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 /// A generator that can create any number of secret shares
 pub struct SequentialParticipantNumberGenerator<F: PrimeField> {
     index: usize,
@@ -25,6 +25,18 @@ pub struct SequentialParticipantNumberGenerator<F: PrimeField> {
     increment: u64,
     limit: usize,
     _markers: PhantomData<F>,
+}
+
+impl<F: PrimeField> Default for SequentialParticipantNumberGenerator<F> {
+    fn default() -> Self {
+        Self {
+            start: 1,
+            increment: 1,
+            index: 0,
+            limit: u8::MAX as usize,
+            _markers: PhantomData,
+        }
+    }
 }
 
 impl<F: PrimeField> Iterator for SequentialParticipantNumberGenerator<F> {
@@ -64,7 +76,7 @@ impl<F: PrimeField> SequentialParticipantNumberGenerator<F> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 /// A generator that creates random participant identifiers
 pub struct RandomParticipantNumberGenerator<F: PrimeField> {
     /// Domain separation tag
@@ -72,6 +84,17 @@ pub struct RandomParticipantNumberGenerator<F: PrimeField> {
     index: usize,
     limit: usize,
     _markers: PhantomData<F>,
+}
+
+impl<F: PrimeField> Default for RandomParticipantNumberGenerator<F> {
+    fn default() -> Self {
+        Self {
+            dst: [0u8; 32],
+            index: 0,
+            limit: u8::MAX as usize,
+            _markers: PhantomData,
+        }
+    }
 }
 
 impl<F: PrimeField> Iterator for RandomParticipantNumberGenerator<F> {

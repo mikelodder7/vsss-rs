@@ -166,7 +166,7 @@ mod error;
 pub mod feldman;
 #[allow(clippy::suspicious_arithmetic_impl)]
 #[allow(clippy::suspicious_op_assign_impl)]
-pub mod gf256;
+mod gf256;
 mod numbering;
 pub mod pedersen;
 mod polynomial;
@@ -180,6 +180,7 @@ use subtle::*;
 
 pub use error::*;
 pub use feldman::Feldman;
+pub use gf256::*;
 pub use identifier::*;
 pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
@@ -187,6 +188,7 @@ pub use polynomial::*;
 pub use set::*;
 pub use shamir::Shamir;
 pub use share::*;
+pub use util::*;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use pedersen::StdPedersenResult;
