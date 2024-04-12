@@ -141,7 +141,7 @@ This crate supports Feldman and Pedersen verifiable secret sharing
 schemes.
 
 Feldman and Pedersen are similar in many ways. It's hard to describe when to use
-one over the other. Indeed both are used in [distributed key generation](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.134.6445&rep=rep1&type=pdf).
+one over the other. Indeed, both are used in [distributed key generation](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.134.6445&rep=rep1&type=pdf).
 
 Feldman reveals the public value of the verifier whereas Pedersen's hides it.
 

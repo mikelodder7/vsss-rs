@@ -380,7 +380,7 @@ impl Share for Vec<u8> {
     }
 
     fn value_vec(&self) -> Vec<u8> {
-        self.clone()
+        self[1..].to_vec()
     }
 }
 
