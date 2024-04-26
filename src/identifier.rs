@@ -409,7 +409,7 @@ impl<const LIMBS: usize> ShareIdentifier for Uint<LIMBS> {
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         let bytes = repr.as_ref();
-        be_byte_array_to_uint::<LIMBS>(&bytes)
+        be_byte_array_to_uint::<LIMBS>(bytes)
     }
 
     fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
@@ -563,7 +563,7 @@ impl<const LIMBS: usize> ShareIdentifier for DynResidue<LIMBS> {
         if repr.len() < Uint::<LIMBS>::BYTES * 2 {
             return Err(Error::InvalidShareConversion);
         }
-        let modulus = Uint::<LIMBS>::from_buffer(&repr)?;
+        let modulus = Uint::<LIMBS>::from_buffer(&repr[..Uint::<LIMBS>::BYTES])?;
         let value = Uint::<LIMBS>::from_buffer(&repr[Uint::<LIMBS>::BYTES..])?;
         let params = DynResidueParams::new(&modulus);
         Ok(DynResidue::new(&value, params))

@@ -5,13 +5,16 @@
 
 use crate::util::{uint_to_be_byte_array, CtIsZero};
 use crate::*;
-use crypto_bigint::{Uint, Zero};
+use core::cmp;
+use crypto_bigint::{
+    modular::runtime_mod::{DynResidue, DynResidueParams},
+    Uint, Zero,
+};
 use elliptic_curve::{group::GroupEncoding, PrimeField};
 use generic_array::{ArrayLength, GenericArray};
-use std::cmp;
 
 /// The methods necessary for a secret share
-pub trait Share: Sized + Clone + Eq + core::hash::Hash + Ord {
+pub trait Share: Sized + Clone + Eq {
     /// The identifier type
     type Identifier: ShareIdentifier;
 
@@ -292,6 +295,57 @@ macro_rules! impl_array_share {
                 fn value_vec(&self) -> Vec<u8> {
                     let mut buffer = vec![0u8; Uint::<LIMBS>::BYTES];
                     uint_to_be_byte_array(&self.1, &mut buffer).expect("buffer is the correct size");
+                    buffer
+                }
+            }
+
+            impl<const LIMBS: usize> Share for ($type, DynResidue<LIMBS>) {
+                type Identifier = $type;
+
+                fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                    // TODO(mikelodder7): figure out a better way to do this
+                    // stubbed in but assumes the caller will correct the modulus
+                    // 18,446,744,073,709,551,557
+                    let params = DynResidueParams::new(&Uint::<LIMBS>::from(0xffffffffffffffc5u64));
+                    (0, DynResidue::<LIMBS>::zero(params))
+                }
+
+                fn is_zero(&self) -> Choice {
+                    Zero::is_zero(&self.1.retrieve())
+                }
+
+                fn identifier(&self) -> Self::Identifier {
+                    self.0
+                }
+
+                fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                    &mut self.0
+                }
+
+                fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
+                    if buffer.len() < Uint::<LIMBS>::BYTES * 2 {
+                        return Err(Error::InvalidShareConversion);
+                    }
+                    self.1.params().modulus().to_buffer(&mut buffer[..Uint::<LIMBS>::BYTES])?;
+                    self.1.retrieve().to_buffer(&mut buffer[Uint::<LIMBS>::BYTES..])?;
+                    Ok(())
+                }
+
+                fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
+                    if buffer.len() < Uint::<LIMBS>::BYTES * 2 {
+                        return Err(Error::InvalidShareConversion);
+                    }
+                    let modulus = Uint::<LIMBS>::from_buffer(&buffer[..Uint::<LIMBS>::BYTES])?;
+                    let value = Uint::<LIMBS>::from_buffer(&buffer[Uint::<LIMBS>::BYTES..])?;
+                    let params = DynResidueParams::new(&modulus);
+                    self.1 = DynResidue::new(&value, params);
+                    Ok(())
+                }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    let mut buffer = vec![0u8; Uint::<LIMBS>::BYTES * 2];
+                    self.value(&mut buffer).expect("buffer is the correct size");
                     buffer
                 }
             }
