@@ -3,7 +3,7 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use crate::util::{uint_to_be_byte_array, CtIsZero};
+use crate::util::CtIsZero;
 use crate::*;
 use core::cmp;
 use crypto_bigint::{
@@ -17,7 +17,7 @@ use elliptic_curve::{group::GroupEncoding, PrimeField};
 use generic_array::{ArrayLength, GenericArray};
 
 /// The methods necessary for a secret share
-pub trait Share: Sized + Clone + Eq {
+pub trait Share: Sized + Clone {
     /// The identifier type
     type Identifier: ShareIdentifier;
 
@@ -247,10 +247,7 @@ macro_rules! impl_array_share {
                 }
 
                 fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
-                    if buffer.len() < L::to_usize() {
-                        return Err(Error::InvalidShareConversion);
-                    }
-                    self.1.copy_from_slice(&buffer[..L::to_usize()]);
+                    self.1 = GenericArray::from_buffer(buffer)?;
                     Ok(())
                 }
 
@@ -283,22 +280,17 @@ macro_rules! impl_array_share {
                     if buffer.len() < Uint::<LIMBS>::BYTES {
                         return Err(Error::InvalidShareConversion);
                     }
-                    uint_to_be_byte_array(&self.1, buffer)
+                    self.1.to_buffer(buffer)
                 }
 
                 fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
-                    if buffer.len() < Uint::<LIMBS>::BYTES {
-                        return Err(Error::InvalidShareConversion);
-                    }
-                    self.1 = Uint::<LIMBS>::from_be_slice(buffer);
+                    self.1 = Uint::<LIMBS>::from_buffer(buffer)?;
                     Ok(())
                 }
 
                 #[cfg(any(feature = "alloc", feature = "std"))]
                 fn value_vec(&self) -> Vec<u8> {
-                    let mut buffer = vec![0u8; Uint::<LIMBS>::BYTES];
-                    uint_to_be_byte_array(&self.1, &mut buffer).expect("buffer is the correct size");
-                    buffer
+                    self.1.to_vec()
                 }
             }
 
@@ -326,30 +318,17 @@ macro_rules! impl_array_share {
                 }
 
                 fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
-                    if buffer.len() < Uint::<LIMBS>::BYTES * 2 {
-                        return Err(Error::InvalidShareConversion);
-                    }
-                    self.1.params().modulus().to_buffer(&mut buffer[..Uint::<LIMBS>::BYTES])?;
-                    self.1.retrieve().to_buffer(&mut buffer[Uint::<LIMBS>::BYTES..])?;
-                    Ok(())
+                    self.1.to_buffer(buffer)
                 }
 
                 fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
-                    if buffer.len() < Uint::<LIMBS>::BYTES * 2 {
-                        return Err(Error::InvalidShareConversion);
-                    }
-                    let modulus = Uint::<LIMBS>::from_buffer(&buffer[..Uint::<LIMBS>::BYTES])?;
-                    let value = Uint::<LIMBS>::from_buffer(&buffer[Uint::<LIMBS>::BYTES..])?;
-                    let params = DynResidueParams::new(&modulus);
-                    self.1 = DynResidue::new(&value, params);
+                    self.1 = DynResidue::from_buffer(buffer)?;
                     Ok(())
                 }
 
                 #[cfg(any(feature = "alloc", feature = "std"))]
                 fn value_vec(&self) -> Vec<u8> {
-                    let mut buffer = vec![0u8; Uint::<LIMBS>::BYTES * 2];
-                    self.value(&mut buffer).expect("buffer is the correct size");
-                    buffer
+                    self.1.to_vec()
                 }
             }
 
@@ -373,22 +352,17 @@ macro_rules! impl_array_share {
                 }
 
                 fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
-                    (self.0, self.1.retrieve()).value(buffer)
+                    self.1.to_buffer(buffer)
                 }
 
                 fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
-                    if buffer.len() < Uint::<LIMBS>::BYTES {
-                        return Err(Error::InvalidShareConversion);
-                    }
-                    let n = Uint::<LIMBS>::ZERO;
-                    (self.0, n).value_mut(buffer)?;
-                    self.1 = Residue::new(&n);
+                    self.1 = Residue::from_buffer(buffer)?;
                     Ok(())
                 }
 
                 #[cfg(any(feature = "alloc", feature = "std"))]
                 fn value_vec(&self) -> Vec<u8> {
-                    (self.0, self.1.retrieve()).value_vec()
+                    self.1.to_vec()
                 }
             }
 
@@ -554,4 +528,43 @@ fn test_small_vec_shares() {
     let mut value = [0u8; 56];
     assert!(share.value(&mut value).is_ok());
     assert_eq!(value, [1u8; 56]);
+}
+
+#[test]
+fn uint() {
+    let share = (2000u16, Uint::<1>::from(0x12345678u32));
+    assert_eq!(share.identifier(), 2000u16);
+    let mut value = [0u8; 8];
+    assert!(share.value(&mut value).is_ok());
+    assert_eq!(value, [0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78]);
+
+    let share = (10000u16, Uint::<2>::from(0x123456789abcdef0u64));
+    assert_eq!(share.identifier(), 10000u16);
+    let mut value = [0u8; 16];
+    assert!(share.value(&mut value).is_ok());
+    assert_eq!(
+        value,
+        [0, 0, 0, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0]
+    );
+}
+
+#[test]
+fn modular() {
+    let params = DynResidueParams::new(&Uint::<1>::from(2147483647u32));
+    let share = (
+        2000u16,
+        DynResidue::new(&Uint::<1>::from(0x12345678u32), params),
+    );
+    assert_eq!(share.identifier(), 2000u16);
+    let mut value = [0u8; 16];
+    assert!(share.value(&mut value).is_ok());
+    assert_eq!(
+        value,
+        [0, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78]
+    );
+
+    let mut share2 = share.clone();
+    let res = share2.value_mut(&value);
+    assert!(res.is_ok());
+    assert_eq!(share.1, share2.1);
 }

@@ -423,17 +423,11 @@ impl<const LIMBS: usize> ShareIdentifier for Uint<LIMBS> {
     }
 
     fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
-        let buffer = buffer.as_mut();
-        if buffer.len() < Uint::<LIMBS>::BYTES {
-            return Err(Error::InvalidShareConversion);
-        }
-        uint_to_be_byte_array(self, buffer)
+        uint_to_be_byte_array(self, buffer.as_mut())
     }
 
     fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
-        let repr = repr.as_ref();
-        let len = cmp::min(Uint::<LIMBS>::BYTES, repr.len());
-        Ok(Uint::<LIMBS>::from_be_slice(&repr[0..len]))
+        be_byte_array_to_uint(repr.as_ref())
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -553,7 +547,9 @@ impl<const LIMBS: usize> ShareIdentifier for DynResidue<LIMBS> {
         if b.len() < Uint::<LIMBS>::BYTES * 2 {
             return Err(Error::InvalidShareConversion);
         }
-        self.params().modulus().to_buffer(&mut b[..Uint::<LIMBS>::BYTES])?;
+        self.params()
+            .modulus()
+            .to_buffer(&mut b[..Uint::<LIMBS>::BYTES])?;
         self.retrieve().to_buffer(&mut b[Uint::<LIMBS>::BYTES..])?;
         Ok(())
     }
