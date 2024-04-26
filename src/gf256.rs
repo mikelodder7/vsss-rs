@@ -8,6 +8,7 @@
 //! 3. Ensure data access patterns are independent of secret data
 
 use crate::util::CtIsNotZero;
+use crate::{Error, ParticipantNumberGenerator, VsssResult};
 use core::borrow::Borrow;
 use core::{
     fmt::{self, Binary, Display, Formatter, LowerHex, UpperHex},
@@ -18,7 +19,7 @@ use core::{
     },
 };
 use elliptic_curve::ff::{Field, PrimeField};
-use rand_core::RngCore;
+use rand_core::{CryptoRng, RngCore};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Represents the finite field GF(2^8) with 256 elements.
@@ -545,6 +546,92 @@ impl Gf256 {
     pub fn pow(&self, exp: u8) -> Self {
         Self(gf256_pow(self.0, exp))
     }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Split a byte array into shares.
+    pub fn split_array<B: AsRef<[u8]>>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> VsssResult<crate::Vec<crate::Vec<u8>>> {
+        let mut shares = crate::Vec::with_capacity(limit);
+        for i in 1..=limit {
+            let mut inner = crate::Vec::with_capacity(limit + 1);
+            inner.push(u8::try_from(i).map_err(|_| Error::SharingInvalidIdentifier)?);
+            shares.push(inner);
+        }
+        for b in secret.as_ref() {
+            let inner_shares = crate::shamir::split_secret::<Self, u8, [u8; 2]>(
+                threshold,
+                limit,
+                Self(*b),
+                &mut rng,
+            )?;
+            for (share, inner_share) in shares.iter_mut().zip(inner_shares.iter()) {
+                share.push(inner_share[1]);
+            }
+        }
+        Ok(shares)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Split a byte array into shares using the participant number generator.
+    pub fn split_array_with_participant_generator<
+        P: ParticipantNumberGenerator<Self>,
+        B: AsRef<[u8]>,
+    >(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        mut rng: impl RngCore + CryptoRng,
+        participant_generator: P,
+    ) -> VsssResult<crate::Vec<crate::Vec<u8>>> {
+        let mut shares = crate::Vec::with_capacity(limit);
+        for i in 0..limit {
+            let mut inner = crate::Vec::with_capacity(limit + 1);
+            inner.push(participant_generator.get_participant_id(i).0);
+            shares.push(inner);
+        }
+        for b in secret.as_ref() {
+            let inner_shares =
+                crate::shamir::split_secret_with_participant_generator::<Self, u8, [u8; 2], P>(
+                    threshold,
+                    limit,
+                    Self(*b),
+                    &mut rng,
+                    participant_generator.clone(),
+                )?;
+            for (share, inner_share) in shares.iter_mut().zip(inner_shares.iter()) {
+                share.push(inner_share[1]);
+            }
+        }
+        Ok(shares)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Combine shares into a byte array.
+    pub fn combine_array<B: AsRef<[crate::Vec<u8>]>>(shares: B) -> VsssResult<crate::Vec<u8>> {
+        let shares = shares.as_ref();
+
+        if shares.len() < 2 {
+            return Err(Error::SharingMinThreshold);
+        }
+
+        let mut secret = crate::Vec::with_capacity(shares[0].len() - 1);
+        let mut inner_shares = crate::Vec::with_capacity(shares[0].len() - 1);
+
+        for share in shares {
+            inner_shares.push([share[0], 0u8]);
+        }
+        for i in 1..shares[0].len() {
+            for (inner_share, share) in inner_shares.iter_mut().zip(shares.iter()) {
+                inner_share[1] = share[i];
+            }
+            secret.push(crate::combine_shares::<Self, u8, [u8; 2]>(&inner_shares)?.0);
+        }
+        Ok(secret)
+    }
 }
 
 fn gf256_pow(base: u8, exp: u8) -> u8 {
@@ -578,7 +665,7 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
 mod tests {
     use super::gf256_cmp;
     use super::*;
-    use crate::{combine_shares, shamir};
+    use crate::{combine_shares, shamir, SequentialParticipantNumberGenerator};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
 
@@ -655,6 +742,35 @@ mod tests {
             let res = combine_shares::<Gf256, u8, [u8; 2]>(&shares[2..]);
             assert_eq!(res.unwrap(), secret);
         }
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[test]
+    fn split_array() {
+        let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
+        let secret = b"Hello World!";
+        let shares = Gf256::split_array(3, 5, secret, &mut rng).unwrap();
+        assert_eq!(shares.len(), 5);
+
+        let res = Gf256::combine_array(&shares[..3]);
+        assert_eq!(res.unwrap(), secret);
+
+        let p = SequentialParticipantNumberGenerator::new(
+            Some(std::num::NonZeroU64::new(10).unwrap()),
+            None,
+            std::num::NonZeroUsize::new(5).unwrap(),
+        );
+        let shares =
+            Gf256::split_array_with_participant_generator(3, 5, secret, &mut rng, p).unwrap();
+        assert_eq!(shares.len(), 5);
+
+        let res = Gf256::combine_array(&shares[..3]);
+        let secret2 = res.unwrap();
+        assert_eq!(secret2, secret);
+
+        let res = Gf256::combine_array(&[shares[4].clone(), shares[1].clone(), shares[3].clone()]);
+        let secret2 = res.unwrap();
+        assert_eq!(secret2, secret);
     }
 }
 

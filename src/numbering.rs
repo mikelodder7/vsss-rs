@@ -12,7 +12,7 @@ use sha3::{
 use std::num::{NonZeroU64, NonZeroUsize};
 
 /// A trait for generating participant numbers
-pub trait ParticipantNumberGenerator<F: PrimeField>: Iterator<Item = F> {
+pub trait ParticipantNumberGenerator<F: PrimeField>: Iterator<Item = F> + Clone {
     /// Get the participant id `index`
     fn get_participant_id(&self, index: usize) -> F;
 }
