@@ -240,19 +240,44 @@ impl CtIsNotZero for usize {
     }
 }
 
+pub(crate) fn be_byte_array_to_uint<const LIMBS: usize>(buffer: &[u8]) -> VsssResult<Uint<LIMBS>> {
+    let mut value = Uint::<LIMBS>::ZERO;
+    let chunks = core::mem::size_of::<crypto_bigint::Word>();
+    let mut word_index = 0;
+    for (b, limb) in buffer.chunks_exact(chunks).rev().zip(value.as_words_mut()) {
+        *limb = crypto_bigint::Word::from_be_bytes(
+            b.try_into().map_err(|_| Error::InvalidShareConversion)?,
+        );
+        word_index += 1;
+    }
+    let rem = buffer.len() % chunks;
+    if rem > 0 {
+        let mut last_limb = 0;
+        for b in &buffer[chunks * word_index..] {
+            last_limb <<= 8;
+            last_limb |= *b as crypto_bigint::Word;
+        }
+        value.as_words_mut()[word_index] = last_limb;
+    }
+    Ok(value)
+}
+
 pub(crate) fn uint_to_be_byte_array<const LIMBS: usize>(
     u: &Uint<LIMBS>,
     buffer: &mut [u8],
 ) -> VsssResult<()> {
-    let mut i = buffer.iter_mut();
-    for limb in u.as_words() {
-        let bytes = (*limb).to_be_bytes();
-        for byte in bytes.iter() {
-            if let Some(b) = i.next() {
-                *b = *byte;
-            } else {
-                return Err(Error::InvalidShareConversion);
-            }
+    let bytes = core::mem::size_of::<crypto_bigint::Word>();
+    let mut word_index = 0;
+    for (slice, limb) in buffer.chunks_exact_mut(bytes).rev().zip(u.as_words()) {
+        slice.copy_from_slice(&(*limb).to_be_bytes());
+        word_index += 1;
+    }
+    let rem = buffer.len() % bytes;
+    if rem > 0 {
+        let mut last_limb = u.as_words()[word_index];
+        for b in &mut buffer[bytes * word_index..] {
+            *b = (last_limb & 0xff) as u8;
+            last_limb >>= 8;
         }
     }
     Ok(())

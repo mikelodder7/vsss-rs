@@ -2,7 +2,13 @@ use crate::util::*;
 use crate::Vec;
 use crate::{Error, VsssResult};
 use core::cmp;
-use crypto_bigint::{Uint, Zero};
+use crypto_bigint::{
+    modular::{
+        constant_mod::{Residue, ResidueParams},
+        runtime_mod::{DynResidue, DynResidueParams},
+    },
+    Uint, Zero,
+};
 use elliptic_curve::PrimeField;
 use generic_array::{ArrayLength, GenericArray};
 use subtle::Choice;
@@ -403,15 +409,11 @@ impl<const LIMBS: usize> ShareIdentifier for Uint<LIMBS> {
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let repr = element.to_repr();
         let bytes = repr.as_ref();
-        let len = cmp::min(Uint::<LIMBS>::BYTES, bytes.len());
-        Ok(Uint::<LIMBS>::from_be_slice(&bytes[0..len]))
+        be_byte_array_to_uint::<LIMBS>(&bytes)
     }
 
     fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
         let mut repr = F::Repr::default();
-        if repr.as_ref().len() < Uint::<LIMBS>::BYTES {
-            return Err(Error::InvalidShareConversion);
-        }
         uint_to_be_byte_array(self, repr.as_mut())?;
         Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
     }
@@ -530,9 +532,91 @@ impl<L: ArrayLength> ShareIdentifier for GenericArray<u8, L> {
     }
 }
 
+impl<const LIMBS: usize> ShareIdentifier for DynResidue<LIMBS> {
+    fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
+        let modulus = Uint::<LIMBS>::from_be_hex(F::MODULUS);
+        let value = Uint::<LIMBS>::from_field_element(element)?;
+        let params = DynResidueParams::new(&modulus);
+        Ok(DynResidue::new(&value, params))
+    }
+
+    fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
+        Uint::<LIMBS>::as_field_element(&self.retrieve())
+    }
+
+    fn is_zero(&self) -> Choice {
+        <Uint<LIMBS> as Zero>::is_zero(&self.retrieve())
+    }
+
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let b = buffer.as_mut();
+        if b.len() < Uint::<LIMBS>::BYTES * 2 {
+            return Err(Error::InvalidShareConversion);
+        }
+        self.params().modulus().to_buffer(b)?;
+        self.retrieve().to_buffer(buffer)?;
+        Ok(())
+    }
+
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        if repr.len() < Uint::<LIMBS>::BYTES * 2 {
+            return Err(Error::InvalidShareConversion);
+        }
+        let modulus = Uint::<LIMBS>::from_buffer(&repr)?;
+        let value = Uint::<LIMBS>::from_buffer(&repr[Uint::<LIMBS>::BYTES..])?;
+        let params = DynResidueParams::new(&modulus);
+        Ok(DynResidue::new(&value, params))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        let mut out = vec![0u8; Uint::<LIMBS>::BYTES * 2];
+        self.to_buffer(&mut out)
+            .expect("buffer is the correct size");
+        out
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier for Residue<MOD, LIMBS> {
+    fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
+        debug_assert_eq!(Uint::<LIMBS>::from_be_hex(F::MODULUS), MOD::MODULUS);
+        let value = Uint::<LIMBS>::from_field_element(element)?;
+        Ok(Residue::new(&value))
+    }
+
+    fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
+        Uint::<LIMBS>::as_field_element(&self.retrieve())
+    }
+
+    fn is_zero(&self) -> Choice {
+        <Uint<LIMBS> as Zero>::is_zero(&self.retrieve())
+    }
+
+    fn to_buffer<M: AsMut<[u8]>>(&self, buffer: M) -> VsssResult<()> {
+        self.retrieve().to_buffer(buffer)
+    }
+
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let value = Uint::<LIMBS>::from_buffer(repr)?;
+        Ok(Residue::new(&value))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        let mut out = vec![0u8; Uint::<LIMBS>::BYTES];
+        self.to_buffer(&mut out)
+            .expect("buffer is the correct size");
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto_bigint::{const_residue, U1024, U128, U256, U64};
+    use elliptic_curve::Field;
+    use rand_core::SeedableRng;
 
     #[test]
     fn arrays() {
@@ -549,5 +633,68 @@ mod tests {
         a[0] = 1;
         let res = ShareIdentifier::as_field_element::<k256::Scalar>(&a);
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn uint() {
+        let res = U1024::from_field_element(k256::Scalar::MULTIPLICATIVE_GENERATOR);
+        assert!(res.is_ok());
+        let v = res.unwrap();
+        let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), k256::Scalar::MULTIPLICATIVE_GENERATOR);
+
+        let res = U256::from_field_element(k256::Scalar::ONE);
+        assert!(res.is_ok());
+        let v = res.unwrap();
+        let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), k256::Scalar::ONE);
+
+        let res = U128::from_field_element(k256::Scalar::ONE);
+        assert!(res.is_ok());
+        let v = res.unwrap();
+        let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), k256::Scalar::ONE);
+
+        let res = U64::from_field_element(k256::Scalar::MULTIPLICATIVE_GENERATOR);
+        assert!(res.is_ok());
+        let v = res.unwrap();
+        let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), k256::Scalar::MULTIPLICATIVE_GENERATOR);
+    }
+
+    #[test]
+    fn uint_random() {
+        let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
+        for _ in 0..20 {
+            let s = k256::Scalar::random(&mut rng);
+
+            let res = U1024::from_field_element(s);
+            assert!(res.is_ok());
+            let v = res.unwrap();
+            let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap(), s);
+
+            let res = U256::from_field_element(s);
+            assert!(res.is_ok());
+            let v = res.unwrap();
+            let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap(), s);
+        }
+    }
+
+    #[test]
+    fn modular() {
+        let res = DynResidue::<4>::from_field_element(k256::Scalar::MULTIPLICATIVE_GENERATOR);
+        assert!(res.is_ok());
+        let v = res.unwrap();
+        let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), k256::Scalar::MULTIPLICATIVE_GENERATOR);
     }
 }
