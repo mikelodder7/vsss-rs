@@ -7,7 +7,10 @@ use crate::util::{uint_to_be_byte_array, CtIsZero};
 use crate::*;
 use core::cmp;
 use crypto_bigint::{
-    modular::runtime_mod::{DynResidue, DynResidueParams},
+    modular::{
+        constant_mod::{Residue, ResidueParams},
+        runtime_mod::{DynResidue, DynResidueParams},
+    },
     Uint, Zero,
 };
 use elliptic_curve::{group::GroupEncoding, PrimeField};
@@ -347,6 +350,45 @@ macro_rules! impl_array_share {
                     let mut buffer = vec![0u8; Uint::<LIMBS>::BYTES * 2];
                     self.value(&mut buffer).expect("buffer is the correct size");
                     buffer
+                }
+            }
+
+            impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Share for ($type, Residue<MOD, LIMBS>) {
+                type Identifier = $type;
+
+                fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                    (0, Residue::ZERO)
+                }
+
+                fn is_zero(&self) -> Choice {
+                    Zero::is_zero(&self.1.retrieve())
+                }
+
+                fn identifier(&self) -> Self::Identifier {
+                    self.0
+                }
+
+                fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                    &mut self.0
+                }
+
+                fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
+                    (self.0, self.1.retrieve()).value(buffer)
+                }
+
+                fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
+                    if buffer.len() < Uint::<LIMBS>::BYTES {
+                        return Err(Error::InvalidShareConversion);
+                    }
+                    let n = Uint::<LIMBS>::ZERO;
+                    (self.0, n).value_mut(buffer)?;
+                    self.1 = Residue::new(&n);
+                    Ok(())
+                }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    (self.0, self.1.retrieve()).value_vec()
                 }
             }
 
