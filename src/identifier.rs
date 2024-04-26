@@ -553,8 +553,8 @@ impl<const LIMBS: usize> ShareIdentifier for DynResidue<LIMBS> {
         if b.len() < Uint::<LIMBS>::BYTES * 2 {
             return Err(Error::InvalidShareConversion);
         }
-        self.params().modulus().to_buffer(b)?;
-        self.retrieve().to_buffer(buffer)?;
+        self.params().modulus().to_buffer(&mut b[..Uint::<LIMBS>::BYTES])?;
+        self.retrieve().to_buffer(&mut b[Uint::<LIMBS>::BYTES..])?;
         Ok(())
     }
 
@@ -614,7 +614,7 @@ impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier for Residue<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto_bigint::{const_residue, U1024, U128, U256, U64};
+    use crypto_bigint::{U1024, U128, U256, U64};
     use elliptic_curve::Field;
     use rand_core::SeedableRng;
 
@@ -696,5 +696,12 @@ mod tests {
         let res = ShareIdentifier::as_field_element::<k256::Scalar>(&v);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), k256::Scalar::MULTIPLICATIVE_GENERATOR);
+
+        let mut buffer = [0u8; 64];
+        let res = v.to_buffer(&mut buffer);
+        assert!(res.is_ok());
+        let res = DynResidue::<4>::from_buffer(&buffer);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), v);
     }
 }
