@@ -17,7 +17,7 @@ use elliptic_curve::{group::GroupEncoding, PrimeField};
 use generic_array::{ArrayLength, GenericArray};
 
 /// The methods necessary for a secret share
-pub trait Share: Sized + Clone {
+pub trait Share: Sized + Clone + Eq + PartialEq {
     /// The identifier type
     type Identifier: ShareIdentifier;
 
