@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "4.1.1"
+version = "4.2.0"
 
 [features]
 default = ["std"]
@@ -19,9 +19,16 @@ curve25519 = ["curve25519-dalek", "serde", "hex", "zeroize"]
 std = ["rand_core/std", "rand/std", "serde/std"]
 
 [dependencies]
+bls12_381_plus = { version = "0.8", optional = true }
+blstrs_plus = { version = "0.8", optional = true }
 crypto-bigint = "0.5"
 curve25519-dalek = { version = "4.1.2", features = ["digest", "rand_core", "group"], optional = true }
 elliptic-curve = { version = "0.13", features = ["ecdh"] }
+k256 = { version = "0.13", optional = true }
+p256 = {version = "0.13", optional = true }
+p384 = { version = "0.13", optional = true }
+p521 = { version = "0.13", optional = true }
+ed448-goldilocks-plus = { version = "0.11", optional = true }
 generic-array = "1"
 hex = { version = "0.4", default-features = false, optional = true }
 rand_core = "0.6"

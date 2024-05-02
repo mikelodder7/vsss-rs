@@ -526,6 +526,52 @@ impl<L: ArrayLength> ShareIdentifier for GenericArray<u8, L> {
     }
 }
 
+impl<L: elliptic_curve::generic_array::ArrayLength<u8>> ShareIdentifier
+    for elliptic_curve::generic_array::GenericArray<u8, L>
+{
+    fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
+        let repr = element.to_repr();
+        let bytes = repr.as_ref();
+        let mut r = Self::default();
+        let len = cmp::min(r.len(), bytes.len());
+        r[..len].copy_from_slice(&bytes[0..len]);
+        Ok(r)
+    }
+
+    fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
+        let mut repr = F::Repr::default();
+        let len = cmp::min(repr.as_ref().len(), self.len());
+        repr.as_mut()[..len].copy_from_slice(&self[..len]);
+        Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.ct_is_zero()
+    }
+
+    fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+        let buffer = buffer.as_mut();
+        if buffer.len() < self.len() {
+            return Err(Error::InvalidShareConversion);
+        }
+        buffer[..self.len()].copy_from_slice(self);
+        Ok(())
+    }
+
+    fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+        let repr = repr.as_ref();
+        let mut r = Self::default();
+        let len = cmp::min(r.len(), repr.len());
+        r[..len].copy_from_slice(&repr[..len]);
+        Ok(r)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self[..].to_vec()
+    }
+}
+
 impl<const LIMBS: usize> ShareIdentifier for DynResidue<LIMBS> {
     fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
         let modulus = Uint::<LIMBS>::from_be_hex(F::MODULUS);
@@ -606,6 +652,77 @@ impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier for Residue<
         out
     }
 }
+
+#[cfg(any(
+    feature = "k256",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "ed448-goldilocks-plus",
+    feature = "curve25519",
+    feature = "bls12_381_plus",
+    feature = "blstrs_plus"
+))]
+macro_rules! scalar_impl {
+    ($name:path) => {
+        impl ShareIdentifier for $name {
+            fn from_field_element<F: PrimeField>(element: F) -> VsssResult<Self> {
+                let bytes =
+                    <<$name as PrimeField>::Repr as ShareIdentifier>::from_field_element(element)?;
+                let ct_out = Self::from_repr(bytes);
+                Option::from(ct_out).ok_or(Error::InvalidShareConversion)
+            }
+
+            fn as_field_element<F: PrimeField>(&self) -> VsssResult<F> {
+                let mut repr = F::Repr::default();
+                let r = self.to_repr();
+                repr.as_mut().copy_from_slice(&r);
+                Option::<F>::from(F::from_repr(repr)).ok_or(Error::InvalidShareConversion)
+            }
+
+            fn is_zero(&self) -> Choice {
+                <$name as elliptic_curve::Field>::is_zero(self)
+            }
+
+            fn from_buffer<B: AsRef<[u8]>>(repr: B) -> VsssResult<Self> {
+                let repr = repr.as_ref();
+                let bytes = <<$name as PrimeField>::Repr as ShareIdentifier>::from_buffer(repr)?;
+                let ct_out = Self::from_repr(bytes);
+                Option::from(ct_out).ok_or(Error::InvalidShareConversion)
+            }
+
+            fn to_buffer<M: AsMut<[u8]>>(&self, mut buffer: M) -> VsssResult<()> {
+                let buffer = buffer.as_mut();
+                if buffer.len() < 32 {
+                    return Err(Error::InvalidShareConversion);
+                }
+                buffer.copy_from_slice(&self.to_repr());
+                Ok(())
+            }
+
+            #[cfg(any(feature = "alloc", feature = "std"))]
+            fn to_vec(&self) -> Vec<u8> {
+                self.to_repr().to_vec()
+            }
+        }
+    };
+}
+#[cfg(feature = "k256")]
+scalar_impl!(k256::Scalar);
+#[cfg(feature = "p256")]
+scalar_impl!(p256::Scalar);
+#[cfg(feature = "p384")]
+scalar_impl!(p384::Scalar);
+#[cfg(feature = "p521")]
+scalar_impl!(p521::Scalar);
+#[cfg(feature = "ed448-goldilocks-plus")]
+scalar_impl!(ed448_goldilocks_plus::Scalar);
+#[cfg(feature = "curve25519")]
+scalar_impl!(crate::curve25519::WrappedScalar);
+#[cfg(feature = "bls12_381_plus")]
+scalar_impl!(bls12_381_plus::Scalar);
+#[cfg(feature = "blstrs_plus")]
+scalar_impl!(blstrs_plus::Scalar);
 
 #[cfg(test)]
 mod tests {

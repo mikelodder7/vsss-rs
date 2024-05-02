@@ -175,6 +175,50 @@ impl<L: ArrayLength> Share for GenericArray<u8, L> {
     }
 }
 
+impl<L: elliptic_curve::generic_array::ArrayLength<u8>> Share
+    for elliptic_curve::generic_array::GenericArray<u8, L>
+{
+    type Identifier = u8;
+
+    fn empty_share_with_capacity(_size_hint: usize) -> Self {
+        Self::default()
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.ct_is_zero()
+    }
+
+    fn identifier(&self) -> Self::Identifier {
+        self[0]
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self[0]
+    }
+
+    fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
+        if buffer.len() < L::to_usize() - 1 {
+            return Err(Error::InvalidShareConversion);
+        }
+        let len = L::to_usize() - 1;
+        buffer[..len].copy_from_slice(&self[1..]);
+        Ok(())
+    }
+
+    fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
+        if buffer.len() < L::to_usize() - 1 {
+            return Err(Error::InvalidShareConversion);
+        }
+        let len = L::to_usize() - 1;
+        self[1..].copy_from_slice(&buffer[..len]);
+        Ok(())
+    }
+
+    fn value_vec(&self) -> Vec<u8> {
+        self[1..].to_vec()
+    }
+}
+
 macro_rules! impl_array_share {
     ($($type:ident),+$(,)*) => {
         $(
@@ -492,6 +536,79 @@ impl Share for (Vec<u8>, Vec<u8>) {
     }
 }
 
+#[cfg(any(
+    feature = "k256",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "ed448-goldilocks-plus",
+    feature = "curve25519",
+    feature = "bls12_381_plus",
+    feature = "blstrs_plus"
+))]
+macro_rules! impl_field_share {
+    ($name:path, $($type:ident),+$(,)*) => {
+        $(
+            impl Share for ($type, $name) {
+                type Identifier = $type;
+
+                fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                    (0, <$name as elliptic_curve::Field>::ZERO)
+                }
+
+                fn is_zero(&self) -> Choice {
+                    self.1.is_zero()
+                }
+
+                fn identifier(&self) -> Self::Identifier {
+                    self.0
+                }
+
+                fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                    &mut self.0
+                }
+
+                fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
+                    self.1.to_buffer(buffer)
+                }
+
+                fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
+                    self.1 = <$name as ShareIdentifier>::from_buffer(buffer)?;
+                    Ok(())
+                }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    self.1.to_repr().to_vec()
+                }
+            }
+        )+
+    };
+}
+
+#[cfg(feature = "k256")]
+impl_field_share!(k256::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "p256")]
+impl_field_share!(p256::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "p384")]
+impl_field_share!(p384::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "ed448-goldilocks-plus")]
+impl_field_share!(
+    ed448_goldilocks_plus::Scalar,
+    u8,
+    u16,
+    u32,
+    u64,
+    usize,
+    u128,
+);
+#[cfg(feature = "curve25519")]
+impl_field_share!(curve25519::WrappedScalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "bls12_381_plus")]
+impl_field_share!(bls12_381_plus::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "blstrs_plus")]
+impl_field_share!(blstrs_plus::Scalar, u8, u16, u32, u64, usize, u128,);
+
 #[test]
 fn test_with_identifier_and_value() {
     use generic_array::{typenum, GenericArray};
@@ -567,4 +684,20 @@ fn modular() {
     let res = share2.value_mut(&value);
     assert!(res.is_ok());
     assert_eq!(share.1, share2.1);
+}
+
+#[cfg(feature = "k256")]
+#[test]
+fn scalars_k256() {
+    let share = (1u16, k256::Scalar::from(0x12345678u64));
+    assert_eq!(share.identifier(), 1u16);
+    let mut value = [0u8; 32];
+    assert!(share.value(&mut value).is_ok());
+    assert_eq!(
+        value,
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0x12, 0x34, 0x56, 0x78
+        ]
+    );
 }

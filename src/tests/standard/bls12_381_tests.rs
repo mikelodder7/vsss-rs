@@ -108,7 +108,10 @@ fn simple_std() {
             &mut rng,
         )
         .unwrap();
-    assert_eq!(ped_res.blinder().is_zero().unwrap_u8(), 0u8);
+    assert_eq!(
+        <Scalar as Field>::is_zero(&ped_res.blinder()).unwrap_u8(),
+        0u8
+    );
     for (s, bs) in ped_res
         .secret_shares()
         .iter()
