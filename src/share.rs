@@ -547,13 +547,13 @@ impl Share for (Vec<u8>, Vec<u8>) {
     feature = "blstrs_plus"
 ))]
 macro_rules! impl_field_share {
-    ($name:path, $($type:ident),+$(,)*) => {
+    ($scalar_name:path, $($type:ident),+$(,)*) => {
         $(
-            impl Share for ($type, $name) {
+            impl Share for ($type, $scalar_name) {
                 type Identifier = $type;
 
                 fn empty_share_with_capacity(_size_hint: usize) -> Self {
-                    (0, <$name as elliptic_curve::Field>::ZERO)
+                    (0, <$scalar_name as elliptic_curve::Field>::ZERO)
                 }
 
                 fn is_zero(&self) -> Choice {
@@ -573,7 +573,7 @@ macro_rules! impl_field_share {
                 }
 
                 fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
-                    self.1 = <$name as ShareIdentifier>::from_buffer(buffer)?;
+                    self.1 = <$scalar_name as ShareIdentifier>::from_buffer(buffer)?;
                     Ok(())
                 }
 
@@ -582,16 +582,116 @@ macro_rules! impl_field_share {
                     self.1.to_repr().to_vec()
                 }
             }
+
+        )+
+    };
+}
+
+#[cfg(any(
+    feature = "k256",
+    feature = "p256",
+    feature = "p384",
+    feature = "p521",
+    feature = "ed448-goldilocks-plus",
+    feature = "curve25519",
+))]
+macro_rules! impl_group_share {
+    ($group_name:path, $($type:ident),+$(,)*) => {
+        $(
+            impl Share for ($type, $group_name) {
+                type Identifier = $type;
+
+                fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                    (0, <$group_name as Group>::identity())
+                }
+
+                fn is_zero(&self) -> Choice {
+                    self.1.is_identity()
+                }
+
+                fn identifier(&self) -> Self::Identifier {
+                    self.0
+                }
+
+                fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                    &mut self.0
+                }
+
+                fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
+                    buffer.copy_from_slice(self.1.to_bytes().as_ref());
+                    Ok(())
+                }
+
+                fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
+                    let t = <<$group_name as GroupEncoding>::Repr as ShareIdentifier>::from_buffer(buffer)?;
+                    self.1 = Option::from(<$group_name as GroupEncoding>::from_bytes(&t)).ok_or(Error::InvalidShareConversion)?;
+                    Ok(())
+                }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    self.1.to_bytes().to_vec()
+                }
+            }
+        )+
+    };
+}
+
+#[cfg(any(feature = "bls12_381_plus", feature = "blstrs_plus"))]
+macro_rules! impl_pairing_share {
+    ($group_name:ident, $($type:ident),+$(,)*) => {
+        $(
+            impl Share for ($type, $group_name) {
+                type Identifier = $type;
+
+                fn empty_share_with_capacity(_size_hint: usize) -> Self {
+                    (0, <$group_name as Group>::identity())
+                }
+
+                fn is_zero(&self) -> Choice {
+                    self.1.is_identity()
+                }
+
+                fn identifier(&self) -> Self::Identifier {
+                    self.0
+                }
+
+                fn identifier_mut(&mut self) -> &mut Self::Identifier {
+                    &mut self.0
+                }
+
+                fn value(&self, buffer: &mut [u8]) -> VsssResult<()> {
+                    buffer.copy_from_slice(self.1.to_bytes().as_ref());
+                    Ok(())
+                }
+
+                fn value_mut(&mut self, buffer: &[u8]) -> VsssResult<()> {
+                    let input = buffer.try_into().map_err(|_| Error::InvalidShareConversion)?;
+                    self.1 = Option::from($group_name::from_compressed(&input)).ok_or(Error::InvalidShareConversion)?;
+                    Ok(())
+                }
+
+                #[cfg(any(feature = "alloc", feature = "std"))]
+                fn value_vec(&self) -> Vec<u8> {
+                    self.1.to_bytes().into()
+                }
+            }
         )+
     };
 }
 
 #[cfg(feature = "k256")]
 impl_field_share!(k256::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "k256")]
+impl_group_share!(k256::ProjectivePoint, u8, u16, u32, u64, usize, u128,);
 #[cfg(feature = "p256")]
 impl_field_share!(p256::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "p256")]
+impl_group_share!(p256::ProjectivePoint, u8, u16, u32, u64, usize, u128,);
 #[cfg(feature = "p384")]
 impl_field_share!(p384::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "p384")]
+impl_group_share!(p384::ProjectivePoint, u8, u16, u32, u64, usize, u128,);
 #[cfg(feature = "ed448-goldilocks-plus")]
 impl_field_share!(
     ed448_goldilocks_plus::Scalar,
@@ -602,12 +702,42 @@ impl_field_share!(
     usize,
     u128,
 );
+#[cfg(feature = "ed448-goldilocks-plus")]
+impl_group_share!(
+    ed448_goldilocks_plus::EdwardsPoint,
+    u8,
+    u16,
+    u32,
+    u64,
+    usize,
+    u128,
+);
 #[cfg(feature = "curve25519")]
 impl_field_share!(curve25519::WrappedScalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "curve25519")]
+impl_group_share!(curve25519::WrappedRistretto, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "curve25519")]
+impl_group_share!(curve25519::WrappedEdwards, u8, u16, u32, u64, usize, u128,);
 #[cfg(feature = "bls12_381_plus")]
 impl_field_share!(bls12_381_plus::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "bls12_381_plus")]
+use bls12_381_plus::G1Projective as G1ProjectiveBls12_381;
+#[cfg(feature = "bls12_381_plus")]
+impl_pairing_share!(G1ProjectiveBls12_381, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "bls12_381_plus")]
+use bls12_381_plus::G2Projective as G2ProjectiveBls12_381;
+#[cfg(feature = "bls12_381_plus")]
+impl_pairing_share!(G2ProjectiveBls12_381, u8, u16, u32, u64, usize, u128,);
 #[cfg(feature = "blstrs_plus")]
 impl_field_share!(blstrs_plus::Scalar, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "blstrs_plus")]
+use blstrs_plus::G1Projective;
+#[cfg(feature = "blstrs_plus")]
+impl_pairing_share!(G1Projective, u8, u16, u32, u64, usize, u128,);
+#[cfg(feature = "blstrs_plus")]
+use blstrs_plus::G2Projective;
+#[cfg(feature = "blstrs_plus")]
+impl_pairing_share!(G2Projective, u8, u16, u32, u64, usize, u128,);
 
 #[test]
 fn test_with_identifier_and_value() {
@@ -700,4 +830,23 @@ fn scalars_k256() {
             0x12, 0x34, 0x56, 0x78
         ]
     );
+}
+
+#[cfg(all(feature = "k256", any(feature = "alloc", feature = "std")))]
+#[test]
+fn points_k256() {
+    use elliptic_curve::Field;
+    use rand_core::SeedableRng;
+
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([0u8; 32]);
+    let secret = k256::Scalar::random(&mut rng);
+    let shares =
+        crate::shamir::split_secret::<k256::Scalar, u8, (u8, k256::Scalar)>(2, 3, secret, &mut rng)
+            .unwrap();
+    let pt_shares = shares
+        .into_iter()
+        .map(|(i, s)| (i, k256::ProjectivePoint::GENERATOR * s))
+        .collect::<Vec<_>>();
+    let pub_key: k256::ProjectivePoint = combine_shares_group(&pt_shares).unwrap();
+    assert_eq!(pub_key, k256::ProjectivePoint::GENERATOR * secret);
 }
