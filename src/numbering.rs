@@ -149,6 +149,15 @@ pub struct ListParticipantNumberGenerator<'a, F: PrimeField> {
     index: usize,
 }
 
+impl<'a, F: PrimeField> Default for ListParticipantNumberGenerator<'a, F> {
+    fn default() -> Self {
+        Self {
+            list: &[],
+            index: 0,
+        }
+    }
+}
+
 impl<'a, F: PrimeField> Iterator for ListParticipantNumberGenerator<'a, F> {
     type Item = F;
 
@@ -181,6 +190,15 @@ impl<'a, F: PrimeField> ListParticipantNumberGenerator<'a, F> {
 pub struct ListAndRandomParticipantNumberGenerator<'a, F: PrimeField> {
     list: ListParticipantNumberGenerator<'a, F>,
     rng: RandomParticipantNumberGenerator<F>,
+}
+
+impl<'a, F: PrimeField> Default for ListAndRandomParticipantNumberGenerator<'a, F> {
+    fn default() -> Self {
+        Self {
+            list: ListParticipantNumberGenerator::default(),
+            rng: RandomParticipantNumberGenerator::default(),
+        }
+    }
 }
 
 impl<'a, F: PrimeField> Iterator for ListAndRandomParticipantNumberGenerator<'a, F> {
@@ -224,6 +242,15 @@ impl<'a, F: PrimeField> ListAndRandomParticipantNumberGenerator<'a, F> {
 pub struct ListAndSequentialParticipantNumberGenerator<'a, F: PrimeField> {
     list: ListParticipantNumberGenerator<'a, F>,
     seq: SequentialParticipantNumberGenerator<F>,
+}
+
+impl<'a, F: PrimeField> Default for ListAndSequentialParticipantNumberGenerator<'a, F> {
+    fn default() -> Self {
+        Self {
+            list: ListParticipantNumberGenerator::default(),
+            seq: SequentialParticipantNumberGenerator::default(),
+        }
+    }
 }
 
 impl<'a, F: PrimeField> Iterator for ListAndSequentialParticipantNumberGenerator<'a, F> {
@@ -436,5 +463,20 @@ mod tests {
             repr.copy_from_slice(&hex::decode(s).unwrap());
             assert_eq!(list[i + 5], Scalar::from_repr(repr).unwrap());
         }
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[test]
+    fn test_empty_list_and_sequential_number_generator() {
+        let mut gen = ListAndSequentialParticipantNumberGenerator::<Scalar>::default();
+        gen.seq.start = 1;
+        gen.seq.limit = 5;
+        let list: Vec<_> = gen.collect();
+        assert_eq!(list.len(), 5);
+        assert_eq!(list[0], Scalar::from(1u64));
+        assert_eq!(list[1], Scalar::from(2u64));
+        assert_eq!(list[2], Scalar::from(3u64));
+        assert_eq!(list[3], Scalar::from(4u64));
+        assert_eq!(list[4], Scalar::from(5u64));
     }
 }

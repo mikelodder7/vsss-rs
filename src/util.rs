@@ -242,7 +242,7 @@ impl CtIsNotZero for usize {
 
 pub(crate) fn be_byte_array_to_uint<const LIMBS: usize>(buffer: &[u8]) -> VsssResult<Uint<LIMBS>> {
     let mut value = Uint::<LIMBS>::ZERO;
-    let chunks = core::mem::size_of::<crypto_bigint::Word>();
+    let chunks = size_of::<crypto_bigint::Word>();
     let mut word_index = 0;
     for (b, limb) in buffer.chunks_exact(chunks).rev().zip(value.as_words_mut()) {
         *limb = crypto_bigint::Word::from_be_bytes(
@@ -266,7 +266,7 @@ pub(crate) fn uint_to_be_byte_array<const LIMBS: usize>(
     u: &Uint<LIMBS>,
     buffer: &mut [u8],
 ) -> VsssResult<()> {
-    let bytes = core::mem::size_of::<crypto_bigint::Word>();
+    let bytes = size_of::<crypto_bigint::Word>();
     let mut word_index = 0;
     for (slice, limb) in buffer.chunks_exact_mut(bytes).rev().zip(u.as_words()) {
         slice.copy_from_slice(&(*limb).to_be_bytes());
