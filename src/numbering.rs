@@ -1,3 +1,4 @@
+use core::num::{NonZeroU64, NonZeroUsize};
 use core::{
     fmt::{self, Debug, Formatter},
     marker::PhantomData,
@@ -9,7 +10,6 @@ use sha3::{
     digest::{Update, XofReader},
     Shake256,
 };
-use std::num::{NonZeroU64, NonZeroUsize};
 
 /// A trait for generating participant numbers
 pub trait ParticipantNumberGenerator<F: PrimeField>: Iterator<Item = F> + Clone {
@@ -326,7 +326,7 @@ impl Debug for XofRng {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "alloc", feature = "std")))]
 mod tests {
     use super::*;
     use crate::*;

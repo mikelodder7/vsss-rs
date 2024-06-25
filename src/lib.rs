@@ -41,6 +41,8 @@
 //! To split a p256 secret using Shamir
 //!
 //! ```
+//! #[cfg(any(feature = "alloc", feature = "std"))]
+//! {
 //! use vsss_rs::{*, shamir};
 //! use elliptic_curve::ff::PrimeField;
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
@@ -57,11 +59,14 @@
 //! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+//! }
 //! ```
 //!
 //! To split a k256 secret using Shamir
 //!
 //! ```
+//! #[cfg(any(feature = "alloc", feature = "std"))]
+//! {
 //! use vsss_rs::{*, shamir};
 //! use elliptic_curve::ff::PrimeField;
 //! use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
@@ -78,11 +83,14 @@
 //! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+//! }
 //! ```
 //!
 //! Feldman or Pedersen return extra information for verification using their respective verifiers
 //!
 //! ```
+//! #[cfg(any(feature = "alloc", feature = "std"))]
+//! {
 //! use vsss_rs::{*, feldman};
 //! use bls12_381_plus::{Scalar, G1Projective};
 //! use elliptic_curve::ff::Field;
@@ -99,6 +107,7 @@
 //! assert!(res.is_ok());
 //! let secret_1: Scalar = res.unwrap();
 //! assert_eq!(secret, secret_1);
+//! }
 //! ```
 //!
 //! Curve25519 is not a prime field but this crate does support it using
@@ -155,7 +164,7 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 

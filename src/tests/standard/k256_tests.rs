@@ -4,9 +4,14 @@
 */
 use super::invalid::*;
 use super::valid::*;
+#[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use crate::*;
+#[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use elliptic_curve::ff::{Field, PrimeField};
-use k256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
+#[cfg(all(test, any(feature = "alloc", feature = "std")))]
+use k256::{NonZeroScalar, SecretKey};
+use k256::{ProjectivePoint, Scalar};
+#[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use rand::rngs::OsRng;
 
 #[test]
@@ -43,8 +48,11 @@ fn key_tests() {
     assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn share_tuples() {
+    use crate::combine_shares;
+
     let mut osrng = OsRng::default();
     let sk = Scalar::random(&mut osrng);
 

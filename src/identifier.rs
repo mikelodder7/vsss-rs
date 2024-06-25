@@ -1,5 +1,4 @@
 use crate::util::*;
-use crate::Vec;
 use crate::{Error, VsssResult};
 use core::cmp;
 use crypto_bigint::{
@@ -12,6 +11,9 @@ use crypto_bigint::{
 use elliptic_curve::PrimeField;
 use generic_array::{ArrayLength, GenericArray};
 use subtle::Choice;
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+use crate::Vec;
 
 /// A value used to represent the identifier for secret shares
 pub trait ShareIdentifier: Sized + Eq {

@@ -5,7 +5,6 @@
 
 use crate::util::CtIsZero;
 use crate::*;
-use core::cmp;
 use crypto_bigint::{
     modular::{
         constant_mod::{Residue, ResidueParams},
@@ -214,6 +213,7 @@ impl<L: elliptic_curve::generic_array::ArrayLength<u8>> Share
         Ok(())
     }
 
+    #[cfg(any(feature = "alloc", feature = "std"))]
     fn value_vec(&self) -> Vec<u8> {
         self[1..].to_vec()
     }
@@ -488,7 +488,7 @@ impl Share for Vec<u8> {
         if buffer.len() < self.len() - 1 {
             return Err(Error::InvalidShareConversion);
         }
-        let len = cmp::min(buffer.len(), self.len() - 1);
+        let len = core::cmp::min(buffer.len(), self.len() - 1);
         self[1..].copy_from_slice(&buffer[..len]);
         Ok(())
     }

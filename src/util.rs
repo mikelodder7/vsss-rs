@@ -4,6 +4,7 @@
 */
 
 use crate::{Error, VsssResult};
+use core::mem::size_of;
 use crypto_bigint::Uint;
 
 /// A trait for constant time indicating if a value is zero.

@@ -8,7 +8,6 @@
 //! 3. Ensure data access patterns are independent of secret data
 
 use crate::util::CtIsNotZero;
-use crate::{Error, ParticipantNumberGenerator, VsssResult};
 use core::borrow::Borrow;
 use core::{
     fmt::{self, Binary, Display, Formatter, LowerHex, UpperHex},
@@ -19,8 +18,11 @@ use core::{
     },
 };
 use elliptic_curve::ff::{Field, PrimeField};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+use rand_core::CryptoRng;
 
 /// Represents the finite field GF(2^8) with 256 elements.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -554,11 +556,11 @@ impl Gf256 {
         limit: usize,
         secret: B,
         mut rng: impl RngCore + CryptoRng,
-    ) -> VsssResult<crate::Vec<crate::Vec<u8>>> {
+    ) -> crate::VsssResult<crate::Vec<crate::Vec<u8>>> {
         let mut shares = crate::Vec::with_capacity(limit);
         for i in 1..=limit {
             let mut inner = crate::Vec::with_capacity(limit + 1);
-            inner.push(u8::try_from(i).map_err(|_| Error::SharingInvalidIdentifier)?);
+            inner.push(u8::try_from(i).map_err(|_| crate::Error::SharingInvalidIdentifier)?);
             shares.push(inner);
         }
         for b in secret.as_ref() {
@@ -578,7 +580,7 @@ impl Gf256 {
     #[cfg(any(feature = "alloc", feature = "std"))]
     /// Split a byte array into shares using the participant number generator.
     pub fn split_array_with_participant_generator<
-        P: ParticipantNumberGenerator<Self>,
+        P: crate::ParticipantNumberGenerator<Self>,
         B: AsRef<[u8]>,
     >(
         threshold: usize,
@@ -586,7 +588,7 @@ impl Gf256 {
         secret: B,
         mut rng: impl RngCore + CryptoRng,
         participant_generator: P,
-    ) -> VsssResult<crate::Vec<crate::Vec<u8>>> {
+    ) -> crate::VsssResult<crate::Vec<crate::Vec<u8>>> {
         let mut shares = crate::Vec::with_capacity(limit);
         for i in 0..limit {
             let mut inner = crate::Vec::with_capacity(limit + 1);
@@ -611,11 +613,13 @@ impl Gf256 {
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     /// Combine shares into a byte array.
-    pub fn combine_array<B: AsRef<[crate::Vec<u8>]>>(shares: B) -> VsssResult<crate::Vec<u8>> {
+    pub fn combine_array<B: AsRef<[crate::Vec<u8>]>>(
+        shares: B,
+    ) -> crate::VsssResult<crate::Vec<u8>> {
         let shares = shares.as_ref();
 
         if shares.len() < 2 {
-            return Err(Error::SharingMinThreshold);
+            return Err(crate::Error::SharingMinThreshold);
         }
 
         let mut secret = crate::Vec::with_capacity(shares[0].len() - 1);
@@ -662,6 +666,7 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
 }
 
 #[cfg(test)]
+#[cfg(any(feature = "alloc", feature = "std"))]
 mod tests {
     use super::gf256_cmp;
     use super::*;
@@ -775,6 +780,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[cfg(any(feature = "alloc", feature = "std"))]
 mod gf256_cmp {
     // Ref https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
 

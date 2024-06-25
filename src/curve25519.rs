@@ -1029,7 +1029,7 @@ fn serialize_arr<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Erro
     if s.is_human_readable() {
         let mut space = [0u8; 64];
         hex::encode_to_slice(bytes, &mut space).unwrap();
-        unsafe { std::str::from_utf8_unchecked(&space) }.serialize(s)
+        unsafe { core::str::from_utf8_unchecked(&space) }.serialize(s)
     } else {
         bytes.serialize(s)
     }

@@ -7,6 +7,7 @@ use super::invalid::*;
 use super::valid::*;
 use crate::*;
 use ed448_goldilocks_plus::{EdwardsPoint, Scalar};
+#[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use elliptic_curve::hash2curve::ExpandMsgXmd;
 
 #[test]
@@ -34,8 +35,10 @@ fn valid_std_tests() {
     combine_all::<EdwardsPoint, u8, [u8; 58]>();
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
+    use crate::combine_shares;
     use rand::Rng;
 
     let mut osrng = rand::rngs::OsRng::default();

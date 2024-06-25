@@ -4,11 +4,15 @@
 */
 use super::invalid::*;
 use super::valid::*;
-use crate::*;
-use elliptic_curve::ff::PrimeField;
 use generic_array::{typenum, GenericArray};
-use p256::{NonZeroScalar, ProjectivePoint, Scalar, SecretKey};
-use rand::rngs::OsRng;
+use p256::{ProjectivePoint, Scalar};
+
+#[cfg(all(test, any(feature = "alloc"), feature = "std"))]
+use crate::*;
+#[cfg(all(test, any(feature = "alloc"), feature = "std"))]
+use elliptic_curve::ff::PrimeField;
+#[cfg(all(test, any(feature = "alloc"), feature = "std"))]
+use p256::{NonZeroScalar, SecretKey};
 
 #[test]
 fn invalid_tests() {
@@ -32,6 +36,7 @@ fn valid_std_tests() {
 fn std_tests() {
     use elliptic_curve::ff::PrimeField;
     use p256::{NonZeroScalar, Scalar, SecretKey};
+    use rand::rngs::OsRng;
 
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
@@ -50,6 +55,8 @@ fn std_tests() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
+    use rand::rngs::OsRng;
+
     let mut osrng = OsRng::default();
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();

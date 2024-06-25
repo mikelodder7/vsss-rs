@@ -240,47 +240,13 @@ fn split_combine_test(#[case] threshold: usize, #[case] limit: usize) {
         .combine_to_field_element::<Scalar, [(Scalar, Scalar); 15]>()
         .unwrap();
     assert_eq!(secret, secret2);
-
-    // let mut sigs_g1 = Vec::<const_generics::Share<G1_SHARE_SIZE>, MAX_TEST_SHARES>::new();
-    // let mut sigs_g2 = Vec::<const_generics::Share<G2_SHARE_SIZE>, MAX_TEST_SHARES>::new();
-    // for s in &shares {
-    //     let ff = s.as_field_element::<Scalar>().unwrap();
-    //     let sig_g1 = G1Projective::GENERATOR * ff;
-    //     let new_share_g1 =
-    //         const_generics::Share::<G1_SHARE_SIZE>::from_group_element(s.identifier(), sig_g1)
-    //             .unwrap();
-    //     sigs_g1.push(new_share_g1).unwrap();
-    //
-    //     let sig_g2 = G2Projective::GENERATOR * ff;
-    //     let new_share_g2 =
-    //         const_generics::Share::<G2_SHARE_SIZE>::from_group_element(s.identifier(), sig_g2)
-    //             .unwrap();
-    //     sigs_g2.push(new_share_g2).unwrap();
-    // }
-    //
-    // let sig_g1 = combine_shares_group_const_generics::<Scalar, G1Projective, G1_SHARE_SIZE>(
-    //     &sigs_g1[..threshold],
-    // )
-    // .unwrap();
-    // assert_eq!(sig_g1, G1Projective::GENERATOR * secret);
-    // let sig_g2 = combine_shares_group_const_generics::<Scalar, G2Projective, G2_SHARE_SIZE>(
-    //     &sigs_g2[..threshold],
-    // )
-    // .unwrap();
-    // assert_eq!(sig_g2, G2Projective::GENERATOR * secret);
-    //
-    // let (shares, verifier) =
-    //     feldman::split_secret_const_generics::<_, G1Projective, _, SECRET_SHARE_SIZE>(
-    //         threshold, limit, secret, None, &mut OsRng,
-    //     )
-    //     .unwrap();
-    // for s in &shares {
-    //     assert!(verifier.verify_const_generics(s).is_ok());
-    // }
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn point_combine() {
+    use crate::combine_shares_group;
+
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
     let res = TesterVsss::<G1Projective, u8, [u8; 33]>::split_secret(2, 3, secret, &mut rng);
@@ -300,8 +266,11 @@ fn point_combine() {
     assert_eq!(sig_g1, G1Projective::GENERATOR * secret);
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn big_integer_identifier() {
+    use crate::combine_shares;
+
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
     let res = TesterVsss::<G1Projective, u16, (u16, GenericArray<u8, typenum::U32>)>::split_secret(
