@@ -14,6 +14,7 @@ pub enum Error {
     #[error("Limit is less than threshold")]
     SharingLimitLessThanThreshold,
     /// When dealing with fixed size arrays, the caller requested more shares than there is space
+    /// or more shares the field supports.
     #[error("Requested more shares than space was provided")]
     InvalidSizeRequest,
     /// Invalid share identifier

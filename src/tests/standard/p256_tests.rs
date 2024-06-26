@@ -28,12 +28,14 @@ fn valid_tests() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
+    use crate::Vec;
     combine_all::<ProjectivePoint, u8, Vec<u8>>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn std_tests() {
+    use crate::{combine_shares, shamir, Vec};
     use elliptic_curve::ff::PrimeField;
     use p256::{NonZeroScalar, Scalar, SecretKey};
     use rand::rngs::OsRng;
@@ -55,6 +57,9 @@ fn std_tests() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
+    use crate::{combine_shares, shamir};
+    use elliptic_curve::PrimeField;
+    use p256::{NonZeroScalar, SecretKey};
     use rand::rngs::OsRng;
 
     let mut osrng = OsRng::default();

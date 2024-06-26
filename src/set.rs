@@ -85,20 +85,21 @@ where
 {
     let mut secret = S::default();
     // Calculate lagrange interpolation
-    for (i, (x_i, s)) in shares.iter().enumerate() {
-        let mut basis = F::ONE;
-        for (j, (x_j, _)) in shares.iter().enumerate() {
+    for (i, &(x_i, s)) in shares.iter().enumerate() {
+        let mut num = F::ONE;
+        let mut den = F::ONE;
+        for (j, &(x_j, _)) in shares.iter().enumerate() {
             if i == j {
                 continue;
             }
 
-            let denom = *x_j - *x_i;
-            let inv = denom.invert().unwrap();
+            den *= x_j - x_i;
+            num *= x_j;
             // x_j / (x_j - x_i) * ...
-            basis *= *x_j * inv;
         }
 
-        secret += *s * basis;
+        let basis = num * den.invert().expect("shouldn't be zero");
+        secret += s * basis;
     }
 
     Ok(secret)

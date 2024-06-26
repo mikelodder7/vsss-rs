@@ -557,6 +557,9 @@ impl Gf256 {
         secret: B,
         mut rng: impl RngCore + CryptoRng,
     ) -> crate::VsssResult<crate::Vec<crate::Vec<u8>>> {
+        if limit > 255 {
+            return Err(crate::Error::InvalidSizeRequest);
+        }
         let mut shares = crate::Vec::with_capacity(limit);
         for i in 1..=limit {
             let mut inner = crate::Vec::with_capacity(limit + 1);
