@@ -80,12 +80,15 @@ where
     PP: ParticipantNumberGenerator<F>,
 {
     // Generate the shares of (x, y) coordinates
-    // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
+    // x coordinates are in the range from [1, N+1). 0 is reserved for the secret
     let mut shares = SS::create(limit);
     let indexer = shares.as_mut();
 
     for (i, s) in indexer.iter_mut().enumerate().take(limit) {
         let x = participant_generator.get_participant_id(i);
+        if x.is_zero().into() {
+            return Err(Error::SharingInvalidIdentifier);
+        }
         let y = polynomial.evaluate(x, threshold);
         let id = I::from_field_element(x)?;
         let share = S::from_field_element(id, y)?;

@@ -560,13 +560,17 @@ impl Gf256 {
         if limit > 255 {
             return Err(crate::Error::InvalidSizeRequest);
         }
+        let secret = secret.as_ref();
+        if secret.is_empty() {
+            return Err(crate::Error::InvalidSecret);
+        }
         let mut shares = crate::Vec::with_capacity(limit);
         for i in 1..=limit {
             let mut inner = crate::Vec::with_capacity(limit + 1);
             inner.push(u8::try_from(i).map_err(|_| crate::Error::SharingInvalidIdentifier)?);
             shares.push(inner);
         }
-        for b in secret.as_ref() {
+        for b in secret {
             let inner_shares = crate::shamir::split_secret::<Self, u8, [u8; 2]>(
                 threshold,
                 limit,
@@ -592,13 +596,20 @@ impl Gf256 {
         mut rng: impl RngCore + CryptoRng,
         participant_generator: P,
     ) -> crate::VsssResult<crate::Vec<crate::Vec<u8>>> {
+        if limit > 255 {
+            return Err(crate::Error::InvalidSizeRequest);
+        }
+        let secret = secret.as_ref();
+        if secret.is_empty() {
+            return Err(crate::Error::InvalidSecret);
+        }
         let mut shares = crate::Vec::with_capacity(limit);
         for i in 0..limit {
             let mut inner = crate::Vec::with_capacity(limit + 1);
             inner.push(participant_generator.get_participant_id(i).0);
             shares.push(inner);
         }
-        for b in secret.as_ref() {
+        for b in secret {
             let inner_shares =
                 crate::shamir::split_secret_with_participant_generator::<Self, u8, [u8; 2], P>(
                     threshold,
@@ -623,6 +634,12 @@ impl Gf256 {
 
         if shares.len() < 2 {
             return Err(crate::Error::SharingMinThreshold);
+        }
+        if shares[0].len() < 2 {
+            return Err(crate::Error::InvalidShare);
+        }
+        if shares[1..].iter().all(|s| s.len() != shares[0].len()) {
+            return Err(crate::Error::InvalidShare);
         }
 
         let mut secret = crate::Vec::with_capacity(shares[0].len() - 1);
@@ -752,7 +769,6 @@ mod tests {
         }
     }
 
-    #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn split_array() {
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
@@ -779,6 +795,14 @@ mod tests {
         let res = Gf256::combine_array(&[shares[4].clone(), shares[1].clone(), shares[3].clone()]);
         let secret2 = res.unwrap();
         assert_eq!(secret2, secret);
+    }
+
+    #[test]
+    fn combine_fuzz() {
+        let res = Gf256::combine_array(&[vec![], vec![]]);
+        assert!(res.is_err());
+        let res = Gf256::combine_array(&[vec![1u8, 8u8], vec![2u8]]);
+        assert!(res.is_err());
     }
 }
 
