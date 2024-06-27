@@ -632,15 +632,7 @@ impl Gf256 {
     ) -> crate::VsssResult<crate::Vec<u8>> {
         let shares = shares.as_ref();
 
-        if shares.len() < 2 {
-            return Err(crate::Error::SharingMinThreshold);
-        }
-        if shares[0].len() < 2 {
-            return Err(crate::Error::InvalidShare);
-        }
-        if shares[1..].iter().all(|s| s.len() != shares[0].len()) {
-            return Err(crate::Error::InvalidShare);
-        }
+        Self::are_shares_valid(shares)?;
 
         let mut secret = crate::Vec::with_capacity(shares[0].len() - 1);
         let mut inner_shares = crate::Vec::with_capacity(shares[0].len() - 1);
@@ -655,6 +647,20 @@ impl Gf256 {
             secret.push(crate::combine_shares::<Self, u8, [u8; 2]>(&inner_shares)?.0);
         }
         Ok(secret)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn are_shares_valid(shares: &[crate::Vec<u8>]) -> crate::VsssResult<()> {
+        if shares.len() < 2 {
+            return Err(crate::Error::SharingMinThreshold);
+        }
+        if shares[0].len() < 2 {
+            return Err(crate::Error::InvalidShare);
+        }
+        if shares[1..].iter().any(|s| s.len() != shares[0].len()) {
+            return Err(crate::Error::InvalidShare);
+        }
+        Ok(())
     }
 }
 
@@ -693,6 +699,7 @@ mod tests {
     use crate::{combine_shares, shamir, SequentialParticipantNumberGenerator};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
+    use std::prelude::v1::Vec;
 
     #[test]
     fn compatibility() {
@@ -803,6 +810,18 @@ mod tests {
         assert!(res.is_err());
         let res = Gf256::combine_array(&[vec![1u8, 8u8], vec![2u8]]);
         assert!(res.is_err());
+
+        let mut rng = ChaCha8Rng::from_entropy();
+        for _ in 0..25 {
+            let threshold = rng.gen::<u8>() + 1;
+
+            let mut shares = Vec::with_capacity(threshold as usize);
+            for i in 0..threshold {
+                let share = vec![i; (rng.gen::<usize>() % 64) + 1];
+                shares.push(share);
+            }
+            assert!(Gf256::combine_array(shares).is_err());
+        }
     }
 }
 
