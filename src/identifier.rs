@@ -354,7 +354,7 @@ impl ShareIdentifier for usize {
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
-        match core::mem::size_of::<usize>() {
+        match size_of::<usize>() {
             4 => {
                 let r = *self as u32;
                 r.to_vec()
