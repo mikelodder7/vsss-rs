@@ -210,7 +210,9 @@ mod identifier;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
-use elliptic_curve::{group::GroupEncoding, Group, PrimeField};
+#[cfg(feature = "std")]
+use elliptic_curve::Group;
+use elliptic_curve::{group::GroupEncoding, PrimeField};
 pub use subtle;
 
 /// Create a no-std verifiable secret sharing scheme with size $num using fixed arrays
