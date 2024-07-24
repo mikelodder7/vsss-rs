@@ -30,6 +30,9 @@ pub trait Polynomial<F: PrimeField> {
         // Start at 1 since 0 is the intercept and not chosen at random
         for i in repr.iter_mut().take(length).skip(1) {
             *i = F::random(&mut rng);
+            while *i == F::ZERO {
+                *i = F::random(&mut rng);
+            }
         }
         Ok(())
     }
