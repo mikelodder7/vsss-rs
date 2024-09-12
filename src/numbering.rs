@@ -3,7 +3,6 @@ use core::{
     fmt::{self, Debug, Formatter},
     marker::PhantomData,
 };
-use elliptic_curve::PrimeField;
 use rand_core::{CryptoRng, RngCore};
 use sha3::digest::ExtendableOutput;
 use sha3::{
@@ -11,7 +10,7 @@ use sha3::{
     Shake256,
 };
 
-use crate::{ShareIdentifier, VsssResult};
+use crate::{Error, ShareIdentifier, VsssResult};
 
 /// The types of participant number generators
 #[derive(Debug)]
@@ -41,7 +40,7 @@ pub enum ParticipantIdGeneratorType<'a, I: ShareIdentifier> {
     },
 }
 
-impl<'a, I: ShareIdentifier> Default for ParticipantIdGeneratorType<I> {
+impl<I: ShareIdentifier> Default for ParticipantIdGeneratorType<'_, I> {
     fn default() -> Self {
         Self::Sequential {
             start: I::one(),
@@ -51,7 +50,7 @@ impl<'a, I: ShareIdentifier> Default for ParticipantIdGeneratorType<I> {
     }
 }
 
-impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<I> {
+impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
     /// Create a new sequential participant number generator
     pub fn sequential(start: Option<I>, increment: Option<I>, count: NonZeroUsize) -> Self {
         Self::Sequential {
@@ -82,7 +81,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<I> {
                 count,
             } => {
                 if count == 0 {
-                    return Err("The count must be greater than zero".into());
+                    return Err(Error::InvalidGenerator("The count must be greater than zero"));
                 }
                 Ok(ParticipantIdGeneratorState::Sequential(
                     SequentialParticipantNumberGenerator {
@@ -95,7 +94,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<I> {
             }
             Self::Random { seed, count } => {
                 if count == 0 {
-                    return Err("The count must be greater than zero".into());
+                    return Err(Error::InvalidGenerator("The count must be greater than zero"));
                 }
                 Ok(ParticipantIdGeneratorState::Random(
                     RandomParticipantNumberGenerator {
@@ -108,7 +107,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<I> {
             }
             Self::List { list } => {
                 if list.is_empty() {
-                    return Err("The list must not be empty".into());
+                    return Err(Error::InvalidGenerator("The list must not be empty"));
                 }
                 Ok(ParticipantIdGeneratorState::List(
                     ListParticipantNumberGenerator { list, index: 0 },
@@ -118,7 +117,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<I> {
     }
 }
 
-pub(crate) struct ParticipantIdGeneratorCollection<'a, 'b, I> {
+pub(crate) struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
     pub(crate) generators: &'a mut [ParticipantIdGeneratorState<'b, I>],
     pub(crate) index: usize,
 }
@@ -210,7 +209,7 @@ impl<I: ShareIdentifier> Iterator for RandomParticipantNumberGenerator<I> {
     }
 }
 
-impl<F: PrimeField> RandomParticipantNumberGenerator<F> {
+impl<I: ShareIdentifier> RandomParticipantNumberGenerator<I> {
     fn get_rng(&self, index: usize) -> XofRng {
         let mut hasher = Shake256::default();
         hasher.update(&self.dst);

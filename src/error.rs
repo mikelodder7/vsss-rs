@@ -30,8 +30,8 @@ pub enum Error {
     #[error("An invalid share was supplied for verification or combine")]
     InvalidShare,
     /// An invalid generator was supplied for share generation
-    #[error("An invalid generator was supplied for share generation")]
-    InvalidGenerator,
+    #[error("An invalid generator was supplied for share generation: {0}")]
+    InvalidGenerator(&'static str),
     /// An invalid secret was supplied for split
     #[error("An invalid secret was supplied for split")]
     InvalidSecret,

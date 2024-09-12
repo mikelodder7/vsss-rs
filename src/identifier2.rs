@@ -5,8 +5,8 @@ use crate::Vec;
 use crate::{Error, VsssResult};
 
 use core::{
-    fmt::Debug,
-    ops::{Add, AddAssign, Deref, Mul, MulAssign, Sub, SubAssign},
+    fmt::{self, Debug, Display, Formatter},
+    ops::{Add, AddAssign, Deref, Mul, MulAssign, Sub, SubAssign, Neg},
 };
 use elliptic_curve::{
     bigint::{
@@ -24,12 +24,14 @@ pub trait ShareIdentifier:
     Sized
     + Debug
     + Eq
+    + PartialEq
     + Clone
     + Default
     + 'static
     + Add<Self, Output = Self>
     + Sub<Self, Output = Self>
     + Mul<Self, Output = Self>
+    + Neg<Output = Self>
     + AddAssign
     + SubAssign
     + MulAssign
@@ -39,10 +41,12 @@ pub trait ShareIdentifier:
 {
     /// The serialized form of the share identifier.
     type Serialization: AsRef<[u8]> + AsMut<[u8]> + 'static;
-    /// Identifier with the value 0.
-    fn zero() -> Self;
+    /// The inner type of the share identifier.
+    type Inner;
     /// Identifier with the value 1.
     fn one() -> Self;
+    /// Get the inner representation of the share identifier.
+    fn inner(self) -> Self::Inner;
     /// Check if the share identifier is zero.
     fn is_zero(&self) -> Choice;
     /// Serialize the share identifier.
@@ -54,7 +58,7 @@ pub trait ShareIdentifier:
     /// Invert the share identifier.
     fn invert(&self) -> VsssResult<Self>;
     /// Create a share identifier from a byte slice.
-    fn from_slice(vec: &[u8]) -> VsssResult<Self>;
+    fn from_slice(slice: &[u8]) -> VsssResult<Self>;
     #[cfg(any(feature = "alloc", feature = "std"))]
     /// Serialize the share identifier to a byte vector.
     fn to_vec(&self) -> Vec<u8>;
@@ -62,13 +66,14 @@ pub trait ShareIdentifier:
 
 impl<F: PrimeField + Sized> ShareIdentifier for F {
     type Serialization = F::Repr;
-
-    fn zero() -> Self {
-        <F as Field>::ZERO
-    }
+    type Inner = F;
 
     fn one() -> Self {
         <F as Field>::ONE
+    }
+
+    fn inner(self) -> Self::Inner {
+        self
     }
 
     fn is_zero(&self) -> Choice {
@@ -220,6 +225,8 @@ macro_rules! impl_primitive_identifier {
             impl ShareIdentifier for $name {
                 type Serialization = [u8; core::mem::size_of::<$primitive>()];
 
+                type Inner = $primitive;
+
                 fn serialize(&self) -> Self::Serialization {
                     self.0.to_be_bytes()
                 }
@@ -228,12 +235,12 @@ macro_rules! impl_primitive_identifier {
                     Ok(Self($primitive::from_be_bytes(*serialized)))
                 }
 
-                fn zero() -> Self {
-                    Self(0)
-                }
-
                 fn one() -> Self {
                     Self(1)
+                }
+
+                fn inner(self) -> Self::Inner {
+                    self.0
                 }
 
                 fn is_zero(&self) -> Choice {
@@ -386,6 +393,7 @@ macro_rules! impl_primitive_identifier {
 
             impl ShareIdentifier for $name {
                 type Serialization = [u8; core::mem::size_of::<$primitive>()];
+                type Inner = $primitive;
 
                 fn serialize(&self) -> Self::Serialization {
                     (self.0 as $alt).to_be_bytes()
@@ -395,12 +403,12 @@ macro_rules! impl_primitive_identifier {
                     Ok(Self($alt::from_be_bytes(*serialized) as $primitive))
                 }
 
-                fn zero() -> Self {
-                    Self(0)
-                }
-
                 fn one() -> Self {
                     Self(1)
+                }
+
+                fn inner(self) -> Self::Inner {
+                    self.0
                 }
 
                 fn is_zero(&self) -> Choice {
@@ -616,13 +624,14 @@ where
     Uint<LIMBS>: ArrayEncoding,
 {
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
-
-    fn zero() -> Self {
-        Self(Uint::<LIMBS>::ZERO)
-    }
+    type Inner = Uint<LIMBS>;
 
     fn one() -> Self {
         Self(Uint::<LIMBS>::ONE)
+    }
+
+    fn inner(self) -> Self::Inner {
+        self.0
     }
 
     fn is_zero(&self) -> Choice {
@@ -860,13 +869,14 @@ where
     Uint<LIMBS>: ArrayEncoding,
 {
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
-
-    fn zero() -> Self {
-        Self(Residue::<MOD, LIMBS>::ZERO)
-    }
+    type Inner = Residue<MOD, LIMBS>;
 
     fn one() -> Self {
         Self(Residue::<MOD, LIMBS>::ONE)
+    }
+
+    fn inner(self) -> Self::Inner {
+        self.0
     }
 
     fn is_zero(&self) -> Choice {
@@ -1110,7 +1120,7 @@ where
 //         self.serialize().as_ref().to_vec()
 //     }
 // }
-//
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use bigint::IdentifierVec;
 
@@ -1120,7 +1130,7 @@ mod bigint {
     use crate::{Box, Error, Vec, VsssResult};
     use core::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
     use num_bigint::BigUint;
-    use num_traits::Zero;
+    use num_traits::{Zero, One};
     use rand_core::{CryptoRng, RngCore};
     use subtle::Choice;
 
@@ -1226,13 +1236,14 @@ mod bigint {
 
     impl ShareIdentifier for IdentifierVec {
         type Serialization = Vec<u8>;
-
-        fn zero() -> Self {
-            Self(BigUint::zero())
-        }
+        type Inner = BigUint;
 
         fn one() -> Self {
             Self(BigUint::one())
+        }
+
+        fn inner(self) -> Self::Inner {
+            self.0
         }
 
         fn is_zero(&self) -> Choice {
