@@ -41,6 +41,9 @@ pub enum Error {
     /// A specific function is not implemented
     #[error("Not implemented")]
     NotImplemented,
+    /// Invalid share identifier
+    #[error("Invalid share identifier")]
+    InvalidShareIdentifier,
 }
 
 /// Results returned by this crate

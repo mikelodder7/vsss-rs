@@ -5,7 +5,7 @@
 
 use crate::util::CtIsZero;
 use crate::*;
-use crypto_bigint::{
+use elliptic_curve::bigint::{
     modular::{
         constant_mod::{Residue, ResidueParams},
         runtime_mod::{DynResidue, DynResidueParams},

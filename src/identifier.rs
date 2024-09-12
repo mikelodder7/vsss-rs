@@ -1,7 +1,7 @@
 use crate::util::*;
 use crate::{Error, VsssResult};
 use core::cmp;
-use crypto_bigint::{
+use elliptic_curve::bigint::{
     modular::{
         constant_mod::{Residue, ResidueParams},
         runtime_mod::{DynResidue, DynResidueParams},
@@ -354,7 +354,7 @@ impl ShareIdentifier for usize {
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
-        match core::mem::size_of::<usize>() {
+        match size_of::<usize>() {
             4 => {
                 let r = *self as u32;
                 r.to_vec()
@@ -729,7 +729,7 @@ scalar_impl!(blstrs_plus::Scalar);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto_bigint::{U1024, U128, U256, U64};
+    use elliptic_curve::bigint::{U1024, U128, U256, U64};
     use elliptic_curve::Field;
     use rand_core::SeedableRng;
 

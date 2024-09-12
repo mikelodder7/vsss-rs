@@ -164,9 +164,9 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
-use std::vec::Vec;
+use std::{boxed::Box, vec::Vec};
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -190,7 +190,8 @@ use subtle::*;
 pub use error::*;
 pub use feldman::Feldman;
 pub use gf256::*;
-pub use identifier::*;
+// pub use identifier::*;
+pub use identifier2::*;
 pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;
@@ -205,7 +206,9 @@ pub use pedersen::StdPedersenResult;
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
-mod identifier;
+// mod identifier;
+mod identifier2;
+mod share2;
 
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
