@@ -13,7 +13,7 @@
 //! schemes.
 //!
 //! Feldman and Pedersen are similar in many ways. It's hard to describe when to use
-//! one over the other. Indeed both are used in
+//! one over the other. Indeed, both are used in
 //! <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.134.6445&rep=rep1&type=pdf>.
 //!
 //! Feldman reveals the public value of the verifier whereas Pedersen's hides it.
@@ -164,12 +164,13 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::fmt::{Debug, Display};
 #[cfg(feature = "std")]
-use std::{boxed::Box, vec::Vec};
+use std::{boxed::Box, string::String, vec::Vec};
 
-#[cfg(test)]
-pub(crate) mod tests;
+// #[cfg(test)]
+// pub(crate) mod tests;
 
 mod error;
 // pub mod feldman;
@@ -179,7 +180,7 @@ mod error;
 mod numbering;
 // pub mod pedersen;
 // mod polynomial;
-// mod set;
+mod set;
 // pub mod shamir;
 // mod share;
 mod util;
@@ -192,7 +193,11 @@ pub use error::*;
 // pub use gf256::*;
 // pub use identifier::*;
 pub use identifier2::*;
+pub use saturating::*;
 pub use numbering::*;
+pub use share2::*;
+pub use primitive::*;
+pub use fixed_array::*;
 // pub use pedersen::{Pedersen, PedersenResult};
 // pub use polynomial::*;
 // pub use set::*;
@@ -208,7 +213,10 @@ pub use util::*;
 // pub mod curve25519;
 // mod identifier;
 mod identifier2;
+mod saturating;
 mod share2;
+mod primitive;
+mod fixed_array;
 
 // #[cfg(feature = "curve25519")]
 // pub use curve25519_dalek;
@@ -216,7 +224,12 @@ pub use elliptic_curve;
 #[cfg(feature = "std")]
 use elliptic_curve::Group;
 use elliptic_curve::{group::GroupEncoding, PrimeField};
+
 pub use subtle;
+
+pub(crate) const USIZE_BYTES: usize = size_of::<usize>();
+pub(crate) const ISIZE_BYTES: usize = size_of::<isize>();
+
 
 // /// Create a no-std verifiable secret sharing scheme with size $num using fixed arrays
 // /// The arguments in order are:

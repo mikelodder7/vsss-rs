@@ -1,107 +1,78 @@
-
 use elliptic_curve::PrimeField;
 use subtle::Choice;
 
 use super::*;
-use crate::*;
 
-impl<F: PrimeField + Sized> Share for (F, F) {
-    type Serialization = F::Repr;
-    type Identifier = F;
-    type Value = F;
+/// A share of a prime field element
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SharePrimeField<I: ShareIdentifier, F: PrimeField> {
+    /// The share identifier
+    pub identifier: I,
+    /// The share value
+    pub value: F,
+}
 
-    fn zero() -> Self {
-        (F::ZERO, F::ZERO)
-    }
-
-    fn with_identifier_and_value(identifier: F, value: &Self::Serialization) -> VsssResult<Self> {
-        let value = Option::from(F::from_repr(*value)).ok_or(Error::InvalidShare)?;
-        Ok((identifier, value))
-    }
-
-    fn is_zero(&self) -> Choice {
-        self.1.is_zero()
-    }
-
-    fn identifier(&self) -> &Self::Identifier {
-        &self.0
-    }
-
-    fn identifier_mut(&mut self) -> &mut Self::Identifier {
-        &mut self.0
-    }
-
-    fn serialize(&self) -> Self::Serialization {
-        self.1.to_repr()
-    }
-
-    fn deserialize(&mut self, serialized: &Self::Serialization) -> VsssResult<()> {
-        self.1 = Option::from(F::from_repr(*serialized)).ok_or(Error::InvalidShare)?;
-        Ok(())
-    }
-
-    fn value(&self) -> &Self::Value {
-        &self.1
-    }
-
-    fn value_mut(&mut self) -> &mut Self::Value {
-        &mut self.1
-    }
-
-    #[cfg(any(feature = "alloc", feature = "std"))]
-    fn to_vec(&self) -> Vec<u8> {
-        self.1.to_repr().as_ref().to_vec()
+impl<I: ShareIdentifier, F: PrimeField> From<(I, F)> for SharePrimeField<I, F> {
+    fn from((identifier, value): (I, F)) -> Self {
+        Self { identifier, value }
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ShareTuple<I: ShareIdentifier, F: PrimeField>(pub (I, F));
+impl<I: ShareIdentifier, F: PrimeField> From<SharePrimeField<I, F>> for (I, F) {
+    fn from(share: SharePrimeField<I, F>) -> Self {
+        (share.identifier, share.value)
+    }
+}
 
-impl<I: ShareIdentifier, F: PrimeField> Share for ShareTuple<I, F> {
+impl<I: ShareIdentifier, F: PrimeField> Share for SharePrimeField<I, F> {
     type Serialization = F::Repr;
     type Identifier = I;
     type Value = F;
 
-    fn zero() -> Self {
-        Self((I::default(), F::ZERO))
-    }
-
-    fn with_identifier_and_value(identifier: I, value: &Self::Serialization) -> VsssResult<Self> {
-        let value = Option::from(F::from_repr(*value)).ok_or(Error::InvalidShare)?;
-        Ok(Self((identifier, value)))
+    fn with_identifier_and_value(identifier: I, value: F) -> Self {
+        Self { identifier, value }
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.1.is_zero()
+        self.value.is_zero()
     }
 
     fn identifier(&self) -> &Self::Identifier {
-        &self.0.0
+        &self.identifier
     }
 
     fn identifier_mut(&mut self) -> &mut Self::Identifier {
-        &mut self.0.0
+        &mut self.identifier
     }
 
     fn serialize(&self) -> Self::Serialization {
-        self.0.1.to_repr()
+        self.value.to_repr()
     }
 
     fn deserialize(&mut self, serialized: &Self::Serialization) -> VsssResult<()> {
-        self.0.1 = Option::from(F::from_repr(*serialized)).ok_or(Error::InvalidShare)?;
+        self.value = Option::from(F::from_repr(*serialized)).ok_or(Error::InvalidShare)?;
         Ok(())
     }
 
     fn value(&self) -> &Self::Value {
-        &self.0.1
+        &self.value
     }
 
     fn value_mut(&mut self) -> &mut Self::Value {
-        &mut self.0.1
+        &mut self.value
+    }
+
+    fn parse_slice(&mut self, slice: &[u8]) -> VsssResult<()> {
+        let mut repr = F::Repr::default();
+        if slice.len() != repr.as_ref().len() {
+            return Err(Error::InvalidShare);
+        }
+        repr.as_mut().copy_from_slice(slice);
+        self.deserialize(&repr)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
-        self.0.1.to_repr().as_ref().to_vec()
+        self.value.to_repr().as_ref().to_vec()
     }
 }

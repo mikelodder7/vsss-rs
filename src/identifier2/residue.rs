@@ -1,0 +1,147 @@
+use core::ops::{Deref, DerefMut};
+use elliptic_curve::bigint::modular::constant_mod::{Residue, ResidueParams};
+use elliptic_curve::bigint::{ArrayEncoding, Uint};
+
+use super::*;
+use crate::*;
+
+/// A share identifier represented as a residue modulo known at compile time.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct IdentifierResidue<MOD: ResidueParams<LIMBS>, const LIMBS: usize>(
+    pub Residue<MOD, LIMBS>,
+)
+where
+    Uint<LIMBS>: ArrayEncoding;
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Deref for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    type Target = Residue<MOD, LIMBS>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> DerefMut for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> AsRef<Residue<MOD, LIMBS>>
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn as_ref(&self) -> &Residue<MOD, LIMBS> {
+        &self.0
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> AsMut<Residue<MOD, LIMBS>>
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn as_mut(&mut self) -> &mut Residue<MOD, LIMBS> {
+        &mut self.0
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> From<Residue<MOD, LIMBS>>
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn from(value: Residue<MOD, LIMBS>) -> Self {
+        Self(value)
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> From<&Residue<MOD, LIMBS>>
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn from(value: &Residue<MOD, LIMBS>) -> Self {
+        Self(*value)
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> From<IdentifierResidue<MOD, LIMBS>>
+    for Residue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn from(value: IdentifierResidue<MOD, LIMBS>) -> Self {
+        value.0
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    type Serialization = <Uint<LIMBS> as Encoding>::Repr;
+    type Inner = Residue<MOD, LIMBS>;
+
+    fn zero() -> Self {
+        Self(Residue::<MOD, LIMBS>::ZERO)
+    }
+
+    fn one() -> Self {
+        Self(Residue::<MOD, LIMBS>::ONE)
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.0.is_zero()
+    }
+
+    fn serialize(&self) -> Self::Serialization {
+        self.0.retrieve().to_be_bytes()
+    }
+
+    fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
+        IdentifierUint::<LIMBS>::deserialize(serialized)
+            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
+    }
+
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let inner = Uint::<LIMBS>::random(&mut rng);
+        Self(Residue::<MOD, LIMBS>::new(&inner))
+    }
+
+    fn invert(&self) -> VsssResult<Self> {
+        let (value, succeeded) = self.0.invert();
+        if !bool::from(succeeded) {
+            return Err(Error::InvalidShareIdentifier);
+        }
+        Ok(Self(value))
+    }
+
+    fn from_slice(vec: &[u8]) -> VsssResult<Self> {
+        IdentifierUint::<LIMBS>::from_slice(vec)
+            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self.serialize().as_ref().to_vec()
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    /// Identifier with the value 0.
+    pub const ZERO: Self = Self(Residue::<MOD, LIMBS>::ZERO);
+    /// Identifier with the value 1.
+    pub const ONE: Self = Self(Residue::<MOD, LIMBS>::ONE);
+}

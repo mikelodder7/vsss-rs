@@ -81,7 +81,9 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
                 count,
             } => {
                 if count == 0 {
-                    return Err(Error::InvalidGenerator("The count must be greater than zero"));
+                    return Err(Error::InvalidGenerator(
+                        "The count must be greater than zero",
+                    ));
                 }
                 Ok(ParticipantIdGeneratorState::Sequential(
                     SequentialParticipantNumberGenerator {
@@ -94,7 +96,9 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
             }
             Self::Random { seed, count } => {
                 if count == 0 {
-                    return Err(Error::InvalidGenerator("The count must be greater than zero"));
+                    return Err(Error::InvalidGenerator(
+                        "The count must be greater than zero",
+                    ));
                 }
                 Ok(ParticipantIdGeneratorState::Random(
                     RandomParticipantNumberGenerator {
@@ -167,7 +171,7 @@ pub(crate) enum ParticipantIdGeneratorState<'a, I: ShareIdentifier> {
 
 #[derive(Debug)]
 /// A generator that can create any number of secret shares
-struct SequentialParticipantNumberGenerator<I: ShareIdentifier> {
+pub(crate) struct SequentialParticipantNumberGenerator<I: ShareIdentifier> {
     start: I,
     increment: I,
     index: usize,
@@ -181,7 +185,7 @@ impl<I: ShareIdentifier> Iterator for SequentialParticipantNumberGenerator<I> {
         if self.index >= self.count {
             return None;
         }
-        self.start += self.increment.clone();
+        *self.start += self.increment.clone().as_ref();
         self.index += 1;
         Some(self.start.clone())
     }
@@ -189,7 +193,7 @@ impl<I: ShareIdentifier> Iterator for SequentialParticipantNumberGenerator<I> {
 
 /// A generator that creates random participant identifiers
 #[derive(Debug)]
-struct RandomParticipantNumberGenerator<I: ShareIdentifier> {
+pub(crate) struct RandomParticipantNumberGenerator<I: ShareIdentifier> {
     /// Domain separation tag
     dst: [u8; 32],
     index: usize,
@@ -221,7 +225,7 @@ impl<I: ShareIdentifier> RandomParticipantNumberGenerator<I> {
 
 /// A generator that creates participant identifiers from a known list
 #[derive(Debug)]
-struct ListParticipantNumberGenerator<'a, I: ShareIdentifier> {
+pub(crate) struct ListParticipantNumberGenerator<'a, I: ShareIdentifier> {
     list: &'a [I],
     index: usize,
 }
@@ -284,19 +288,19 @@ mod tests {
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn test_sequential_participant_number_generator() {
-        let gen = SequentialParticipantNumberGenerator::<Scalar> {
-            start: Scalar::ONE,
-            increment: Scalar::ONE,
+        let gen = SequentialParticipantNumberGenerator::<IdentifierPrimeField<Scalar>> {
+            start: IdentifierPrimeField::<Scalar>::ONE,
+            increment: IdentifierPrimeField::<Scalar>::ONE,
             index: 0,
             count: 5,
         };
         let list: Vec<_> = gen.collect();
         assert_eq!(list.len(), 5);
-        assert_eq!(list[0], Scalar::from(1u64));
-        assert_eq!(list[1], Scalar::from(2u64));
-        assert_eq!(list[2], Scalar::from(3u64));
-        assert_eq!(list[3], Scalar::from(4u64));
-        assert_eq!(list[4], Scalar::from(5u64));
+        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(1u64)));
+        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(2u64)));
+        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(3u64)));
+        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(4u64)));
+        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(5u64)));
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -305,7 +309,7 @@ mod tests {
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([1u8; 32]);
         let mut dst = [0u8; 32];
         rng.fill_bytes(&mut dst);
-        let gen = RandomParticipantNumberGenerator::<Scalar> {
+        let gen = RandomParticipantNumberGenerator::<IdentifierPrimeField<Scalar>> {
             dst,
             index: 0,
             count: 5,
@@ -325,7 +329,10 @@ mod tests {
         .enumerate()
         {
             repr.copy_from_slice(&hex::decode(s).unwrap());
-            assert_eq!(list[i], Scalar::from_repr(repr).unwrap());
+            assert_eq!(
+                list[i],
+                IdentifierPrimeField::from(Scalar::from_repr(repr).unwrap())
+            );
         }
     }
 
@@ -333,11 +340,11 @@ mod tests {
     #[test]
     fn test_list_participant_number_generator() {
         let list = [
-            Scalar::from(10u64),
-            Scalar::from(20u64),
-            Scalar::from(30u64),
-            Scalar::from(40u64),
-            Scalar::from(50u64),
+            IdentifierPrimeField::from(Scalar::from(10u64)),
+            IdentifierPrimeField::from(Scalar::from(20u64)),
+            IdentifierPrimeField::from(Scalar::from(30u64)),
+            IdentifierPrimeField::from(Scalar::from(40u64)),
+            IdentifierPrimeField::from(Scalar::from(50u64)),
         ];
         let gen = ListParticipantNumberGenerator {
             list: &list,
@@ -345,21 +352,21 @@ mod tests {
         };
         let list: Vec<_> = gen.collect();
         assert_eq!(list.len(), 5);
-        assert_eq!(list[0], Scalar::from(10u64));
-        assert_eq!(list[1], Scalar::from(20u64));
-        assert_eq!(list[2], Scalar::from(30u64));
-        assert_eq!(list[3], Scalar::from(40u64));
-        assert_eq!(list[4], Scalar::from(50u64));
+        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
+        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(20u64)));
+        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(30u64)));
+        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(40u64)));
+        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(50u64)));
     }
 
     #[test]
     fn test_list_and_sequential_number_generator() {
         let list = [
-            Scalar::from(10u64),
-            Scalar::from(20u64),
-            Scalar::from(30u64),
-            Scalar::from(40u64),
-            Scalar::from(50u64),
+            IdentifierPrimeField::from(Scalar::from(10u64)),
+            IdentifierPrimeField::from(Scalar::from(20u64)),
+            IdentifierPrimeField::from(Scalar::from(30u64)),
+            IdentifierPrimeField::from(Scalar::from(40u64)),
+            IdentifierPrimeField::from(Scalar::from(50u64)),
         ];
         let mut generators = [
             ParticipantIdGeneratorState::List(ListParticipantNumberGenerator {
@@ -367,37 +374,37 @@ mod tests {
                 index: 0,
             }),
             ParticipantIdGeneratorState::Sequential(SequentialParticipantNumberGenerator {
-                start: Scalar::from(51u64),
-                increment: Scalar::from(1u64),
+                start: IdentifierPrimeField::from(Scalar::from(51u64)),
+                increment: IdentifierPrimeField::<Scalar>::ONE,
                 index: 0,
                 count: 5,
             }),
         ];
-        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators);
+        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
 
         let list: Vec<_> = collection.collect();
         assert_eq!(list.len(), 10);
-        assert_eq!(list[0], Scalar::from(10u64));
-        assert_eq!(list[1], Scalar::from(20u64));
-        assert_eq!(list[2], Scalar::from(30u64));
-        assert_eq!(list[3], Scalar::from(40u64));
-        assert_eq!(list[4], Scalar::from(50u64));
-        assert_eq!(list[5], Scalar::from(51u64));
-        assert_eq!(list[6], Scalar::from(52u64));
-        assert_eq!(list[7], Scalar::from(53u64));
-        assert_eq!(list[8], Scalar::from(54u64));
-        assert_eq!(list[9], Scalar::from(55u64));
+        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
+        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(20u64)));
+        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(30u64)));
+        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(40u64)));
+        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(50u64)));
+        assert_eq!(list[5], IdentifierPrimeField::from(Scalar::from(51u64)));
+        assert_eq!(list[6], IdentifierPrimeField::from(Scalar::from(52u64)));
+        assert_eq!(list[7], IdentifierPrimeField::from(Scalar::from(53u64)));
+        assert_eq!(list[8], IdentifierPrimeField::from(Scalar::from(54u64)));
+        assert_eq!(list[9], IdentifierPrimeField::from(Scalar::from(55u64)));
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn test_list_and_random_number_generator() {
         let list = [
-            Scalar::from(10u64),
-            Scalar::from(20u64),
-            Scalar::from(30u64),
-            Scalar::from(40u64),
-            Scalar::from(50u64),
+            IdentifierPrimeField::from(Scalar::from(10u64)),
+            IdentifierPrimeField::from(Scalar::from(20u64)),
+            IdentifierPrimeField::from(Scalar::from(30u64)),
+            IdentifierPrimeField::from(Scalar::from(40u64)),
+            IdentifierPrimeField::from(Scalar::from(50u64)),
         ];
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([1u8; 32]);
         let mut dst = [0u8; 32];
@@ -414,14 +421,14 @@ mod tests {
                 _markers: PhantomData,
             }),
         ];
-        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators);
+        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
         let list: Vec<_> = collection.collect();
         assert_eq!(list.len(), 10);
-        assert_eq!(list[0], Scalar::from(10u64));
-        assert_eq!(list[1], Scalar::from(20u64));
-        assert_eq!(list[2], Scalar::from(30u64));
-        assert_eq!(list[3], Scalar::from(40u64));
-        assert_eq!(list[4], Scalar::from(50u64));
+        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
+        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(20u64)));
+        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(30u64)));
+        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(40u64)));
+        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(50u64)));
         let mut repr = FieldBytes::default();
         for (i, s) in [
             "5d9936ecfa115f5a6b3f5d52ba3a3746ea228ee00909efd37765c6518e2ccf23",
@@ -434,7 +441,10 @@ mod tests {
         .enumerate()
         {
             repr.copy_from_slice(&hex::decode(s).unwrap());
-            assert_eq!(list[i + 5], Scalar::from_repr(repr).unwrap());
+            assert_eq!(
+                list[i + 5],
+                IdentifierPrimeField::from(Scalar::from_repr(repr).unwrap())
+            );
         }
     }
 
@@ -448,19 +458,19 @@ mod tests {
                 index: 0,
             }),
             ParticipantIdGeneratorState::Sequential(SequentialParticipantNumberGenerator {
-                start: Scalar::from(1u64),
-                increment: Scalar::from(1u64),
+                start: IdentifierPrimeField::<Scalar>::ONE,
+                increment: IdentifierPrimeField::<Scalar>::ONE,
                 index: 0,
                 count: 5,
             }),
         ];
-        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators);
+        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
         let list: Vec<_> = collection.collect();
         assert_eq!(list.len(), 5);
-        assert_eq!(list[0], Scalar::from(1u64));
-        assert_eq!(list[1], Scalar::from(2u64));
-        assert_eq!(list[2], Scalar::from(3u64));
-        assert_eq!(list[3], Scalar::from(4u64));
-        assert_eq!(list[4], Scalar::from(5u64));
+        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(1u64)));
+        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(2u64)));
+        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(3u64)));
+        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(4u64)));
+        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(5u64)));
     }
 }

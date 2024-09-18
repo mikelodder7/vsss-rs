@@ -14,9 +14,10 @@ version = "5.0.0-pre0"
 
 [features]
 default = ["std"]
-alloc = ["rand_core/alloc", "rand/alloc", "serde/alloc", "num/std", "num/rand"]
-curve25519 = ["curve25519-dalek", "hex", "zeroize", "alloc"]
-std = ["num/std", "num/rand", "rand_core/std", "rand/std", "serde/std"]
+serde = ["dep:serde", "std"]
+alloc = ["rand_core/alloc", "rand/alloc", "serde/alloc", "num/std", "num/rand", "hex/alloc"]
+curve25519 = ["curve25519-dalek", "zeroize", "alloc"]
+std = ["num/std", "num/rand", "rand_core/std", "rand/std", "serde/std", "hex/std"]
 
 [dependencies]
 bls12_381_plus = { version = "0.8", optional = true }
@@ -30,9 +31,9 @@ p521 = { version = "0.13", optional = true }
 ed448-goldilocks-plus = { version = "0.11", optional = true }
 generic-array = "1"
 num = { version = "0.4", default-features = false }
-hex = { version = "0.4", default-features = false, optional = true }
+hex = { version = "0.4", default-features = false }
 rand_core = "0.6"
-serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.5" }
 sha3 = { version = "0.10", default-features = false }
 thiserror-no-std = "2.0"
