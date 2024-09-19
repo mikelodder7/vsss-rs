@@ -71,7 +71,7 @@ impl<P: Primitive<BYTES>, const BYTES: usize> From<P> for IdentifierPrimitive<P,
     }
 }
 
-impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrimitive<P, BYTES> {
+impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimitive<P, BYTES> {
     type Serialization = [u8; BYTES];
     type Inner = P;
 
@@ -95,19 +95,9 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrim
         Self::from_slice(&serialized[..])
     }
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let mut repr = [0u8; BYTES];
-        rng.fill_bytes(repr.as_mut());
-        Self(P::from_fixed_array(&repr))
-    }
-
-    fn invert(&self) -> VsssResult<Self> {
-        Ok(Self(P::ONE / self.0))
-    }
-
     fn from_slice(slice: &[u8]) -> VsssResult<Self> {
         if slice.len() != BYTES {
-            return Err(Error::InvalidShareIdentifier);
+            return Err(Error::InvalidShareElement);
         }
         let repr: [u8; BYTES] = slice.try_into().unwrap();
         Ok(Self(P::from_fixed_array(&repr)))
@@ -116,6 +106,21 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrim
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
         self.serialize().to_vec()
+    }
+}
+
+impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrimitive<P, BYTES> {
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let mut repr = [0u8; BYTES];
+        rng.fill_bytes(repr.as_mut());
+        Self(P::from_fixed_array(&repr))
+    }
+
+    fn invert(&self) -> VsssResult<Self> {
+        P::ONE
+            .checked_div(&self.0)
+            .map(Self)
+            .ok_or(Error::InvalidShareElement)
     }
 }
 

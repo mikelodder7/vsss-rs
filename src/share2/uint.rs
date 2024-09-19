@@ -5,7 +5,7 @@ use crate::saturating::Saturating;
 
 /// A share with a `Uint` value.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ShareUint<I: ShareIdentifier, const LIMBS: usize>
+pub struct ShareUint<I: ShareElement, const LIMBS: usize>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -15,7 +15,7 @@ where
     pub value: Saturating<LIMBS>,
 }
 
-impl<I: ShareIdentifier, const LIMBS: usize> From<(I, Saturating<LIMBS>)> for ShareUint<I, LIMBS>
+impl<I: ShareElement, const LIMBS: usize> From<(I, Saturating<LIMBS>)> for ShareUint<I, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -24,7 +24,7 @@ where
     }
 }
 
-impl<I: ShareIdentifier, const LIMBS: usize> From<ShareUint<I, LIMBS>> for (I, Saturating<LIMBS>)
+impl<I: ShareElement, const LIMBS: usize> From<ShareUint<I, LIMBS>> for (I, Saturating<LIMBS>)
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -33,7 +33,7 @@ where
     }
 }
 
-impl<I: ShareIdentifier, const LIMBS: usize> Share for ShareUint<I, LIMBS>
+impl<I: ShareElement, const LIMBS: usize> Share for ShareUint<I, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -89,7 +89,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<I: ShareIdentifier + serde::Serialize, const LIMBS: usize> serde::Serialize
+impl<I: ShareElement + serde::Serialize, const LIMBS: usize> serde::Serialize
     for ShareUint<I, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
@@ -103,7 +103,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, I: ShareIdentifier + serde::Deserialize<'de>, const LIMBS: usize> serde::Deserialize<'de>
+impl<'de, I: ShareElement + serde::Deserialize<'de>, const LIMBS: usize> serde::Deserialize<'de>
     for ShareUint<I, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,

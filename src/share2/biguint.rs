@@ -6,26 +6,26 @@ use subtle::Choice;
 
 /// A share value represented as a big unsigned number
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareBigUint<I: ShareIdentifier> {
+pub struct ShareBigUint<I: ShareElement> {
     /// The share identifier
     pub identifier: I,
     /// The share value
     pub value: BigUint,
 }
 
-impl<I: ShareIdentifier> From<(I, BigUint)> for ShareBigUint<I> {
+impl<I: ShareElement> From<(I, BigUint)> for ShareBigUint<I> {
     fn from((identifier, value): (I, BigUint)) -> Self {
         Self { identifier, value }
     }
 }
 
-impl<I: ShareIdentifier> From<ShareBigUint<I>> for (I, BigUint) {
+impl<I: ShareElement> From<ShareBigUint<I>> for (I, BigUint) {
     fn from(share: ShareBigUint<I>) -> Self {
         (share.identifier, share.value)
     }
 }
 
-impl<I: ShareIdentifier> Share for ShareBigUint<I> {
+impl<I: ShareElement> Share for ShareBigUint<I> {
     type Serialization = Vec<u8>;
     type Identifier = I;
     type Value = BigUint;
@@ -74,14 +74,14 @@ impl<I: ShareIdentifier> Share for ShareBigUint<I> {
 }
 
 #[cfg(feature = "serde")]
-impl<I: ShareIdentifier + serde::Serialize> serde::Serialize for ShareBigUint<I> {
+impl<I: ShareElement + serde::Serialize> serde::Serialize for ShareBigUint<I> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         (self.identifier(), self.value()).serialize(serializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, I: ShareIdentifier + serde::Deserialize<'de>> serde::Deserialize<'de>
+impl<'de, I: ShareElement + serde::Deserialize<'de>> serde::Deserialize<'de>
     for ShareBigUint<I>
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {

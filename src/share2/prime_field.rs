@@ -5,26 +5,26 @@ use super::*;
 
 /// A share of a prime field element
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SharePrimeField<I: ShareIdentifier, F: PrimeField> {
+pub struct SharePrimeField<I: ShareElement, F: PrimeField> {
     /// The share identifier
     pub identifier: I,
     /// The share value
     pub value: F,
 }
 
-impl<I: ShareIdentifier, F: PrimeField> From<(I, F)> for SharePrimeField<I, F> {
+impl<I: ShareElement, F: PrimeField> From<(I, F)> for SharePrimeField<I, F> {
     fn from((identifier, value): (I, F)) -> Self {
         Self { identifier, value }
     }
 }
 
-impl<I: ShareIdentifier, F: PrimeField> From<SharePrimeField<I, F>> for (I, F) {
+impl<I: ShareElement, F: PrimeField> From<SharePrimeField<I, F>> for (I, F) {
     fn from(share: SharePrimeField<I, F>) -> Self {
         (share.identifier, share.value)
     }
 }
 
-impl<I: ShareIdentifier, F: PrimeField> Share for SharePrimeField<I, F> {
+impl<I: ShareElement, F: PrimeField> Share for SharePrimeField<I, F> {
     type Serialization = F::Repr;
     type Identifier = I;
     type Value = F;
@@ -78,7 +78,7 @@ impl<I: ShareIdentifier, F: PrimeField> Share for SharePrimeField<I, F> {
 }
 
 #[cfg(feature = "serde")]
-impl<I: ShareIdentifier + serde::Serialize, F: PrimeField> serde::Serialize
+impl<I: ShareElement + serde::Serialize, F: PrimeField> serde::Serialize
     for SharePrimeField<I, F>
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -88,7 +88,7 @@ impl<I: ShareIdentifier + serde::Serialize, F: PrimeField> serde::Serialize
 }
 
 #[cfg(feature = "serde")]
-impl<'de, I: ShareIdentifier + serde::Deserialize<'de>, F: PrimeField> serde::Deserialize<'de>
+impl<'de, I: ShareElement + serde::Deserialize<'de>, F: PrimeField> serde::Deserialize<'de>
     for SharePrimeField<I, F>
 {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {

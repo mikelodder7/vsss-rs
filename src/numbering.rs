@@ -185,7 +185,7 @@ impl<I: ShareIdentifier> Iterator for SequentialParticipantNumberGenerator<I> {
         if self.index >= self.count {
             return None;
         }
-        *self.start += self.increment.clone().as_ref();
+        *self.start += self.increment.as_ref();
         self.index += 1;
         Some(self.start.clone())
     }

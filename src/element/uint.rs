@@ -71,7 +71,7 @@ where
     }
 }
 
-impl<const LIMBS: usize> ShareIdentifier for IdentifierUint<LIMBS>
+impl<const LIMBS: usize> ShareElement for IdentifierUint<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -99,6 +99,23 @@ where
         Ok(Self(inner))
     }
 
+    fn from_slice(vec: &[u8]) -> VsssResult<Self> {
+        if vec.len() != Uint::<LIMBS>::BYTES {
+            return Err(Error::InvalidShareElement);
+        }
+        Ok(Self(Saturating(Uint::<LIMBS>::from_be_slice(vec))))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        self.serialize().as_ref().to_vec()
+    }
+}
+
+impl<const LIMBS: usize> ShareIdentifier for IdentifierUint<LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
     fn random(mut rng: impl RngCore + CryptoRng) -> Self {
         let inner = Saturating(Uint::<LIMBS>::random(&mut rng));
         Self(inner)
@@ -107,18 +124,6 @@ where
     fn invert(&self) -> VsssResult<Self> {
         let r = Saturating(Uint::<LIMBS>::ONE) / self.0;
         Ok(Self(r))
-    }
-
-    fn from_slice(vec: &[u8]) -> VsssResult<Self> {
-        if vec.len() != Uint::<LIMBS>::BYTES {
-            return Err(Error::InvalidShareIdentifier);
-        }
-        Ok(Self(Saturating(Uint::<LIMBS>::from_be_slice(vec))))
-    }
-
-    #[cfg(any(feature = "alloc", feature = "std"))]
-    fn to_vec(&self) -> Vec<u8> {
-        self.serialize().as_ref().to_vec()
     }
 }
 

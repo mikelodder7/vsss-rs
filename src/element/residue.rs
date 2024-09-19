@@ -85,8 +85,7 @@ where
     }
 }
 
-impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier
-    for IdentifierResidue<MOD, LIMBS>
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareElement for IdentifierResidue<MOD, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -114,19 +113,6 @@ where
             .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
     }
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let inner = Uint::<LIMBS>::random(&mut rng);
-        Self(Residue::<MOD, LIMBS>::new(&inner))
-    }
-
-    fn invert(&self) -> VsssResult<Self> {
-        let (value, succeeded) = self.0.invert();
-        if !bool::from(succeeded) {
-            return Err(Error::InvalidShareIdentifier);
-        }
-        Ok(Self(value))
-    }
-
     fn from_slice(vec: &[u8]) -> VsssResult<Self> {
         IdentifierUint::<LIMBS>::from_slice(vec)
             .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
@@ -135,6 +121,25 @@ where
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
         self.serialize().as_ref().to_vec()
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let inner = Uint::<LIMBS>::random(&mut rng);
+        Self(Residue::<MOD, LIMBS>::new(&inner))
+    }
+
+    fn invert(&self) -> VsssResult<Self> {
+        let (value, succeeded) = self.0.invert();
+        if !bool::from(succeeded) {
+            return Err(Error::InvalidShareElement);
+        }
+        Ok(Self(value))
     }
 }
 

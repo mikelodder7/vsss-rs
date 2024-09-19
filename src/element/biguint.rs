@@ -3,6 +3,7 @@ use crate::*;
 use core::ops::{Deref, DerefMut};
 use num::bigint::BigUint;
 use num::traits::{One, Zero};
+use num::CheckedDiv;
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
 
@@ -85,7 +86,7 @@ impl From<&IdentifierBigUint> for Vec<u8> {
     }
 }
 
-impl ShareIdentifier for IdentifierBigUint {
+impl ShareElement for IdentifierBigUint {
     type Serialization = Vec<u8>;
     type Inner = BigUint;
 
@@ -109,6 +110,16 @@ impl ShareIdentifier for IdentifierBigUint {
         Ok(IdentifierBigUint(BigUint::from_bytes_be(serialized)))
     }
 
+    fn from_slice(vec: &[u8]) -> VsssResult<Self> {
+        Ok(IdentifierBigUint(BigUint::from_bytes_be(vec)))
+    }
+
+    fn to_vec(&self) -> Vec<u8> {
+        self.0.to_bytes_be()
+    }
+}
+
+impl ShareIdentifier for IdentifierBigUint {
     fn random(mut rng: impl RngCore + CryptoRng) -> Self {
         let mut buf = vec![0u8; 32];
         rng.fill_bytes(&mut buf);
@@ -116,18 +127,10 @@ impl ShareIdentifier for IdentifierBigUint {
     }
 
     fn invert(&self) -> VsssResult<Self> {
-        if self.0.is_zero() {
-            return Err(Error::InvalidShareIdentifier);
-        }
-        let r = Self::one().0 / &self.0;
-        Ok(Self(r))
-    }
-
-    fn from_slice(vec: &[u8]) -> VsssResult<Self> {
-        Ok(IdentifierBigUint(BigUint::from_bytes_be(vec)))
-    }
-
-    fn to_vec(&self) -> Vec<u8> {
-        self.0.to_bytes_be()
+        Self::one()
+            .0
+            .checked_div(&self.0)
+            .map(IdentifierBigUint)
+            .ok_or(Error::InvalidShareElement)
     }
 }

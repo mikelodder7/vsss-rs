@@ -7,7 +7,7 @@ use super::*;
 
 /// A share identifier represented as a residue modulo known at compile time.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareResidue<I: ShareIdentifier, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+pub struct ShareResidue<I: ShareElement, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
@@ -17,7 +17,7 @@ where
     pub value: Residue<MOD, LIMBS>,
 }
 
-impl<I: ShareIdentifier, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+impl<I: ShareElement, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     From<(I, Residue<MOD, LIMBS>)> for ShareResidue<I, MOD, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
@@ -27,7 +27,7 @@ where
     }
 }
 
-impl<I: ShareIdentifier, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+impl<I: ShareElement, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     From<ShareResidue<I, MOD, LIMBS>> for (I, Residue<MOD, LIMBS>)
 where
     Uint<LIMBS>: ArrayEncoding,
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<I: ShareIdentifier, MOD: ResidueParams<LIMBS>, const LIMBS: usize> Share
+impl<I: ShareElement, MOD: ResidueParams<LIMBS>, const LIMBS: usize> Share
     for ShareResidue<I, MOD, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
@@ -82,7 +82,7 @@ where
 
     fn parse_slice(&mut self, slice: &[u8]) -> VsssResult<()> {
         if slice.len() != Uint::<LIMBS>::BYTES {
-            return Err(Error::InvalidShareIdentifier);
+            return Err(Error::InvalidShareElement);
         }
         let inner = Uint::<LIMBS>::from_be_slice(slice);
         self.value = Residue::<MOD, LIMBS>::new(&inner);
@@ -96,7 +96,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<I: ShareIdentifier + serde::Serialize, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+impl<I: ShareElement + serde::Serialize, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     serde::Serialize for ShareResidue<I, MOD, LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
@@ -112,7 +112,7 @@ where
 #[cfg(feature = "serde")]
 impl<
         'de,
-        I: ShareIdentifier + serde::Deserialize<'de>,
+        I: ShareElement + serde::Deserialize<'de>,
         MOD: ResidueParams<LIMBS>,
         const LIMBS: usize,
     > serde::Deserialize<'de> for ShareResidue<I, MOD, LIMBS>

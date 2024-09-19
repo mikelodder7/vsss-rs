@@ -42,7 +42,7 @@ impl<F: PrimeField> From<F> for IdentifierPrimeField<F> {
     }
 }
 
-impl<F: PrimeField> ShareIdentifier for IdentifierPrimeField<F> {
+impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     type Serialization = F::Repr;
     type Inner = F;
 
@@ -63,33 +63,35 @@ impl<F: PrimeField> ShareIdentifier for IdentifierPrimeField<F> {
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
-        Option::from(F::from_repr(*serialized).map(Self)).ok_or(Error::InvalidShareIdentifier)
-    }
-
-    fn random(rng: impl RngCore + CryptoRng) -> Self {
-        Self(<F as Field>::random(rng))
-    }
-
-    fn invert(&self) -> VsssResult<Self> {
-        Option::from(self.0.invert())
-            .map(Self)
-            .ok_or(Error::InvalidShareIdentifier)
+        Option::from(F::from_repr(*serialized).map(Self)).ok_or(Error::InvalidShareElement)
     }
 
     fn from_slice(vec: &[u8]) -> VsssResult<Self> {
         let mut repr = F::Repr::default();
         if vec.len() != repr.as_ref().len() {
-            return Err(Error::InvalidShareIdentifier);
+            return Err(Error::InvalidShareElement);
         }
         repr.as_mut().copy_from_slice(vec);
         Option::from(F::from_repr(repr))
             .map(Self)
-            .ok_or(Error::InvalidShareIdentifier)
+            .ok_or(Error::InvalidShareElement)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
         self.to_repr().as_ref().to_vec()
+    }
+}
+
+impl<F: PrimeField> ShareIdentifier for IdentifierPrimeField<F> {
+    fn random(rng: impl RngCore + CryptoRng) -> Self {
+        Self(F::random(rng))
+    }
+
+    fn invert(&self) -> VsssResult<Self> {
+        Option::from(self.0.invert())
+            .map(Self)
+            .ok_or(Error::InvalidShareElement)
     }
 }
 

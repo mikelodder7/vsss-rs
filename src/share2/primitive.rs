@@ -2,14 +2,14 @@ use super::*;
 
 /// A share identifier represented as a primitive integer.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
-pub struct SharePrimitive<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> {
+pub struct SharePrimitive<I: ShareElement, P: Primitive<BYTES>, const BYTES: usize> {
     /// The share identifier.
     pub identifier: I,
     /// The share value.
     pub value: P,
 }
 
-impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> From<(I, P)>
+impl<I: ShareElement, P: Primitive<BYTES>, const BYTES: usize> From<(I, P)>
     for SharePrimitive<I, P, BYTES>
 {
     fn from((identifier, value): (I, P)) -> Self {
@@ -17,7 +17,7 @@ impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> From<(I, P)>
     }
 }
 
-impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> From<SharePrimitive<I, P, BYTES>>
+impl<I: ShareElement, P: Primitive<BYTES>, const BYTES: usize> From<SharePrimitive<I, P, BYTES>>
     for (I, P)
 {
     fn from(share: SharePrimitive<I, P, BYTES>) -> Self {
@@ -25,7 +25,7 @@ impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> From<SharePrim
     }
 }
 
-impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> Share
+impl<I: ShareElement, P: Primitive<BYTES>, const BYTES: usize> Share
     for SharePrimitive<I, P, BYTES>
 {
     type Serialization = [u8; BYTES];
@@ -68,7 +68,7 @@ impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> Share
     fn parse_slice(&mut self, slice: &[u8]) -> VsssResult<()> {
         let mut repr = P::ZERO.to_be_bytes();
         if slice.len() != repr.as_ref().len() {
-            return Err(Error::InvalidShareIdentifier);
+            return Err(Error::InvalidShareElement);
         }
         repr.as_mut().copy_from_slice(slice);
         self.value = P::from_be_bytes(&repr);
@@ -83,7 +83,7 @@ impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> Share
 
 #[cfg(feature = "serde")]
 impl<
-        I: ShareIdentifier + serde::Serialize,
+        I: ShareElement + serde::Serialize,
         P: Primitive<BYTES> + serde::Serialize,
         const BYTES: usize,
     > serde::Serialize for SharePrimitive<I, P, BYTES>
@@ -96,7 +96,7 @@ impl<
 #[cfg(feature = "serde")]
 impl<
         'de,
-        I: ShareIdentifier + serde::Deserialize<'de>,
+        I: ShareElement + serde::Deserialize<'de>,
         P: Primitive<BYTES> + serde::Deserialize<'de>,
         const BYTES: usize,
     > serde::Deserialize<'de> for SharePrimitive<I, P, BYTES>
