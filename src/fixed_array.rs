@@ -38,4 +38,3 @@ impl_fixed_array!(
     i128 => 16,
     isize => ISIZE_BYTES,
 );
-

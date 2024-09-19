@@ -76,3 +76,24 @@ impl<I: ShareIdentifier, F: PrimeField> Share for SharePrimeField<I, F> {
         self.value.to_repr().as_ref().to_vec()
     }
 }
+
+#[cfg(feature = "serde")]
+impl<I: ShareIdentifier + serde::Serialize, F: PrimeField> serde::Serialize
+    for SharePrimeField<I, F>
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let id2 = IdentifierPrimeField(self.value);
+        (self.identifier(), id2).serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, I: ShareIdentifier + serde::Deserialize<'de>, F: PrimeField> serde::Deserialize<'de>
+    for SharePrimeField<I, F>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let (identifier, IdentifierPrimeField(value)) =
+            <(I, IdentifierPrimeField<F>)>::deserialize(d)?;
+        Ok(Self { identifier, value })
+    }
+}

@@ -87,3 +87,32 @@ where
         self.serialize().as_ref().to_vec()
     }
 }
+
+#[cfg(feature = "serde")]
+impl<I: ShareIdentifier + serde::Serialize, const LIMBS: usize> serde::Serialize
+    for ShareUint<I, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        (self.identifier(), self.value()).serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, I: ShareIdentifier + serde::Deserialize<'de>, const LIMBS: usize> serde::Deserialize<'de>
+    for ShareUint<I, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn deserialize<D>(d: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let (identifier, value) = <(I, Saturating<LIMBS>)>::deserialize(d)?;
+        Ok(Self { identifier, value })
+    }
+}

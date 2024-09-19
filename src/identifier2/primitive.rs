@@ -118,3 +118,109 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrim
         self.serialize().to_vec()
     }
 }
+
+impl<P: Primitive<BYTES>, const BYTES: usize> IdentifierPrimitive<P, BYTES> {
+    /// Returns the additive identity element.
+    pub const ZERO: Self = Self(P::ZERO);
+    /// Returns the multiplicative identity element.
+    pub const ONE: Self = Self(P::ONE);
+}
+
+#[cfg(feature = "serde")]
+macro_rules! impl_serde {
+    ($($identifier:ident => $primitive:ty),+$(,)*) => {
+        $(
+            impl serde::Serialize for $identifier {
+                fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                    self.0.serialize(s)
+                }
+            }
+
+            impl<'de> serde::Deserialize<'de> for $identifier {
+                fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                    <$primitive>::deserialize(d).map(IdentifierPrimitive)
+                }
+            }
+        )+
+    };
+}
+
+#[cfg(feature = "serde")]
+impl_serde!(
+    IdentifierU8 => u8,
+    IdentifierU16 => u16,
+    IdentifierU32 => u32,
+    IdentifierU64 => u64,
+    IdentifierI8 => i8,
+    IdentifierI16 => i16,
+    IdentifierI32 => i32,
+    IdentifierI64 => i64,
+);
+
+#[cfg(all(feature = "serde", target_pointer_width = "64"))]
+impl_serde!(
+    IdentifierU128 => u128,
+    IdentifierI128 => i128,
+);
+#[cfg(all(feature = "serde", target_pointer_width = "32"))]
+pub use serde_32::*;
+
+#[cfg(all(feature = "serde", target_pointer_width = "64"))]
+mod serde_64 {
+    use super::*;
+    use serde::*;
+
+    impl Serialize for IdentifierUsize {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            (self.0 as u64).serialize(s)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for IdentifierUsize {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            <u64>::deserialize(d).map(|x| IdentifierPrimitive(x as usize))
+        }
+    }
+
+    impl Serialize for IdentifierIsize {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            (self.0 as i64).serialize(s)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for IdentifierIsize {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            <i64>::deserialize(d).map(|x| IdentifierPrimitive(x as isize))
+        }
+    }
+}
+
+#[cfg(all(feature = "serde", target_pointer_width = "32"))]
+mod serde_32 {
+    use super::*;
+    use serde::*;
+
+    impl Serialize for IdentifierUsize {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            (self.0 as u32).serialize(s)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for IdentifierUsize {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            <u32>::deserialize(d).map(|x| IdentifierPrimitive(x as usize))
+        }
+    }
+
+    impl Serialize for IdentifierIsize {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            (self.0 as i32).serialize(s)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for IdentifierIsize {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            <i32>::deserialize(d).map(|x| IdentifierPrimitive(x as isize))
+        }
+    }
+}

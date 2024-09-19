@@ -7,6 +7,8 @@ use crate::*;
 
 /// A share identifier represented as a residue modulo known at compile time.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(transparent)]
 pub struct IdentifierResidue<MOD: ResidueParams<LIMBS>, const LIMBS: usize>(
     pub Residue<MOD, LIMBS>,
 )

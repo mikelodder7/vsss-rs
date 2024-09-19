@@ -94,3 +94,36 @@ where
         self.value.retrieve().to_be_bytes().as_ref().to_vec()
     }
 }
+
+#[cfg(feature = "serde")]
+impl<I: ShareIdentifier + serde::Serialize, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+    serde::Serialize for ShareResidue<I, MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        (self.identifier(), self.value()).serialize(s)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<
+        'de,
+        I: ShareIdentifier + serde::Deserialize<'de>,
+        MOD: ResidueParams<LIMBS>,
+        const LIMBS: usize,
+    > serde::Deserialize<'de> for ShareResidue<I, MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn deserialize<D>(d: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let (identifier, value) = <(I, Residue<MOD, LIMBS>)>::deserialize(d)?;
+        Ok(Self { identifier, value })
+    }
+}

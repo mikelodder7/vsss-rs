@@ -8,6 +8,7 @@ use subtle::Choice;
 
 /// A share identifier represented as a big unsigned number
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IdentifierBigUint(pub BigUint);
 
 impl Deref for IdentifierBigUint {

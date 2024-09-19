@@ -72,3 +72,20 @@ impl<I: ShareIdentifier> Share for ShareBigUint<I> {
         self.value.to_bytes_be()
     }
 }
+
+#[cfg(feature = "serde")]
+impl<I: ShareIdentifier + serde::Serialize> serde::Serialize for ShareBigUint<I> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (self.identifier(), self.value()).serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, I: ShareIdentifier + serde::Deserialize<'de>> serde::Deserialize<'de>
+    for ShareBigUint<I>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let (identifier, value) = <(I, BigUint)>::deserialize(deserializer)?;
+        Ok(Self { identifier, value })
+    }
+}

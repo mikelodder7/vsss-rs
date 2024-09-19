@@ -9,6 +9,8 @@ use crate::*;
 /// A share identifier represented as a Big unsigned integer with
 /// a fixed number of limbs.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(transparent)]
 pub struct IdentifierUint<const LIMBS: usize>(pub Saturating<LIMBS>)
 where
     Uint<LIMBS>: ArrayEncoding;

@@ -82,139 +82,43 @@ impl<I: ShareIdentifier, G: Group + GroupEncoding + Default> Share for ShareGrou
 }
 
 #[cfg(feature = "serde")]
-pub use group_element_serde::*;
+struct ShareGroupSerde<G: Group + GroupEncoding + Default>(pub G);
 
 #[cfg(feature = "serde")]
-mod group_element_serde {
-    use super::*;
-
-    use serde::{
-        de::{Error as DError, MapAccess, SeqAccess, Visitor},
-        ser::SerializeStruct,
-        Deserialize, Deserializer, Serialize, Serializer,
-    };
-
-    impl<I: ShareIdentifier, G: Group + GroupEncoding + Default> Serialize for ShareGroupElement<I, G> {
-        fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let hr = s.is_human_readable();
-            let mut state = s.serialize_struct("ShareGroupElement", 2)?;
-            if hr {
-                state.serialize_field(
-                    "identifier",
-                    &hex::encode(self.identifier.serialize().as_ref()),
-                )?;
-                state.serialize_field(
-                    "value",
-                    &hex::encode(<ShareGroupElement<I, G> as Share>::serialize(self).as_ref()),
-                )?;
-            } else {
-                state.serialize_field("identifier", &self.identifier.serialize().as_ref())?;
-                state.serialize_field(
-                    "value",
-                    <ShareGroupElement<I, G> as Share>::serialize(self).as_ref(),
-                )?;
-            }
-            state.end()
-        }
+impl<G: Group + GroupEncoding + Default> serde::Serialize for ShareGroupSerde<G> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        serdect::array::serialize_hex_lower_or_bin(&self.0.to_bytes(), s)
     }
+}
 
-    impl<'de, I: ShareIdentifier, G: Group + GroupEncoding + Default> Deserialize<'de>
-        for ShareGroupElement<I, G>
-    {
-        fn deserialize<D>(d: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            struct ShareGroupElementVisitor<I: ShareIdentifier, G: Group + GroupEncoding + Default> {
-                _phantom: std::marker::PhantomData<(I, G)>,
-            }
+#[cfg(feature = "serde")]
+impl<'de, G: Group + GroupEncoding + Default> serde::Deserialize<'de> for ShareGroupSerde<G> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let mut repr = G::Repr::default();
+        serdect::array::deserialize_hex_or_bin(repr.as_mut(), d)?;
+        Option::from(G::from_bytes(&repr)).map(Self).ok_or_else(|| {
+            serde::de::Error::custom("failed to deserialize group element from bytes")
+        })
+    }
+}
 
-            impl<'de, I: ShareIdentifier, G: Group + GroupEncoding + Default> Visitor<'de>
-                for ShareGroupElementVisitor<I, G>
-            {
-                type Value = ShareGroupElement<I, G>;
+#[cfg(feature = "serde")]
+impl<I: ShareIdentifier + serde::Serialize, G: Group + GroupEncoding + Default> serde::Serialize
+    for ShareGroupElement<I, G>
+{
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let share = ShareGroupSerde(self.value);
+        (self.identifier(), share).serialize(s)
+    }
+}
 
-                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    formatter.write_str("struct ShareGroupElement")
-                }
-
-                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-                where
-                    A: SeqAccess<'de>,
-                {
-                    let mut repr = G::Repr::default();
-                    let identifier = I::from_slice(
-                        &seq.next_element::<Vec<u8>>()?
-                            .ok_or_else(|| DError::invalid_length(0, &self))?,
-                    )
-                    .map_err(DError::custom)?;
-                    let bytes = seq
-                        .next_element::<Vec<u8>>()?
-                        .ok_or_else(|| DError::invalid_length(1, &self))?;
-                    if repr.as_ref().len() != bytes.len() {
-                        return Err(DError::custom("invalid share value length"));
-                    }
-                    repr.as_mut().copy_from_slice(bytes.as_slice());
-                    Ok(ShareGroupElement {
-                        identifier,
-                        value: Option::from(G::from_bytes(&repr)).ok_or_else(|| {
-                            DError::custom("invalid share value while deserializing")
-                        })?,
-                    })
-                }
-
-                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-                where
-                    A: MapAccess<'de>,
-                {
-                    let mut identifier = None;
-                    let mut value = None;
-                    while let Some(key) = map.next_key()? {
-                        match key {
-                            "identifier" => {
-                                identifier = Some(
-                                    I::from_slice(
-                                        &hex::decode(&map.next_value::<String>()?)
-                                            .map_err(DError::custom)?,
-                                    )
-                                    .map_err(DError::custom)?,
-                                );
-                            }
-                            "value" => {
-                                let mut repr = G::Repr::default();
-                                let temp = hex::decode(map.next_value::<String>()?)
-                                    .map_err(DError::custom)?;
-                                if repr.as_ref().len() != temp.len() {
-                                    return Err(DError::custom("invalid share value length"));
-                                }
-                                repr.as_mut().copy_from_slice(&temp[..]);
-                                value = Option::<G>::from(G::from_bytes(&repr));
-                            }
-                            _ => {
-                                return Err(DError::unknown_field(key, &["identifier", "value"]));
-                            }
-                        }
-                    }
-                    let identifier =
-                        identifier.ok_or_else(|| DError::missing_field("identifier"))?;
-                    let value = value.ok_or_else(|| {
-                        DError::missing_field("invalid share value while deserializing")
-                    })?;
-                    Ok(ShareGroupElement { identifier, value })
-                }
-            }
-
-            d.deserialize_struct(
-                "ShareGroupElement",
-                &["identifier", "value"],
-                ShareGroupElementVisitor {
-                    _phantom: core::marker::PhantomData,
-                },
-            )
-        }
+#[cfg(feature = "serde")]
+impl<'de, I: ShareIdentifier + serde::Deserialize<'de>, G: Group + GroupEncoding + Default>
+    serde::Deserialize<'de> for ShareGroupElement<I, G>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let (identifier, ShareGroupSerde(value)) = <(I, ShareGroupSerde<G>)>::deserialize(d)?;
+        Ok(Self { identifier, value })
     }
 }
 

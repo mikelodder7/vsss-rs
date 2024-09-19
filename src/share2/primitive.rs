@@ -80,3 +80,29 @@ impl<I: ShareIdentifier, P: Primitive<BYTES>, const BYTES: usize> Share
         self.serialize().to_vec()
     }
 }
+
+#[cfg(feature = "serde")]
+impl<
+        I: ShareIdentifier + serde::Serialize,
+        P: Primitive<BYTES> + serde::Serialize,
+        const BYTES: usize,
+    > serde::Serialize for SharePrimitive<I, P, BYTES>
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (self.identifier(), self.value()).serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<
+        'de,
+        I: ShareIdentifier + serde::Deserialize<'de>,
+        P: Primitive<BYTES> + serde::Deserialize<'de>,
+        const BYTES: usize,
+    > serde::Deserialize<'de> for SharePrimitive<I, P, BYTES>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let (identifier, value) = <(I, P)>::deserialize(deserializer)?;
+        Ok(Self { identifier, value })
+    }
+}

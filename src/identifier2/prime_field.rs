@@ -99,3 +99,20 @@ impl<F: PrimeField> IdentifierPrimeField<F> {
     /// Returns multiplicative identity.
     pub const ONE: Self = Self(F::ONE);
 }
+
+#[cfg(feature = "serde")]
+impl<F: PrimeField> serde::Serialize for IdentifierPrimeField<F> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        serdect::array::serialize_hex_lower_or_bin(&self.0.to_repr(), s)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, F: PrimeField> serde::Deserialize<'de> for IdentifierPrimeField<F> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let mut repr = F::Repr::default();
+        serdect::array::deserialize_hex_or_bin(repr.as_mut(), d)?;
+        Option::from(F::from_repr(repr).map(Self))
+            .ok_or_else(|| serde::de::Error::custom("invalid share identifier"))
+    }
+}
