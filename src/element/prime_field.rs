@@ -1,7 +1,8 @@
-use core::ops::{Deref, DerefMut};
-use elliptic_curve::{Field, PrimeField};
+use core::ops::{Deref, DerefMut, Mul};
+use crypto_bigint::modular::constant_mod::ResidueParams;
+use crypto_bigint::ArrayEncoding;
+use elliptic_curve::{bigint::Uint, ops::Reduce, Field, PrimeField};
 use rand_core::{CryptoRng, RngCore};
-use subtle::Choice;
 
 use super::*;
 use crate::*;
@@ -39,6 +40,102 @@ impl<F: PrimeField> AsMut<F> for IdentifierPrimeField<F> {
 impl<F: PrimeField> From<F> for IdentifierPrimeField<F> {
     fn from(value: F) -> Self {
         Self(value)
+    }
+}
+
+impl<F: PrimeField> From<&IdentifierPrimeField<F>> for IdentifierPrimeField<F> {
+    fn from(value: &IdentifierPrimeField<F>) -> Self {
+        *value
+    }
+}
+
+impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> From<&IdentifierPrimitive<P, BYTES>>
+    for IdentifierPrimeField<F>
+{
+    fn from(value: &IdentifierPrimitive<P, BYTES>) -> Self {
+        #[cfg(target_pointer_width = "64")]
+        {
+            if BYTES * 8 <= 64 {
+                Self(F::from(value.0.to_u64().expect("invalid share identifier")))
+            } else {
+                Self(F::from_u128(
+                    value.0.to_u128().expect("invalid share identifier"),
+                ))
+            }
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            Self(F::from(value.0.to_u64().expect("invalid share identifier")))
+        }
+    }
+}
+
+impl<F: PrimeField + Reduce<Uint<LIMBS>>, const LIMBS: usize> From<&IdentifierUint<LIMBS>>
+    for IdentifierPrimeField<F>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn from(value: &IdentifierUint<LIMBS>) -> Self {
+        if LIMBS * 8 != F::Repr::default().as_ref().len() {
+            panic!("cannot convert from IdentifierUint to IdentifierPrimeField with different limb size");
+        }
+        Self(F::reduce(value.0 .0))
+    }
+}
+
+impl<F: PrimeField + Reduce<Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+    From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn from(value: &IdentifierResidue<MOD, LIMBS>) -> Self {
+        let t = value.0.retrieve();
+        Self(F::reduce(t))
+    }
+}
+
+impl<F: PrimeField> Mul<&IdentifierPrimeField<F>> for IdentifierPrimeField<F> {
+    type Output = IdentifierPrimeField<F>;
+
+    fn mul(self, rhs: &IdentifierPrimeField<F>) -> Self::Output {
+        Self(self.0 * rhs.0)
+    }
+}
+
+impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> Mul<&IdentifierPrimitive<P, BYTES>>
+    for IdentifierPrimeField<F>
+{
+    type Output = IdentifierPrimeField<F>;
+
+    fn mul(self, rhs: &IdentifierPrimitive<P, BYTES>) -> Self::Output {
+        let rhs = IdentifierPrimeField::<F>::from(rhs);
+        Self(self.0 * rhs.0)
+    }
+}
+
+impl<F: PrimeField + Reduce<Uint<LIMBS>>, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
+    for IdentifierPrimeField<F>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    type Output = IdentifierPrimeField<F>;
+
+    fn mul(self, rhs: &IdentifierUint<LIMBS>) -> Self::Output {
+        let rhs = IdentifierPrimeField::<F>::from(rhs);
+        Self(self.0 * rhs.0)
+    }
+}
+
+impl<F: PrimeField + Reduce<Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+    Mul<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    type Output = IdentifierPrimeField<F>;
+
+    fn mul(self, rhs: &IdentifierResidue<MOD, LIMBS>) -> Self::Output {
+        let rhs = IdentifierPrimeField::<F>::from(rhs);
+        Self(self.0 * rhs.0)
     }
 }
 

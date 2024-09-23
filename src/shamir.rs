@@ -9,14 +9,12 @@ use generic_array::{ArrayLength, GenericArray};
 use rand_core::{CryptoRng, RngCore};
 
 /// A Polynomial that can create secret shares
-pub trait Shamir<F, I, S>
+pub trait Shamir<S>
 where
-    F: PrimeField,
-    I: ShareIdentifier,
-    S: Share<Identifier = I>,
+    S: Share,
 {
     /// The polynomial for the coefficients
-    type InnerPolynomial: Polynomial<F>;
+    type InnerPolynomial: Polynomial<S>;
     /// The set of secret shares
     type ShareSet: WriteableShareSet<I, S>;
 

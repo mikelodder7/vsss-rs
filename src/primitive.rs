@@ -3,7 +3,7 @@ use core::fmt::{Debug, Display};
 use num::{
     traits::{
         ConstOne, ConstZero, FromBytes, NumAssign, NumAssignRef, NumOps, NumRef, SaturatingAdd,
-        SaturatingMul, SaturatingSub, ToBytes,
+        SaturatingMul, SaturatingSub, ToBytes, ToPrimitive,
     },
     PrimInt,
 };
@@ -24,6 +24,7 @@ pub trait Primitive<const BYTES: usize>:
     + FixedArray<BYTES>
     + ToBytes
     + FromBytes<Bytes = <Self as ToBytes>::Bytes>
+    + ToPrimitive
     + Copy
     + Clone
     + Default
@@ -48,6 +49,7 @@ impl<
             + FixedArray<BYTES>
             + ToBytes
             + FromBytes<Bytes = <Self as ToBytes>::Bytes>
+            + ToPrimitive
             + Copy
             + Clone
             + Default

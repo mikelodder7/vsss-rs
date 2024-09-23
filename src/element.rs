@@ -10,6 +10,7 @@ mod uint;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use biguint::*;
+pub use group_element::*;
 pub use prime_field::*;
 pub use primitive::*;
 pub use residue::*;
@@ -19,7 +20,7 @@ use crate::*;
 
 use core::{
     fmt::Debug,
-    ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use elliptic_curve::bigint::{Encoding, Random, Zero as CryptoZero};
 use rand_core::{CryptoRng, RngCore};
@@ -70,6 +71,47 @@ pub trait ShareIdentifier: ShareElement<Inner: ShareIdentifierInner> {
     fn invert(&self) -> VsssResult<Self>;
 }
 
+/// Objects that represent the ability to verify shamir shares
+pub trait ShareVerifier<S: Share>:
+    ShareElement
+    + Copy
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + AddAssign
+    + SubAssign
+    + Neg<Output = Self>
+    + Mul<S::Identifier, Output = Self>
+    + Mul<S::Value, Output = Self>
+    + MulAssign<S::Identifier>
+    + MulAssign<S::Value>
+    + for<'a> Mul<&'a S::Identifier, Output = Self>
+    + for<'a> Mul<&'a S::Value, Output = Self>
+    + for<'a> MulAssign<&'a S::Identifier>
+    + for<'a> MulAssign<&'a S::Value>
+{
+}
+
+impl<
+        S: Share,
+        SV: ShareElement
+            + Copy
+            + Add<Output = Self>
+            + Sub<Output = Self>
+            + AddAssign
+            + SubAssign
+            + Neg<Output = Self>
+            + Mul<S::Identifier, Output = Self>
+            + Mul<S::Value, Output = Self>
+            + MulAssign<S::Identifier>
+            + MulAssign<S::Value>
+            + for<'a> Mul<&'a S::Identifier, Output = Self>
+            + for<'a> Mul<&'a S::Value, Output = Self>
+            + for<'a> MulAssign<&'a S::Identifier>
+            + for<'a> MulAssign<&'a S::Value>,
+    > ShareVerifier<S> for SV
+{
+}
+
 /// A share element inner type for secret sharing schemes.
 pub trait ShareElementInner:
     Sized
@@ -79,10 +121,12 @@ pub trait ShareElementInner:
     + Clone
     + Default
     + 'static
-    + Add
-    + Sub
+    + Add<Output = Self>
+    + Sub<Output = Self>
     + AddAssign
     + SubAssign
+    + for<'a> Add<&'a Self, Output = Self>
+    + for<'a> Sub<&'a Self, Output = Self>
     + for<'a> AddAssign<&'a Self>
     + for<'a> SubAssign<&'a Self>
 {
@@ -96,10 +140,12 @@ impl<
             + Clone
             + Default
             + 'static
-            + Add
-            + Sub
+            + Add<Output = Self>
+            + Sub<Output = Self>
             + AddAssign
             + SubAssign
+            + for<'a> Add<&'a Self, Output = Self>
+            + for<'a> Sub<&'a Self, Output = Self>
             + for<'a> AddAssign<&'a Self>
             + for<'a> SubAssign<&'a Self>,
     > ShareElementInner for I
@@ -108,11 +154,20 @@ impl<
 
 /// A share identifier inner type for secret sharing schemes.
 pub trait ShareIdentifierInner:
-    ShareElementInner + Mul + MulAssign + for<'a> MulAssign<&'a Self>
+    ShareElementInner
+    + Mul<Output = Self>
+    + MulAssign
+    + for<'a> Mul<&'a Self, Output = Self>
+    + for<'a> MulAssign<&'a Self>
 {
 }
 
-impl<I: ShareElementInner + Mul + MulAssign + for<'a> MulAssign<&'a Self>> ShareIdentifierInner
-    for I
+impl<
+        E: ShareElementInner
+            + Mul<Output = Self>
+            + MulAssign
+            + for<'a> Mul<&'a Self, Output = Self>
+            + for<'a> MulAssign<&'a Self>,
+    > ShareIdentifierInner for E
 {
 }

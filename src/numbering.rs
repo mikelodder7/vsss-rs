@@ -380,7 +380,7 @@ mod tests {
                 count: 5,
             }),
         ];
-        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
+        let collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
 
         let list: Vec<_> = collection.collect();
         assert_eq!(list.len(), 10);
@@ -421,7 +421,7 @@ mod tests {
                 _markers: PhantomData,
             }),
         ];
-        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
+        let collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
         let list: Vec<_> = collection.collect();
         assert_eq!(list.len(), 10);
         assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
@@ -464,7 +464,7 @@ mod tests {
                 count: 5,
             }),
         ];
-        let mut collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
+        let collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
         let list: Vec<_> = collection.collect();
         assert_eq!(list.len(), 5);
         assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(1u64)));

@@ -180,11 +180,10 @@ mod error;
 mod numbering;
 // pub mod pedersen;
 mod polynomial;
-// mod set;
+mod set;
 // pub mod shamir;
 mod element;
 mod fixed_array;
-mod group_type;
 mod primitive;
 mod saturating;
 mod share2;
@@ -196,19 +195,16 @@ use subtle::*;
 pub use error::*;
 // pub use feldman::Feldman;
 // pub use gf256::*;
-// pub use identifier::*;
 pub use element::*;
 pub use fixed_array::*;
-pub use group_type::*;
 pub use numbering::*;
 pub use primitive::*;
 pub use saturating::*;
 pub use share2::*;
 // pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;
-// pub use set::*;
+pub use set::*;
 // pub use shamir::Shamir;
-// pub use share::*;
 pub use util::*;
 
 // #[cfg(any(feature = "alloc", feature = "std"))]
@@ -217,7 +213,6 @@ pub use util::*;
 // #[cfg(feature = "curve25519")]
 // #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 // pub mod curve25519;
-// mod identifier;
 
 // #[cfg(feature = "curve25519")]
 // pub use curve25519_dalek;
