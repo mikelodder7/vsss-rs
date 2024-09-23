@@ -78,6 +78,11 @@ where
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
     type Inner = Saturating<LIMBS>;
 
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let inner = Saturating(Uint::<LIMBS>::random(&mut rng));
+        Self(inner)
+    }
+
     fn zero() -> Self {
         Self(Saturating(Uint::<LIMBS>::ZERO))
     }
@@ -116,11 +121,6 @@ impl<const LIMBS: usize> ShareIdentifier for IdentifierUint<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let inner = Saturating(Uint::<LIMBS>::random(&mut rng));
-        Self(inner)
-    }
-
     fn invert(&self) -> VsssResult<Self> {
         let r = Saturating(Uint::<LIMBS>::ONE) / self.0;
         Ok(Self(r))

@@ -143,6 +143,10 @@ impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     type Serialization = F::Repr;
     type Inner = F;
 
+    fn random(rng: impl RngCore + CryptoRng) -> Self {
+        Self(F::random(rng))
+    }
+
     fn zero() -> Self {
         Self(<F as Field>::ZERO)
     }
@@ -181,10 +185,6 @@ impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
 }
 
 impl<F: PrimeField> ShareIdentifier for IdentifierPrimeField<F> {
-    fn random(rng: impl RngCore + CryptoRng) -> Self {
-        Self(F::random(rng))
-    }
-
     fn invert(&self) -> VsssResult<Self> {
         Option::from(self.0.invert())
             .map(Self)

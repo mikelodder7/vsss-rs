@@ -92,6 +92,11 @@ where
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
     type Inner = Residue<MOD, LIMBS>;
 
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let inner = Uint::<LIMBS>::random(&mut rng);
+        Self(Residue::<MOD, LIMBS>::new(&inner))
+    }
+
     fn zero() -> Self {
         Self(Residue::<MOD, LIMBS>::ZERO)
     }
@@ -129,11 +134,6 @@ impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier
 where
     Uint<LIMBS>: ArrayEncoding,
 {
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let inner = Uint::<LIMBS>::random(&mut rng);
-        Self(Residue::<MOD, LIMBS>::new(&inner))
-    }
-
     fn invert(&self) -> VsssResult<Self> {
         let (value, succeeded) = self.0.invert();
         if !bool::from(succeeded) {

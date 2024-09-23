@@ -75,6 +75,12 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimiti
     type Serialization = [u8; BYTES];
     type Inner = P;
 
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let mut repr = [0u8; BYTES];
+        rng.fill_bytes(repr.as_mut());
+        Self(P::from_fixed_array(&repr))
+    }
+
     fn zero() -> Self {
         Self(P::ZERO)
     }
@@ -110,12 +116,6 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimiti
 }
 
 impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrimitive<P, BYTES> {
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let mut repr = [0u8; BYTES];
-        rng.fill_bytes(repr.as_mut());
-        Self(P::from_fixed_array(&repr))
-    }
-
     fn invert(&self) -> VsssResult<Self> {
         P::ONE
             .checked_div(&self.0)

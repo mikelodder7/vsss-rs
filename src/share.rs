@@ -51,3 +51,45 @@ where
         &mut self.1
     }
 }
+
+/// A default share implementation providing named fields for the identifier and value.
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct DefaultShare<I, V>
+where
+    I: ShareIdentifier,
+    V: ShareElement + for<'a> From<&'a I> + for<'a> core::ops::Mul<&'a I, Output = V>,
+{
+    /// The share identifier
+    pub identifier: I,
+    /// The share value
+    pub value: V,
+}
+
+impl<I, V> Share for DefaultShare<I, V>
+where
+    I: ShareIdentifier,
+    V: ShareElement + for<'a> From<&'a I> + for<'a> core::ops::Mul<&'a I, Output = V>,
+{
+    type Identifier = I;
+    type Value = V;
+
+    fn with_identifier_and_value(identifier: Self::Identifier, value: Self::Value) -> Self {
+        Self { identifier, value }
+    }
+
+    fn identifier(&self) -> &Self::Identifier {
+        &self.identifier
+    }
+
+    fn identifier_mut(&mut self) -> &mut Self::Identifier {
+        &mut self.identifier
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.value
+    }
+
+    fn value_mut(&mut self) -> &mut Self::Value {
+        &mut self.value
+    }
+}

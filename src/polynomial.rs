@@ -38,7 +38,7 @@ pub trait Polynomial<S: Share> {
     }
 
     /// Evaluate the polynomial with the specified `x`
-    fn evaluate(&self, x: S::Identifier, threshold: usize) -> S::Value {
+    fn evaluate(&self, x: &S::Identifier, threshold: usize) -> S::Value {
         let coefficients = self.coefficients();
         // Compute the polynomial value using Horner's Method
         let degree = threshold - 1;

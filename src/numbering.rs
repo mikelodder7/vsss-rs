@@ -73,38 +73,38 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
         Self::List { list }
     }
 
-    pub(crate) fn try_into_generator(self) -> VsssResult<ParticipantIdGeneratorState<'a, I>> {
+    pub(crate) fn try_into_generator(&self) -> VsssResult<ParticipantIdGeneratorState<'a, I>> {
         match self {
             Self::Sequential {
                 start,
                 increment,
                 count,
             } => {
-                if count == 0 {
+                if *count == 0 {
                     return Err(Error::InvalidGenerator(
                         "The count must be greater than zero",
                     ));
                 }
                 Ok(ParticipantIdGeneratorState::Sequential(
                     SequentialParticipantNumberGenerator {
-                        start,
-                        increment,
+                        start: start.clone(),
+                        increment: increment.clone(),
                         index: 0,
-                        count,
+                        count: *count,
                     },
                 ))
             }
             Self::Random { seed, count } => {
-                if count == 0 {
+                if *count == 0 {
                     return Err(Error::InvalidGenerator(
                         "The count must be greater than zero",
                     ));
                 }
                 Ok(ParticipantIdGeneratorState::Random(
                     RandomParticipantNumberGenerator {
-                        dst: seed,
+                        dst: *seed,
                         index: 0,
-                        count,
+                        count: *count,
                         _markers: PhantomData,
                     },
                 ))
@@ -121,11 +121,13 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
     pub(crate) generators: &'a mut [ParticipantIdGeneratorState<'b, I>],
     pub(crate) index: usize,
 }
 
+#[cfg(test)]
 impl<'a, 'b, I: ShareIdentifier> Iterator for ParticipantIdGeneratorCollection<'a, 'b, I> {
     type Item = I;
 
@@ -152,6 +154,7 @@ impl<'a, 'b, I: ShareIdentifier> Iterator for ParticipantIdGeneratorCollection<'
     }
 }
 
+#[cfg(test)]
 impl<'a, 'b, I: ShareIdentifier> From<&'a mut [ParticipantIdGeneratorState<'b, I>]>
     for ParticipantIdGeneratorCollection<'a, 'b, I>
 {
@@ -167,6 +170,18 @@ pub(crate) enum ParticipantIdGeneratorState<'a, I: ShareIdentifier> {
     Sequential(SequentialParticipantNumberGenerator<I>),
     Random(RandomParticipantNumberGenerator<I>),
     List(ListParticipantNumberGenerator<'a, I>),
+}
+
+impl<'a, I: ShareIdentifier> Iterator for ParticipantIdGeneratorState<'a, I> {
+    type Item = I;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Sequential(gen) => gen.next(),
+            Self::Random(gen) => gen.next(),
+            Self::List(gen) => gen.next(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -282,6 +297,7 @@ impl Debug for XofRng {
 mod tests {
     use super::*;
     use crate::*;
+    use elliptic_curve::PrimeField;
     use k256::{FieldBytes, Scalar};
     use rand_core::SeedableRng;
 

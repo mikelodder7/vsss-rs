@@ -164,282 +164,104 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{boxed::Box, string::String, vec::Vec};
-use core::fmt::{Debug, Display};
+use alloc::{boxed::Box, vec::Vec};
+use core::fmt::Debug;
 #[cfg(feature = "std")]
-use std::{boxed::Box, string::String, vec::Vec};
+use std::{boxed::Box, vec::Vec};
 
 // #[cfg(test)]
 // pub(crate) mod tests;
 
-mod error;
-// pub mod feldman;
-// #[allow(clippy::suspicious_arithmetic_impl)]
-// #[allow(clippy::suspicious_op_assign_impl)]
-// mod gf256;
-mod numbering;
-// pub mod pedersen;
-mod polynomial;
-mod set;
-// pub mod shamir;
 mod element;
+mod error;
+pub mod feldman;
 mod fixed_array;
+#[allow(clippy::suspicious_arithmetic_impl)]
+#[allow(clippy::suspicious_op_assign_impl)]
+mod gf256;
+mod numbering;
+pub mod pedersen;
+mod polynomial;
 mod primitive;
 mod saturating;
-mod share2;
+mod set;
+pub mod shamir;
+mod share;
 mod util;
 
-// use shamir::{check_params, create_shares};
+use shamir::check_params;
 use subtle::*;
 
-pub use error::*;
-// pub use feldman::Feldman;
-// pub use gf256::*;
 pub use element::*;
+pub use error::*;
+pub use feldman::Feldman;
 pub use fixed_array::*;
+pub use gf256::*;
 pub use numbering::*;
+pub use pedersen::{Pedersen, PedersenResult};
+pub use polynomial::*;
 pub use primitive::*;
 pub use saturating::*;
-pub use share2::*;
-// pub use pedersen::{Pedersen, PedersenResult};
-pub use polynomial::*;
 pub use set::*;
-// pub use shamir::Shamir;
+pub use shamir::Shamir;
+pub use share::*;
 pub use util::*;
 
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// pub use pedersen::StdPedersenResult;
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub use pedersen::StdPedersenResult;
 
-// #[cfg(feature = "curve25519")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
-// pub mod curve25519;
-
-// #[cfg(feature = "curve25519")]
-// pub use curve25519_dalek;
+#[cfg(feature = "curve25519")]
+#[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
+pub mod curve25519;
+//
+#[cfg(feature = "curve25519")]
+pub use curve25519_dalek;
 pub use elliptic_curve;
+use elliptic_curve::group::GroupEncoding;
 #[cfg(feature = "std")]
 use elliptic_curve::Group;
-use elliptic_curve::{group::GroupEncoding, PrimeField};
 
 pub use subtle;
 
 pub(crate) const USIZE_BYTES: usize = size_of::<usize>();
 pub(crate) const ISIZE_BYTES: usize = size_of::<isize>();
 
-// /// Create a no-std verifiable secret sharing scheme with size $num using fixed arrays
-// /// The arguments in order are:
-// ///     The vsss name
-// ///     The name for a pedersen secret sharing scheme result
-// ///     The maximum threshold allowed
-// ///     The maximum number of shares allowed
-// #[macro_export]
-// macro_rules! vsss_arr_impl {
-//     ($name:ident, $result:ident, $max_threshold:expr, $max_shares:expr) => {
-//         /// No-std verifiable secret sharing scheme with size $num
-//         pub struct $name<G, I, S>
-//         where
-//             G: Group + GroupEncoding + Default,
-//             I: ShareIdentifier,
-//             S: Share<Identifier = I>,
-//         {
-//             marker: core::marker::PhantomData<(G, I, S)>,
-//         }
-//
-//         impl<G: Group + GroupEncoding + Default, I: ShareIdentifier, S: Share<Identifier = I>>
-//             Shamir<G::Scalar, I, S> for $name<G, I, S>
-//         {
-//             type InnerPolynomial = [G::Scalar; $max_threshold];
-//             type ShareSet = [S; $max_shares];
-//         }
-//
-//         impl<G: Group + GroupEncoding + Default, I: ShareIdentifier, S: Share<Identifier = I>>
-//             Feldman<G, I, S> for $name<G, I, S>
-//         {
-//             type VerifierSet = [G; $max_threshold + 1];
-//         }
-//
-//         impl<G: Group + GroupEncoding + Default, I: ShareIdentifier, S: Share<Identifier = I>>
-//             Pedersen<G, I, S> for $name<G, I, S>
-//         {
-//             type FeldmanVerifierSet = [G; $max_threshold + 1];
-//             type PedersenVerifierSet = [G; $max_threshold + 2];
-//             type PedersenResult = $result<G, I, S>;
-//         }
-//
-//         /// The no-std result to use when an allocator is available with size $num
-//         pub struct $result<G, I, S>
-//         where
-//             G: Group + GroupEncoding + Default,
-//             I: ShareIdentifier,
-//             S: Share<Identifier = I>,
-//         {
-//             blinder: G::Scalar,
-//             secret_shares: [S; $max_shares],
-//             blinder_shares: [S; $max_shares],
-//             feldman_verifier_set: [G; $max_threshold + 1],
-//             pedersen_verifier_set: [G; $max_threshold + 2],
-//         }
-//
-//         impl<G, I, S> PedersenResult<G, I, S> for $result<G, I, S>
-//         where
-//             G: Group + GroupEncoding + Default,
-//             I: ShareIdentifier,
-//             S: Share<Identifier = I>,
-//         {
-//             type ShareSet = [S; $max_shares];
-//             type FeldmanVerifierSet = [G; $max_threshold + 1];
-//             type PedersenVerifierSet = [G; $max_threshold + 2];
-//
-//             fn new(
-//                 blinder: G::Scalar,
-//                 secret_shares: Self::ShareSet,
-//                 blinder_shares: Self::ShareSet,
-//                 feldman_verifier_set: Self::FeldmanVerifierSet,
-//                 pedersen_verifier_set: Self::PedersenVerifierSet,
-//             ) -> Self {
-//                 Self {
-//                     blinder,
-//                     secret_shares,
-//                     blinder_shares,
-//                     feldman_verifier_set,
-//                     pedersen_verifier_set,
-//                 }
-//             }
-//
-//             fn blinder(&self) -> G::Scalar {
-//                 self.blinder
-//             }
-//
-//             fn secret_shares(&self) -> &Self::ShareSet {
-//                 &self.secret_shares
-//             }
-//
-//             fn blinder_shares(&self) -> &Self::ShareSet {
-//                 &self.blinder_shares
-//             }
-//
-//             fn feldman_verifier_set(&self) -> &Self::FeldmanVerifierSet {
-//                 &self.feldman_verifier_set
-//             }
-//
-//             fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet {
-//                 &self.pedersen_verifier_set
-//             }
-//         }
-//     };
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// /// Reconstruct a secret from shares created from split_secret. The X-coordinates operate in F The Y-coordinates operate in F
-// pub fn combine_shares<F: PrimeField, I: ShareIdentifier, S: Share<Identifier = I>>(
-//     shares: &[S],
-// ) -> VsssResult<F> {
-//     shares.combine_to_field_element::<F, Vec<(F, F)>>()
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// /// Reconstruct a secret from shares created from split_secret. The X-coordinates operate in F The Y-coordinates operate in G
-// ///
-// /// Exists to support operations like threshold BLS where the shares operate in F but the partial signatures operate in G.
-// pub fn combine_shares_group<
-//     G: Group + GroupEncoding + Default,
-//     I: ShareIdentifier,
-//     S: Share<Identifier = I>,
-// >(
-//     shares: &[S],
-// ) -> VsssResult<G> {
-//     shares.combine_to_group_element::<G, Vec<(G::Scalar, G)>>()
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// /// Standard verifiable secret sharing scheme
-// pub struct StdVsss<G, I, S>
-// where
-//     G: Group + GroupEncoding + Default,
-//     I: ShareIdentifier,
-//     S: Share<Identifier = I>,
-// {
-//     _marker: (core::marker::PhantomData<G>, core::marker::PhantomData<S>),
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<G, I, S> Shamir<G::Scalar, I, S> for StdVsss<G, I, S>
-// where
-//     G: Group + GroupEncoding + Default,
-//     I: ShareIdentifier,
-//     S: Share<Identifier = I>,
-// {
-//     type InnerPolynomial = Vec<G::Scalar>;
-//     type ShareSet = Vec<S>;
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<G, I, S> Feldman<G, I, S> for StdVsss<G, I, S>
-// where
-//     G: Group + GroupEncoding + Default,
-//     I: ShareIdentifier,
-//     S: Share<Identifier = I>,
-// {
-//     type VerifierSet = Vec<G>;
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<G, I, S> Pedersen<G, I, S> for StdVsss<G, I, S>
-// where
-//     G: Group + GroupEncoding + Default,
-//     I: ShareIdentifier,
-//     S: Share<Identifier = I>,
-// {
-//     type FeldmanVerifierSet = Vec<G>;
-//     type PedersenVerifierSet = Vec<G>;
-//     type PedersenResult = StdPedersenResult<G, I, S>;
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// /// Default Standard verifiable secret sharing scheme
-// /// that uses a single byte for the identifier and a Vec<u8> for the share.
-// /// This is the most common use case since most secret sharing schemes don't generate
-// /// more than 255 shares.
-// pub struct DefaultStdVsss<G: Group + GroupEncoding + Default> {
-//     _marker: core::marker::PhantomData<G>,
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<G: Group + GroupEncoding + Default> Shamir<G::Scalar, u8, Vec<u8>> for DefaultStdVsss<G> {
-//     type InnerPolynomial = Vec<G::Scalar>;
-//     type ShareSet = Vec<Vec<u8>>;
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<G> Feldman<G, u8, Vec<u8>> for DefaultStdVsss<G>
-// where
-//     G: Group + GroupEncoding + Default,
-// {
-//     type VerifierSet = Vec<G>;
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<G> Pedersen<G, u8, Vec<u8>> for DefaultStdVsss<G>
-// where
-//     G: Group + GroupEncoding + Default,
-// {
-//     type FeldmanVerifierSet = Vec<G>;
-//     type PedersenVerifierSet = Vec<G>;
-//     type PedersenResult = StdPedersenResult<G, u8, Vec<u8>>;
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// #[test]
-// fn default_std_vsss() {
-//     use elliptic_curve::ff::Field;
-//
-//     let mut osrng = rand_core::OsRng::default();
-//     let secret = p256::Scalar::random(&mut osrng);
-//     let res = DefaultStdVsss::<p256::ProjectivePoint>::split_secret(2, 3, secret, &mut osrng);
-//     assert!(res.is_ok());
-//     let shares = res.unwrap();
-//     let res = combine_shares(&shares);
-//     assert!(res.is_ok());
-//     let scalar: p256::Scalar = res.unwrap();
-//     assert_eq!(secret, scalar);
-// }
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Standard verifiable secret sharing scheme
+pub struct StdVsss<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    _marker: (core::marker::PhantomData<V>, core::marker::PhantomData<S>),
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Shamir<S> for StdVsss<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type InnerPolynomial = Vec<S>;
+    type ShareSet = Vec<S>;
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Feldman<S, V> for StdVsss<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type VerifierSet = Vec<V>;
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Pedersen<S, V> for StdVsss<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type FeldmanVerifierSet = Vec<V>;
+    type PedersenVerifierSet = Vec<V>;
+    type PedersenResult = StdPedersenResult<S, V>;
+}

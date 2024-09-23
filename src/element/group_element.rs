@@ -3,6 +3,7 @@ use core::ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAs
 use crypto_bigint::modular::constant_mod::ResidueParams;
 use crypto_bigint::{ArrayEncoding, Uint};
 use elliptic_curve::ops::Reduce;
+use rand_core::{CryptoRng, RngCore};
 
 /// A share element represented as a group field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
@@ -81,6 +82,9 @@ impl<G: Group + GroupEncoding + Default> ShareElement for GroupElement<G> {
 
     type Inner = G;
 
+    fn random(rng: impl RngCore + CryptoRng) -> Self {
+        Self(G::random(rng))
+    }
     fn zero() -> Self {
         Self(<G as Group>::identity())
     }

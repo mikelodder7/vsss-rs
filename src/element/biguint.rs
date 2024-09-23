@@ -90,6 +90,12 @@ impl ShareElement for IdentifierBigUint {
     type Serialization = Vec<u8>;
     type Inner = BigUint;
 
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        let mut buf = vec![0u8; 32];
+        rng.fill_bytes(&mut buf);
+        IdentifierBigUint(BigUint::from_bytes_be(&buf))
+    }
+
     fn zero() -> Self {
         Self(BigUint::zero())
     }
@@ -120,12 +126,6 @@ impl ShareElement for IdentifierBigUint {
 }
 
 impl ShareIdentifier for IdentifierBigUint {
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let mut buf = vec![0u8; 32];
-        rng.fill_bytes(&mut buf);
-        IdentifierBigUint(BigUint::from_bytes_be(&buf))
-    }
-
     fn invert(&self) -> VsssResult<Self> {
         Self::one()
             .0

@@ -46,6 +46,8 @@ pub trait ShareElement:
     /// The inner type of the share element.
     type Inner: ShareElementInner;
 
+    /// Generate a random share element.
+    fn random(rng: impl RngCore + CryptoRng) -> Self;
     /// Defines an additive identity element for the share identifier.
     fn zero() -> Self;
     /// Defines a multiplicative identity element for the share identifier.
@@ -65,8 +67,6 @@ pub trait ShareElement:
 
 /// A share identifier for secret sharing schemes.
 pub trait ShareIdentifier: ShareElement<Inner: ShareIdentifierInner> {
-    /// Generate a random share identifier.
-    fn random(rng: impl RngCore + CryptoRng) -> Self;
     /// Invert the share identifier.
     fn invert(&self) -> VsssResult<Self>;
 }
