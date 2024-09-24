@@ -14,8 +14,8 @@ use core::{
     fmt::{self, Binary, Display, Formatter, LowerHex, UpperHex},
     iter::{Product, Sum},
     ops::{
-        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div,
-        DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Deref,
+        DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
     },
 };
 use elliptic_curve::ff::{Field, PrimeField};
@@ -26,10 +26,11 @@ use crate::ParticipantIdGeneratorType;
 #[cfg(any(feature = "alloc", feature = "std"))]
 use rand_core::CryptoRng;
 
-type GfShare = DefaultShare<IdentifierU8, IdentifierPrimeField<Gf256>>;
+type GfShare = DefaultShare<IdentifierGf256, IdentifierGf256>;
 
 /// Represents the finite field GF(2^8) with 256 elements.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Gf256(pub u8);
 
@@ -577,7 +578,7 @@ impl Gf256 {
         limit: usize,
         secret: B,
         mut rng: impl RngCore + CryptoRng,
-        participant_generators: &[ParticipantIdGeneratorType<IdentifierU8>],
+        participant_generators: &[ParticipantIdGeneratorType<IdentifierGf256>],
     ) -> VsssResult<Vec<Vec<u8>>> {
         if limit > 255 {
             return Err(Error::InvalidSizeRequest);
@@ -609,17 +610,17 @@ impl Gf256 {
                 return Err(Error::SharingInvalidIdentifier);
             }
             let mut inner = Vec::with_capacity(limit + 1);
-            inner.push(id.0);
+            inner.push(id.0 .0);
             shares.push(inner);
         }
         for b in secret {
-            let share = IdentifierPrimeField(Gf256(*b));
+            let share = IdentifierGf256(Gf256(*b));
             let inner_shares = shamir::split_secret_with_participant_generator::<GfShare>(
                 threshold,
                 limit,
                 share,
                 &mut rng,
-                &[ParticipantIdGeneratorType::default()],
+                participant_generators,
             )?;
             for (share, inner_share) in shares.iter_mut().zip(inner_shares.iter()) {
                 share.push(inner_share.value.0 .0);
@@ -640,13 +641,13 @@ impl Gf256 {
 
         for share in shares {
             inner_shares.push(DefaultShare {
-                identifier: IdentifierPrimitive(share[0]),
-                value: IdentifierPrimeField(Gf256(0u8)),
+                identifier: IdentifierGf256(Gf256(share[0])),
+                value: IdentifierGf256(Gf256(0u8)),
             });
         }
         for i in 1..shares[0].len() {
             for (inner_share, share) in inner_shares.iter_mut().zip(shares.iter()) {
-                inner_share.value = IdentifierPrimeField(Gf256(share[i]));
+                inner_share.value = IdentifierGf256(Gf256(share[i]));
             }
             secret.push(inner_shares.combine()?.0 .0);
         }
@@ -693,6 +694,122 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
         a ^= 0x1b & t;
     }
     r as u8
+}
+
+/// Represents an identifier in the Galois Field GF(2^8).
+/// We need this solely for Sequential Participant ID generation,
+/// because adding GF256 is xor which means the identifiers will oscillate between
+/// the start number and the incremented number instead of adding.
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(transparent)]
+pub struct IdentifierGf256(pub Gf256);
+
+impl Deref for IdentifierGf256 {
+    type Target = Gf256;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for IdentifierGf256 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl AsRef<Gf256> for IdentifierGf256 {
+    fn as_ref(&self) -> &Gf256 {
+        &self.0
+    }
+}
+
+impl AsMut<Gf256> for IdentifierGf256 {
+    fn as_mut(&mut self) -> &mut Gf256 {
+        &mut self.0
+    }
+}
+
+impl From<Gf256> for IdentifierGf256 {
+    fn from(val: Gf256) -> Self {
+        IdentifierGf256(val)
+    }
+}
+
+impl From<&IdentifierGf256> for IdentifierGf256 {
+    fn from(val: &IdentifierGf256) -> Self {
+        IdentifierGf256(val.0)
+    }
+}
+
+impl Mul<&IdentifierGf256> for IdentifierGf256 {
+    type Output = IdentifierGf256;
+
+    fn mul(self, rhs: &IdentifierGf256) -> IdentifierGf256 {
+        IdentifierGf256(self.0 * rhs.0)
+    }
+}
+
+impl ShareElement for IdentifierGf256 {
+    type Serialization = [u8; 1];
+
+    type Inner = Gf256;
+
+    fn random(rng: impl RngCore + CryptoRng) -> Self {
+        Self(Gf256::random(rng))
+    }
+
+    fn zero() -> Self {
+        Self(Gf256::ZERO)
+    }
+
+    fn one() -> Self {
+        Self(Gf256::ONE)
+    }
+
+    fn is_zero(&self) -> Choice {
+        self.0.is_zero()
+    }
+
+    fn serialize(&self) -> Self::Serialization {
+        [self.0 .0]
+    }
+
+    fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
+        Ok(Self(Gf256(serialized[0])))
+    }
+
+    fn from_slice(slice: &[u8]) -> VsssResult<Self> {
+        if slice.len() != 1 {
+            return Err(Error::InvalidShareElement);
+        }
+        Ok(Self(Gf256(slice[0])))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    fn to_vec(&self) -> Vec<u8> {
+        vec![self.0 .0]
+    }
+}
+
+impl ShareIdentifier for IdentifierGf256 {
+    fn inc(&mut self, increment: &Self) {
+        self.0 .0 = self.0 .0.saturating_add(increment.0 .0);
+    }
+
+    fn invert(&self) -> VsssResult<Self> {
+        Option::from(self.0.invert())
+            .map(Self)
+            .ok_or(Error::InvalidShareElement)
+    }
+}
+
+impl IdentifierGf256 {
+    /// Returns additive identity.
+    pub const ZERO: Self = Self(Gf256(0));
+    /// Returns multiplicative identity.
+    pub const ONE: Self = Self(Gf256(1));
 }
 
 #[cfg(test)]
@@ -742,13 +859,13 @@ mod tests {
     fn shamir() {
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for i in 1..=255 {
-            let secret = IdentifierPrimeField(Gf256(i));
+            let secret = IdentifierGf256(Gf256(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, secret, &mut rng).unwrap();
-            assert_eq!(shares[0].identifier.0, 1);
-            assert_eq!(shares[1].identifier.0, 2);
-            assert_eq!(shares[2].identifier.0, 3);
-            assert_eq!(shares[3].identifier.0, 4);
-            assert_eq!(shares[4].identifier.0, 5);
+            assert_eq!(shares[0].identifier.0 .0, 1);
+            assert_eq!(shares[1].identifier.0 .0, 2);
+            assert_eq!(shares[2].identifier.0 .0, 3);
+            assert_eq!(shares[3].identifier.0 .0, 4);
+            assert_eq!(shares[4].identifier.0 .0, 5);
             let res = &shares[0..3].to_vec().combine();
             assert!(
                 res.is_ok(),
@@ -766,13 +883,13 @@ mod tests {
         }
         rng = ChaCha8Rng::from_entropy();
         for i in 1..=255 {
-            let secret = IdentifierPrimeField(Gf256(i));
+            let secret = IdentifierGf256(Gf256(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, secret, &mut rng).unwrap();
-            assert_eq!(shares[0].identifier.0, 1);
-            assert_eq!(shares[1].identifier.0, 2);
-            assert_eq!(shares[2].identifier.0, 3);
-            assert_eq!(shares[3].identifier.0, 4);
-            assert_eq!(shares[4].identifier.0, 5);
+            assert_eq!(shares[0].identifier.0 .0, 1);
+            assert_eq!(shares[1].identifier.0 .0, 2);
+            assert_eq!(shares[2].identifier.0 .0, 3);
+            assert_eq!(shares[3].identifier.0 .0, 4);
+            assert_eq!(shares[4].identifier.0 .0, 5);
             let res = &shares[2..].to_vec().combine();
             assert_eq!(res.unwrap(), secret);
         }
@@ -789,8 +906,8 @@ mod tests {
         assert_eq!(res.unwrap(), secret);
 
         let p = ParticipantIdGeneratorType::Sequential {
-            start: IdentifierPrimitive(10),
-            increment: IdentifierPrimitive(1),
+            start: IdentifierGf256(Gf256(10)),
+            increment: IdentifierGf256(Gf256(1)),
             count: 5,
         };
         let shares =
@@ -815,7 +932,7 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_entropy();
         for _ in 0..25 {
-            let threshold = rng.gen::<u8>() + 1;
+            let threshold = rng.gen::<u8>().saturating_add(1);
 
             let mut shares = Vec::with_capacity(threshold as usize);
             for i in 0..threshold {
@@ -949,7 +1066,7 @@ mod gf256_cmp {
 
     /// Divide in GF(256)/
     pub fn gf256_div(a: u8, b: u8) -> u8 {
-        // multiply a against inverse b
+        // multiply `a` against inverse `b`
         gf256_mul(a, GF256_EXP[usize::from(255 - GF256_LOG[usize::from(b)])])
     }
 }

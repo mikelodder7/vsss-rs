@@ -67,6 +67,9 @@ pub trait ShareElement:
 
 /// A share identifier for secret sharing schemes.
 pub trait ShareIdentifier: ShareElement<Inner: ShareIdentifierInner> {
+    /// Add to the identifier by the increment value.
+    fn inc(&mut self, increment: &Self);
+
     /// Invert the share identifier.
     fn invert(&self) -> VsssResult<Self>;
 }

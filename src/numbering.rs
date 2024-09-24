@@ -137,12 +137,7 @@ impl<'a, 'b, I: ShareIdentifier> Iterator for ParticipantIdGeneratorCollection<'
                 return None;
             }
             let generator = self.generators.get_mut(self.index)?;
-            let opt_id = match generator {
-                ParticipantIdGeneratorState::Sequential(gen) => gen.next(),
-                ParticipantIdGeneratorState::Random(gen) => gen.next(),
-                ParticipantIdGeneratorState::List(gen) => gen.next(),
-            };
-            match opt_id {
+            match generator.next() {
                 Some(id) => {
                     return Some(id);
                 }
@@ -200,9 +195,10 @@ impl<I: ShareIdentifier> Iterator for SequentialParticipantNumberGenerator<I> {
         if self.index >= self.count {
             return None;
         }
-        *self.start += self.increment.as_ref();
+        let value = self.start.clone();
+        self.start.inc(&self.increment);
         self.index += 1;
-        Some(self.start.clone())
+        Some(value)
     }
 }
 
@@ -447,11 +443,11 @@ mod tests {
         assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(50u64)));
         let mut repr = FieldBytes::default();
         for (i, s) in [
-            "5d9936ecfa115f5a6b3f5d52ba3a3746ea228ee00909efd37765c6518e2ccf23",
-            "bb8dac41d8863e1b62432ebb498135db386a9c87565204f424866b9425e3462f",
-            "b5c783b3d7c5aabd815778ae5c384d52bbadfab862ce19fe595bb8a266620010",
-            "060b9b0a6881ad4b9be3dbcb7fa28917e9c334340e769155ce6cd5960cc789f6",
-            "693f774bf59d93f23bd873412863cc6988136fc815169c69059cabbfef563f73",
+            "134de46908fd0867a9c14ed96e90cd34be47e2b052ca266499687adae4cfe445",
+            "5b182d31afa277bcfb5d6316c31e231004d29f2c99e4dec0c384d7a46439c8ca",
+            "cb15c36dfe7b15c253e3f9fde1fd9ccfbd75839ff6dccca49700cb831dc5802e",
+            "bb3a92d716f6a8d94d82295fd120b23d42ec8543a405ecd82e519ab0fe4ef965",
+            "a0fff4c9e992f0d1acc8bc90fe6ae31dee280a0175a028a6333dde56de2121ec",
         ]
         .iter()
         .enumerate()

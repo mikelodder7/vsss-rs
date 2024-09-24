@@ -134,6 +134,10 @@ impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareIdentifier
 where
     Uint<LIMBS>: ArrayEncoding,
 {
+    fn inc(&mut self, increment: &Self) {
+        self.0 += increment.0;
+    }
+
     fn invert(&self) -> VsssResult<Self> {
         let (value, succeeded) = self.0.invert();
         if !bool::from(succeeded) {

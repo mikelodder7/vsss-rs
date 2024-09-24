@@ -9,6 +9,7 @@ use crate::*;
 
 /// A share identifier represented as a prime field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[repr(transparent)]
 pub struct IdentifierPrimeField<F: PrimeField>(pub F);
 
 impl<F: PrimeField> Deref for IdentifierPrimeField<F> {
@@ -185,6 +186,10 @@ impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
 }
 
 impl<F: PrimeField> ShareIdentifier for IdentifierPrimeField<F> {
+    fn inc(&mut self, increment: &Self) {
+        self.0 += increment.0;
+    }
+
     fn invert(&self) -> VsssResult<Self> {
         Option::from(self.0.invert())
             .map(Self)

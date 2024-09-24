@@ -23,15 +23,14 @@ pub trait Polynomial<S: Share> {
             return Err(Error::InvalidSizeRequest);
         }
         // Ensure intercept is set
-        repr[0] = S::with_identifier_and_value(S::Identifier::zero(), intercept);
+        *repr[0].value_mut() = intercept;
 
         // Assign random coefficients to polynomial
         // Start at 1 since 0 is the intercept and not chosen at random
-        for i in repr.iter_mut() {
-            *i = S::with_identifier_and_value(S::Identifier::random(&mut rng), S::Value::zero());
+        for i in repr.iter_mut().skip(1) {
+            *i.identifier_mut() = S::Identifier::random(&mut rng);
             while i.identifier().is_zero().into() {
-                *i =
-                    S::with_identifier_and_value(S::Identifier::random(&mut rng), S::Value::zero());
+                *i.identifier_mut() = S::Identifier::random(&mut rng);
             }
         }
         Ok(())
@@ -45,7 +44,7 @@ pub trait Polynomial<S: Share> {
         // b_n = a_n
         let mut out = coefficients[degree].identifier().clone();
 
-        for i in (1..degree).rev() {
+        for i in (0..degree).rev() {
             // b_{n-1} = a_{n-1} + b_n*x
             *out *= x.as_ref();
             *out += coefficients[i].identifier().as_ref();

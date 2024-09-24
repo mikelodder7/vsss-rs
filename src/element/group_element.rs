@@ -7,6 +7,7 @@ use rand_core::{CryptoRng, RngCore};
 
 /// A share element represented as a group field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[repr(transparent)]
 pub struct GroupElement<G: Group + GroupEncoding + Default>(pub G);
 
 impl<G: Group + GroupEncoding + Default> Deref for GroupElement<G> {

@@ -10,6 +10,7 @@ use subtle::Choice;
 /// A share identifier represented as a big unsigned number
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(transparent)]
 pub struct IdentifierBigUint(pub BigUint);
 
 impl Deref for IdentifierBigUint {
@@ -126,6 +127,10 @@ impl ShareElement for IdentifierBigUint {
 }
 
 impl ShareIdentifier for IdentifierBigUint {
+    fn inc(&mut self, increment: &Self) {
+        self.0.add_assign(&increment.0);
+    }
+
     fn invert(&self) -> VsssResult<Self> {
         Self::one()
             .0

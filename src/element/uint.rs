@@ -121,6 +121,10 @@ impl<const LIMBS: usize> ShareIdentifier for IdentifierUint<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
+    fn inc(&mut self, increment: &Self) {
+        self.0 += increment.0;
+    }
+
     fn invert(&self) -> VsssResult<Self> {
         let r = Saturating(Uint::<LIMBS>::ONE) / self.0;
         Ok(Self(r))

@@ -37,6 +37,7 @@ pub type IdentifierIsize = IdentifierPrimitive<isize, ISIZE_BYTES>;
 
 /// A share identifier represented as a primitive integer.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[repr(transparent)]
 pub struct IdentifierPrimitive<P: Primitive<BYTES>, const BYTES: usize>(pub P);
 
 impl<P: Primitive<BYTES>, const BYTES: usize> Deref for IdentifierPrimitive<P, BYTES> {
@@ -116,6 +117,10 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimiti
 }
 
 impl<P: Primitive<BYTES>, const BYTES: usize> ShareIdentifier for IdentifierPrimitive<P, BYTES> {
+    fn inc(&mut self, increment: &Self) {
+        self.0 = self.0.saturating_add(increment.0);
+    }
+
     fn invert(&self) -> VsssResult<Self> {
         P::ONE
             .checked_div(&self.0)
