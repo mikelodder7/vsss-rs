@@ -8,12 +8,6 @@ use crate::*;
 use p256::{ProjectivePoint, Scalar};
 
 use crate::tests::standard::TestShare;
-#[cfg(all(test, any(feature = "alloc"), feature = "std"))]
-use crate::*;
-#[cfg(all(test, any(feature = "alloc"), feature = "std"))]
-use elliptic_curve::ff::PrimeField;
-#[cfg(all(test, any(feature = "alloc"), feature = "std"))]
-use p256::{NonZeroScalar, SecretKey};
 
 #[test]
 fn invalid_tests() {
