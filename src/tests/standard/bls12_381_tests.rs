@@ -6,6 +6,9 @@ use super::super::utils::MockRng;
 use super::invalid::*;
 use super::valid::*;
 use super::*;
+use crate::feldman::GenericArrayFeldmanVsss;
+use crate::pedersen::PedersenOptions;
+use crate::*;
 use bls12_381_plus::{
     multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
@@ -24,45 +27,19 @@ fn simple() {
 
     let mut rng = MockRng::default();
     let secret = Scalar::random(&mut rng);
+    let sk = IdentifierPrimeField(secret);
 
-    let shares: [[u8; 33]; SHARES] =
-        <[[u8; 33]; SHARES]>::split_secret(THRESHOLD, SHARES, secret, &mut rng).unwrap();
-    let secret2 = (&shares[..THRESHOLD])
-        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
+    let shares =
+        FixedArrayVsss8Of15::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret(
+            THRESHOLD, SHARES, &sk, &mut rng,
+        )
         .unwrap();
-    assert_eq!(secret, secret2);
-
-    struct Fvss {
-        coefficients: [Scalar; THRESHOLD],
-    }
-
-    impl Polynomial<Scalar> for Fvss {
-        fn create(_size_hint: usize) -> Self {
-            Fvss {
-                coefficients: [Scalar::default(); THRESHOLD],
-            }
-        }
-        fn coefficients(&self) -> &[Scalar] {
-            self.coefficients.as_ref()
-        }
-
-        fn coefficients_mut(&mut self) -> &mut [Scalar] {
-            self.coefficients.as_mut()
-        }
-    }
-
-    impl Shamir<Scalar, u8, [u8; 33]> for Fvss {
-        type InnerPolynomial = [Scalar; THRESHOLD];
-        type ShareSet = [[u8; 33]; SHARES];
-    }
-
-    impl Feldman<G1Projective, u8, [u8; 33]> for Fvss {
-        type VerifierSet = [G1Projective; THRESHOLD + 1];
-    }
+    let secret2 = (&shares[..THRESHOLD]).combine().unwrap();
+    assert_eq!(sk, secret2);
 
     let (shares, verifiers) =
-        Fvss::split_secret_with_verifier(THRESHOLD, SHARES, secret, None, &mut rng).unwrap();
-    for s in &shares {
+        FixedArrayVsss8Of15::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret_with_verifier(THRESHOLD, SHARES, &sk, None, &mut rng).unwrap();
+    for s in &shares[..SHARES] {
         assert!(verifiers.verify_share(s).is_ok());
     }
 }
@@ -74,42 +51,45 @@ fn simple_std() {
     const SHARES: usize = 5;
 
     let mut rng = MockRng::default();
-    let secret = Scalar::random(&mut rng);
+    let secret = IdentifierPrimeField(Scalar::random(&mut rng));
 
-    let shares: Vec<Vec<u8>> =
-        <StdVsss<G1Projective, u8, Vec<u8>>>::split_secret(THRESHOLD, SHARES, secret, &mut rng)
-            .unwrap();
-    let secret2 = (&shares[..THRESHOLD])
-        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 3]>()
-        .unwrap();
+    let shares = GenericArrayFeldmanVsss::<
+        TestShare<Scalar>,
+        GroupElement<G1Projective>,
+        typenum::U3,
+        typenum::U5,
+    >::split_secret(THRESHOLD, SHARES, &secret, &mut rng)
+    .unwrap();
+    let secret2 = (&shares[..THRESHOLD]).combine().unwrap();
     assert_eq!(secret, secret2);
 
-    let (shares, verifiers): (Vec<Vec<u8>>, Vec<G1Projective>) =
-        StdVsss::split_secret_with_verifier(
-            THRESHOLD,
-            SHARES,
-            secret,
-            None::<G1Projective>,
-            &mut rng,
+    let (shares, verifiers) =
+        StdVsss::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret_with_verifier(
+            THRESHOLD, SHARES, &secret, None, &mut rng,
         )
         .unwrap();
     for s in &shares {
         assert!(verifiers.verify_share(s).is_ok());
     }
 
-    let ped_res: StdPedersenResult<G1Projective, u8, Vec<u8>> =
-        StdVsss::split_secret_with_blind_verifier(
+    let numbering = ParticipantIdGeneratorType::default();
+    let options = PedersenOptions {
+        secret,
+        blinder: None,
+        secret_generator: None,
+        blinder_generator: None,
+        participant_generators: &[numbering],
+    };
+    let ped_res =
+        StdPedersenResult::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret_with_blind_verifiers(
             THRESHOLD,
             SHARES,
-            secret,
-            None::<Scalar>,
-            None::<G1Projective>,
-            None::<G1Projective>,
+            &options,
             &mut rng,
         )
         .unwrap();
     assert_eq!(
-        <Scalar as Field>::is_zero(&ped_res.blinder()).unwrap_u8(),
+        <Scalar as Field>::is_zero(&ped_res.blinder().0).unwrap_u8(),
         0u8
     );
     for (s, bs) in ped_res
@@ -126,8 +106,8 @@ fn simple_std() {
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<G1Projective, u8, [u8; 48]>();
-    split_invalid_args::<G2Projective, u16, (u16, [u8; 96])>();
+    split_invalid_args::<TestShare<Scalar>, GroupElement<G1Projective>>();
+    split_invalid_args::<TestShare<Scalar>, GroupElement<G2Projective>>();
     combine_invalid::<Scalar>();
 }
 
@@ -139,49 +119,51 @@ fn invalid_test_std() {
 
 #[test]
 fn valid_tests() {
-    combine_single::<G1Projective, u8, [u8; 33]>();
-    combine_single::<G2Projective, u8, [u8; 33]>();
+    combine_single::<G1Projective>();
+    combine_single::<G2Projective>();
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn valid_std_tests() {
-    combine_all::<G1Projective, u8, Vec<u8>>();
-    combine_all::<G2Projective, u8, Vec<u8>>();
+    combine_all::<G1Projective>();
+    combine_all::<G2Projective>();
 }
 
 #[test]
 fn group_combine() {
     let mut rng = MockRng::default();
-    let secret = Scalar::random(&mut rng);
-    let res = TesterVsss::<G1Projective, u8, [u8; 33]>::split_secret(3, 5, secret, &mut rng);
+    let secret = IdentifierPrimeField(Scalar::random(&mut rng));
+    let res = <[TestShare<Scalar>; 5]>::split_secret(3, 5, &secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
     // Compute partial bls signatures
     let dst = b"group_combine";
     let msg = b"1234567890";
-    let mut sig_shares1 = [GenericArray::<u8, typenum::U49>::default(); 5];
-    let mut sig_shares2 = [GenericArray::<u8, typenum::U97>::default(); 5];
-    for (i, s) in shares[..5].iter().enumerate() {
-        let mut bytes = [0u8; 32];
-        s.value(&mut bytes).unwrap();
-        let sk = Scalar::from_le_bytes(&bytes).unwrap();
-
+    let mut sig_shares1 = [(
+        IdentifierPrimeField::<Scalar>::ZERO,
+        GroupElement::<G1Projective>::identity(),
+    ); 5];
+    let mut sig_shares2 = [(
+        IdentifierPrimeField::<Scalar>::ZERO,
+        GroupElement::<G2Projective>::identity(),
+    ); 5];
+    for (i, s) in shares.iter().enumerate() {
         let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
         let h2 = G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
 
-        let s1 = h1 * sk;
-        let s2 = h2 * sk;
+        let s1 = h1 * s.value().0;
+        let s2 = h2 * s.value().0;
 
-        sig_shares1[i] =
-            GenericArray::<u8, typenum::U49>::from_group_element(s.identifier(), s1).unwrap();
-        sig_shares2[i] =
-            GenericArray::<u8, typenum::U97>::from_group_element(s.identifier(), s2).unwrap();
+        sig_shares1[i].0 = *s.identifier();
+        sig_shares1[i].1 .0 = s1;
+        sig_shares2[i].0 = *s.identifier();
+        sig_shares2[i].1 .0 = s2;
     }
 
-    let res2 = sig_shares2.combine_to_group_element::<G2Projective, [(Scalar, G2Projective); 5]>();
-    let res1 = sig_shares1.combine_to_group_element::<G1Projective, [(Scalar, G1Projective); 5]>();
+    let res2 = sig_shares2.combine();
+    let res1 = sig_shares1.combine();
     assert!(res2.is_ok());
     assert!(res1.is_ok());
 
@@ -192,8 +174,8 @@ fn group_combine() {
     let h2 =
         G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst).to_affine());
 
-    let pk1 = (G1Projective::GENERATOR * secret).to_affine();
-    let pk2 = G2Prepared::from((G2Projective::GENERATOR * secret).to_affine());
+    let pk1 = (G1Projective::GENERATOR * *secret).to_affine();
+    let pk2 = G2Prepared::from((G2Projective::GENERATOR * *secret).to_affine());
 
     let g1 = -G1Affine::generator();
     let g2 = G2Prepared::from(-G2Affine::generator());
@@ -230,55 +212,35 @@ fn splitter() {
 #[case::threshold8_of_15(8, 14)]
 fn split_combine_test(#[case] threshold: usize, #[case] limit: usize) {
     let mut rng = MockRng::default();
-    let secret = Scalar::random(&mut rng);
+    let secret = IdentifierPrimeField(Scalar::random(&mut rng));
 
     let shares =
-        TesterVsss::<G1Projective, u8, [u8; 33]>::split_secret(threshold, limit, secret, &mut rng)
-            .unwrap();
+        <[TestShare<Scalar>; 14]>::split_secret(threshold, limit, &secret, &mut rng).unwrap();
 
-    let secret2 = (&shares[..threshold])
-        .combine_to_field_element::<Scalar, [(Scalar, Scalar); 15]>()
-        .unwrap();
+    let secret2 = (&shares[..threshold]).combine().unwrap();
     assert_eq!(secret, secret2);
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn point_combine() {
-    use crate::combine_shares_group;
-
     let mut rng = MockRng::default();
-    let secret = Scalar::random(&mut rng);
-    let res = TesterVsss::<G1Projective, u8, [u8; 33]>::split_secret(2, 3, secret, &mut rng);
+    let secret = IdentifierPrimeField(Scalar::random(&mut rng));
+    let res = Vec::<TestShare<Scalar>>::split_secret(2, 3, &secret, &mut rng);
     assert!(res.is_ok());
     let shares = res.unwrap();
 
     let sigs_g1 = shares
         .iter()
         .map(|s| {
-            let ff = Share::as_field_element::<Scalar>(s).unwrap();
-            let pt = G1Projective::GENERATOR * ff;
-            <[u8; 49]>::with_identifier_and_value(s.identifier(), &pt.to_compressed())
+            let pt = G1Projective::GENERATOR * s.value().0;
+            <(IdentifierPrimeField<Scalar>, GroupElement<G1Projective>)>::with_identifier_and_value(
+                s.identifier().clone(),
+                GroupElement(pt),
+            )
         })
-        .collect::<Vec<[u8; 49]>>();
+        .collect::<Vec<_>>();
 
-    let sig_g1 = combine_shares_group::<G1Projective, u8, [u8; 49]>(&sigs_g1[..2]).unwrap();
-    assert_eq!(sig_g1, G1Projective::GENERATOR * secret);
-}
-
-#[cfg(any(feature = "alloc", feature = "std"))]
-#[test]
-fn big_integer_identifier() {
-    use crate::combine_shares;
-
-    let mut rng = MockRng::default();
-    let secret = Scalar::random(&mut rng);
-    let res = TesterVsss::<G1Projective, u16, (u16, GenericArray<u8, typenum::U32>)>::split_secret(
-        2, 3, secret, &mut rng,
-    );
-    assert!(res.is_ok());
-    let shares = res.unwrap();
-
-    let secret2 = combine_shares(&shares[..2]).unwrap();
-    assert_eq!(secret, secret2);
+    let sig_g1 = (&sigs_g1[..2]).combine().unwrap();
+    assert_eq!(sig_g1.0, G1Projective::GENERATOR * *secret);
 }

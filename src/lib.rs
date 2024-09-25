@@ -169,8 +169,11 @@ use core::fmt::Debug;
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec};
 
-// #[cfg(test)]
-// pub(crate) mod tests;
+/// Macros for creating VSSS implementations
+#[macro_use]
+pub mod macros;
+#[cfg(test)]
+pub(crate) mod tests;
 
 mod element;
 mod error;
@@ -213,6 +216,7 @@ pub use pedersen::StdPedersenResult;
 #[cfg(feature = "curve25519")]
 #[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
 pub mod curve25519;
+
 //
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;

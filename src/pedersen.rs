@@ -10,6 +10,11 @@
 //! the Feldman verifiers may be discarded.
 use crate::shamir::create_shares_with_participant_generator;
 use crate::*;
+use core::ops::{Add, Sub};
+use generic_array::{
+    typenum::{Add1, Sub1, B1, U2},
+    ArrayLength, GenericArray,
+};
 use rand_core::{CryptoRng, RngCore};
 
 /// Options for Pedersen secret sharing
@@ -58,7 +63,7 @@ where
     fn split_secret_with_blind_verifiers(
         threshold: usize,
         limit: usize,
-        options: PedersenOptions<S, V>,
+        options: &PedersenOptions<S, V>,
         mut rng: impl RngCore + CryptoRng,
     ) -> VsssResult<Self::PedersenResult> {
         check_params(threshold, limit)?;
@@ -71,14 +76,20 @@ where
                 "Pedersen generators cannot be zero",
             ));
         }
+        if g == h {
+            return Err(Error::InvalidGenerator(
+                "Pedersen generators cannot be the same",
+            ));
+        }
         let blinder = options
             .blinder
+            .clone()
             .unwrap_or_else(|| S::Value::random(&mut rng));
 
         let mut secret_polynomial = Self::InnerPolynomial::create(threshold);
         let mut blinder_polynomial = Self::InnerPolynomial::create(threshold);
-        secret_polynomial.fill(options.secret, &mut rng, threshold)?;
-        blinder_polynomial.fill(blinder.clone(), &mut rng, threshold)?;
+        secret_polynomial.fill(&options.secret, &mut rng, threshold)?;
+        blinder_polynomial.fill(&blinder, &mut rng, threshold)?;
 
         let mut feldman_verifier_set =
             Self::FeldmanVerifierSet::empty_feldman_set_with_capacity(threshold, g);
@@ -95,15 +106,9 @@ where
         feldman_verifiers[0] = g * secret_coefficients[0].value();
         pedersen_verifiers[0] = feldman_verifiers[0] + h * blinder_coefficients[0].value();
 
-        for (i, (fvs, pvs)) in feldman_verifiers
-            .iter_mut()
-            .zip(pedersen_verifiers.iter_mut())
-            .take(threshold)
-            .skip(1)
-            .enumerate()
-        {
-            *fvs = g * secret_coefficients[i].identifier();
-            *pvs = *fvs + h * blinder_coefficients[i].identifier();
+        for i in 1..threshold {
+            feldman_verifiers[i] = g * secret_coefficients[i].identifier();
+            pedersen_verifiers[i] = feldman_verifiers[i] + h * blinder_coefficients[i].identifier();
         }
         let secret_shares = create_shares_with_participant_generator(
             &secret_polynomial,
@@ -165,8 +170,121 @@ where
     fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet;
 }
 
-/// The std result to use when an allocator is available
+type Add2<A> = <A as Add<U2>>::Output;
+type Sub2<A> = <A as Sub<U2>>::Output;
+/// The result to use when the sizes are known or computed at compile time
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GenericArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + Add<U2> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArrayLength + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+    Sub2<Add2<THRESHOLD>>: ArrayLength,
+{
+    /// The blinder used to create pedersen commitments
+    pub(crate) blinder: S::Value,
+    /// The secret shares
+    pub(crate) secret_shares: GenericArray<S, SHARES>,
+    /// The blinder shares
+    pub(crate) blinder_shares: GenericArray<S, SHARES>,
+    /// The feldman verifiers
+    pub(crate) feldman_verifier_set: GenericArray<V, Add1<THRESHOLD>>,
+    /// The pedersen verifiers
+    pub(crate) pedersen_verifier_set: GenericArray<V, Add2<THRESHOLD>>,
+}
+
+impl<S, V, THRESHOLD, SHARES> PedersenResult<S, V>
+    for GenericArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + Add<U2> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArrayLength + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+    Sub2<Add2<THRESHOLD>>: ArrayLength,
+{
+    type ShareSet = GenericArray<S, SHARES>;
+    type FeldmanVerifierSet = GenericArray<V, Add1<THRESHOLD>>;
+    type PedersenVerifierSet = GenericArray<V, Add2<THRESHOLD>>;
+
+    fn new(
+        blinder: S::Value,
+        secret_shares: Self::ShareSet,
+        blinder_shares: Self::ShareSet,
+        feldman_verifier_set: Self::FeldmanVerifierSet,
+        pedersen_verifier_set: Self::PedersenVerifierSet,
+    ) -> Self {
+        Self {
+            blinder,
+            secret_shares,
+            blinder_shares,
+            feldman_verifier_set,
+            pedersen_verifier_set,
+        }
+    }
+
+    fn blinder(&self) -> &S::Value {
+        &self.blinder
+    }
+
+    fn secret_shares(&self) -> &Self::ShareSet {
+        &self.secret_shares
+    }
+
+    fn blinder_shares(&self) -> &Self::ShareSet {
+        &self.blinder_shares
+    }
+
+    fn feldman_verifier_set(&self) -> &Self::FeldmanVerifierSet {
+        &self.feldman_verifier_set
+    }
+
+    fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet {
+        &self.pedersen_verifier_set
+    }
+}
+
+impl<S, V, THRESHOLD, SHARES> Shamir<S> for GenericArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + Add<U2> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArrayLength + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+    Sub2<Add2<THRESHOLD>>: ArrayLength,
+{
+    type InnerPolynomial = GenericArray<S, THRESHOLD>;
+    type ShareSet = GenericArray<S, SHARES>;
+}
+
+impl<S, V, THRESHOLD, SHARES> Pedersen<S, V> for GenericArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + Add<U2> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArrayLength + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+    Sub2<Add2<THRESHOLD>>: ArrayLength,
+{
+    type FeldmanVerifierSet = GenericArray<V, Add1<THRESHOLD>>;
+    type PedersenVerifierSet = GenericArray<V, Add2<THRESHOLD>>;
+    type PedersenResult = Self;
+}
+
+/// The result to use when an allocator is available
 #[cfg(any(feature = "alloc", feature = "std"))]
+#[derive(Debug, Clone)]
 pub struct StdPedersenResult<S, V>
 where
     S: Share,
@@ -182,6 +300,27 @@ where
     pub(crate) feldman_verifier_set: Vec<V>,
     /// The pedersen verifiers
     pub(crate) pedersen_verifier_set: Vec<V>,
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Shamir<S> for StdPedersenResult<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type InnerPolynomial = Vec<S>;
+    type ShareSet = Vec<S>;
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Pedersen<S, V> for StdPedersenResult<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type FeldmanVerifierSet = Vec<V>;
+    type PedersenVerifierSet = Vec<V>;
+    type PedersenResult = Self;
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -241,7 +380,7 @@ where
 pub fn split_secret<S, V>(
     threshold: usize,
     limit: usize,
-    secret: S::Value,
+    secret: &S::Value,
     blinding: Option<S::Value>,
     share_generator: Option<V>,
     blind_factor_generator: Option<V>,
@@ -254,8 +393,8 @@ where
     StdVsss::split_secret_with_blind_verifiers(
         threshold,
         limit,
-        PedersenOptions {
-            secret,
+        &PedersenOptions {
+            secret: secret.clone(),
             blinder: blinding,
             secret_generator: share_generator,
             blinder_generator: blind_factor_generator,

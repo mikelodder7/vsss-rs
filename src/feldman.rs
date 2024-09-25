@@ -6,6 +6,14 @@
 //! see <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
 use crate::shamir::create_shares_with_participant_generator;
 use crate::*;
+use core::{
+    marker::PhantomData,
+    ops::{Add, Sub},
+};
+use generic_array::{
+    typenum::{Add1, Sub1, B1},
+    ArrayLength, GenericArray,
+};
 use rand_core::{CryptoRng, RngCore};
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
@@ -24,7 +32,7 @@ where
     fn split_secret_with_verifier(
         threshold: usize,
         limit: usize,
-        secret: S::Value,
+        secret: &S::Value,
         generator: Option<V>,
         rng: impl RngCore + CryptoRng,
     ) -> VsssResult<(Self::ShareSet, Self::VerifierSet)> {
@@ -44,7 +52,7 @@ where
     fn split_secret_with_participant_generator_and_verifiers(
         threshold: usize,
         limit: usize,
-        secret: S::Value,
+        secret: &S::Value,
         generator: Option<V>,
         rng: impl RngCore + CryptoRng,
         participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
@@ -65,14 +73,9 @@ where
         let coefficients = polynomial.coefficients();
         let verifiers = verifier_set.verifiers_mut();
         verifiers[0] = g * coefficients[0].value();
-        verifiers
-            .iter_mut()
-            .take(threshold)
-            .skip(1)
-            .enumerate()
-            .for_each(|(i, vs)| {
-                *vs = g * coefficients[i].identifier();
-            });
+        for i in 1..threshold {
+            verifiers[i] = g * coefficients[i].identifier();
+        }
         let shares = create_shares_with_participant_generator(
             &polynomial,
             threshold,
@@ -83,6 +86,47 @@ where
     }
 }
 
+/// A default feldman implementation using [`GenericArray`]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GenericArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+{
+    /// Marker for the share type
+    pub marker: PhantomData<(S, V, Add1<THRESHOLD>, SHARES)>,
+}
+
+impl<S, V, THRESHOLD, SHARES> Shamir<S> for GenericArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+{
+    type InnerPolynomial = GenericArray<S, THRESHOLD>;
+    type ShareSet = GenericArray<S, SHARES>;
+}
+
+impl<S, V, THRESHOLD, SHARES> Feldman<S, V> for GenericArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArrayLength,
+    THRESHOLD: Add<B1> + ArrayLength,
+    Add1<THRESHOLD>: ArrayLength + Sub<B1, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArrayLength,
+{
+    type VerifierSet = GenericArray<V, Add1<THRESHOLD>>;
+}
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret.
 /// `generator` is the point to use for computing feldman verifiers.
@@ -90,7 +134,7 @@ where
 pub fn split_secret<S, V>(
     threshold: usize,
     limit: usize,
-    secret: S::Value,
+    secret: &S::Value,
     generator: Option<V>,
     rng: impl RngCore + CryptoRng,
 ) -> VsssResult<(Vec<S>, Vec<V>)>
@@ -106,7 +150,7 @@ where
 pub fn split_secret_with_participant_generator<S, V>(
     threshold: usize,
     limit: usize,
-    secret: S::Value,
+    secret: &S::Value,
     generator: Option<V>,
     rng: impl RngCore + CryptoRng,
     participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],

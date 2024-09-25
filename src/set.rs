@@ -68,32 +68,6 @@ where
     Ok(secret)
 }
 
-// impl<S, const L: usize> ShareSetCombiner<S> for [S; L]
-// where
-//     S: Share,
-// {
-//     fn create(_size_hint: usize) -> Self {
-//         core::array::from_fn(|_| S::default())
-//     }
-// }
-//
-// impl<S, L> ShareSetCombiner<S> for GenericArray<S, L>
-// where
-//     S: Share,
-//     L: ArrayLength,
-// {
-//     fn create(_size_hint: usize) -> Self {
-//         Self::default()
-//     }
-// }
-//
-// #[cfg(any(feature = "alloc", feature = "std"))]
-// impl<S: Share> ShareSetCombiner<S> for Vec<S> {
-//     fn create(size_hint: usize) -> Self {
-//         vec![S::default(); size_hint]
-//     }
-// }
-//
 impl<S, const L: usize> WriteableShareSet<S> for [S; L]
 where
     S: Share,
@@ -262,8 +236,9 @@ where
             ));
         }
 
-        let secret = share.identifier();
-        let blinder = blinder.identifier();
+        let secret = share.value();
+        let blinder = blinder.value();
+        let x = share.identifier();
 
         let mut i = S::Identifier::one();
 
@@ -278,7 +253,7 @@ where
         // c_0
         let mut rhs = commitments[0];
         for v in &commitments[1..] {
-            *i.as_mut() *= share.identifier().as_ref();
+            *i.as_mut() *= x.as_ref();
 
             // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
             rhs += *v * i.clone();
@@ -419,30 +394,30 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> PedersenVerifierSet<S, G>
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<S: Share, G: ShareVerifier<S>> PedersenVerifierSet<S, G> for Vec<G> {
+impl<S: Share, V: ShareVerifier<S>> PedersenVerifierSet<S, V> for Vec<V> {
     fn empty_pedersen_set_with_capacity(
         size_hint: usize,
-        secret_generator: G,
-        blinder_generator: G,
+        secret_generator: V,
+        blinder_generator: V,
     ) -> Self {
         let mut t = vec![blinder_generator; size_hint + 2];
         t[0] = secret_generator;
         t
     }
 
-    fn secret_generator(&self) -> G {
+    fn secret_generator(&self) -> V {
         self[0]
     }
 
-    fn blinder_generator(&self) -> G {
+    fn blinder_generator(&self) -> V {
         self[1]
     }
 
-    fn blind_verifiers(&self) -> &[G] {
+    fn blind_verifiers(&self) -> &[V] {
         &self[2..]
     }
 
-    fn blind_verifiers_mut(&mut self) -> &mut [G] {
+    fn blind_verifiers_mut(&mut self) -> &mut [V] {
         self[2..].as_mut()
     }
 }

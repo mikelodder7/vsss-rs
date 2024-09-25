@@ -22,7 +22,7 @@ where
     fn split_secret(
         threshold: usize,
         limit: usize,
-        secret: S::Value,
+        secret: &S::Value,
         rng: impl RngCore + CryptoRng,
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
@@ -35,13 +35,10 @@ where
     fn split_secret_with_participant_generator(
         threshold: usize,
         limit: usize,
-        secret: S::Value,
+        secret: &S::Value,
         rng: impl RngCore + CryptoRng,
         participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
-    ) -> VsssResult<Self::ShareSet>
-    where
-        S: Share,
-    {
+    ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
@@ -113,11 +110,7 @@ impl<S: Share, const L: usize> Shamir<S> for [S; L] {
     type ShareSet = [S; L];
 }
 
-impl<S, L> Shamir<S> for GenericArray<S, L>
-where
-    S: Share,
-    L: ArrayLength,
-{
+impl<S: Share, L: ArrayLength> Shamir<S> for GenericArray<S, L> {
     type InnerPolynomial = GenericArray<S, L>;
     type ShareSet = GenericArray<S, L>;
 }
@@ -133,7 +126,7 @@ impl<S: Share> Shamir<S> for Vec<S> {
 pub fn split_secret<S: Share>(
     threshold: usize,
     limit: usize,
-    secret: S::Value,
+    secret: &S::Value,
     rng: impl RngCore + CryptoRng,
 ) -> VsssResult<Vec<S>> {
     StdVsssShamir::split_secret(threshold, limit, secret, rng)
@@ -144,7 +137,7 @@ pub fn split_secret<S: Share>(
 pub fn split_secret_with_participant_generator<S: Share>(
     threshold: usize,
     limit: usize,
-    secret: S::Value,
+    secret: &S::Value,
     rng: impl RngCore + CryptoRng,
     participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
 ) -> VsssResult<Vec<S>> {

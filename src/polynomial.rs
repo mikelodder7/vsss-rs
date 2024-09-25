@@ -14,7 +14,7 @@ pub trait Polynomial<S: Share> {
     /// Generate the polynomial coefficients
     fn fill(
         &mut self,
-        intercept: S::Value,
+        intercept: &S::Value,
         mut rng: impl RngCore + CryptoRng,
         length: usize,
     ) -> VsssResult<()> {
@@ -23,11 +23,11 @@ pub trait Polynomial<S: Share> {
             return Err(Error::InvalidSizeRequest);
         }
         // Ensure intercept is set
-        *repr[0].value_mut() = intercept;
+        *repr[0].value_mut() = intercept.clone();
 
         // Assign random coefficients to polynomial
         // Start at 1 since 0 is the intercept and not chosen at random
-        for i in repr.iter_mut().skip(1) {
+        for i in repr.iter_mut().take(length).skip(1) {
             *i.identifier_mut() = S::Identifier::random(&mut rng);
             while i.identifier().is_zero().into() {
                 *i.identifier_mut() = S::Identifier::random(&mut rng);

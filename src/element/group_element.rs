@@ -175,6 +175,14 @@ impl<G: Group + GroupEncoding + Default> MulAssign<&IdentifierPrimeField<G::Scal
     }
 }
 
+impl<G: Group + GroupEncoding + Default> From<&IdentifierPrimeField<G::Scalar>>
+    for GroupElement<G>
+{
+    fn from(id: &IdentifierPrimeField<G::Scalar>) -> Self {
+        Self(G::generator() * id.0)
+    }
+}
+
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     Mul<IdentifierPrimitive<P, BYTES>> for GroupElement<G>
 {
@@ -394,6 +402,18 @@ where
     fn mul_assign(&mut self, rhs: &IdentifierResidue<MOD, LIMBS>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
         self.0 *= id.0;
+    }
+}
+
+impl<G: Group + GroupEncoding + Default> GroupElement<G> {
+    /// Create the additive identity element.
+    pub fn identity() -> Self {
+        Self(G::identity())
+    }
+
+    /// Create the multiplicative identity element.
+    pub fn generator() -> Self {
+        Self(G::generator())
     }
 }
 

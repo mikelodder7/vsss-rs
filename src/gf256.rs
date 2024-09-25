@@ -618,7 +618,7 @@ impl Gf256 {
             let inner_shares = shamir::split_secret_with_participant_generator::<GfShare>(
                 threshold,
                 limit,
-                share,
+                &share,
                 &mut rng,
                 participant_generators,
             )?;
@@ -860,7 +860,7 @@ mod tests {
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for i in 1..=255 {
             let secret = IdentifierGf256(Gf256(i));
-            let shares = shamir::split_secret::<GfShare>(3, 5, secret, &mut rng).unwrap();
+            let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
             assert_eq!(shares[0].identifier.0 .0, 1);
             assert_eq!(shares[1].identifier.0 .0, 2);
             assert_eq!(shares[2].identifier.0 .0, 3);
@@ -884,7 +884,7 @@ mod tests {
         rng = ChaCha8Rng::from_entropy();
         for i in 1..=255 {
             let secret = IdentifierGf256(Gf256(i));
-            let shares = shamir::split_secret::<GfShare>(3, 5, secret, &mut rng).unwrap();
+            let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
             assert_eq!(shares[0].identifier.0 .0, 1);
             assert_eq!(shares[1].identifier.0 .0, 2);
             assert_eq!(shares[2].identifier.0 .0, 3);
