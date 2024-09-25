@@ -5,7 +5,6 @@
 use super::super::utils::MockRng;
 use super::*;
 use crate::pedersen::{GenericArrayPedersenResult, PedersenOptions};
-use crate::*;
 use elliptic_curve::PrimeField;
 use generic_array::typenum::{U1, U2, U3, U8};
 

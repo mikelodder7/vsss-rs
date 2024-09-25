@@ -194,7 +194,7 @@ fn shamir_split<G: Group + GroupEncoding + Default>(
     limit: usize,
     secret: G::Scalar,
     rng: &mut MockRng,
-) -> VsssResult<PrimeField8Of15ShareSet<G>> {
+) -> VsssResult<FixedArrayVsss8Of15ShareSet<TestShare<G::Scalar>, GroupElement<G>>> {
     let secret = IdentifierPrimeField::from(secret);
     FixedArrayVsss8Of15::<TestShare<G::Scalar>, GroupElement<G>>::split_secret(
         threshold, limit, &secret, rng,
@@ -207,8 +207,8 @@ fn feldman_split<G: Group + GroupEncoding + Default>(
     secret: G::Scalar,
     rng: &mut MockRng,
 ) -> VsssResult<(
-    PrimeField8Of15ShareSet<G>,
-    PrimeField8Of15FeldmanVerifierSet<G>,
+    FixedArrayVsss8Of15ShareSet<TestShare<G::Scalar>, GroupElement<G>>,
+    FixedArrayVsss8Of15FeldmanVerifierSet<TestShare<G::Scalar>, GroupElement<G>>,
 )> {
     let secret = IdentifierPrimeField::from(secret);
     FixedArrayVsss8Of15::split_secret_with_verifier(threshold, limit, &secret, None, rng)
@@ -219,7 +219,7 @@ fn pedersen_split<G: Group + GroupEncoding + Default>(
     limit: usize,
     secret: G::Scalar,
     rng: &mut MockRng,
-) -> VsssResult<PrimeField8Of15PedersenResult<G>> {
+) -> VsssResult<FixedArrayPedersenResult8Of15<TestShare<G::Scalar>, GroupElement<G>>> {
     let numbering = ParticipantIdGeneratorType::default();
     let options = PedersenOptions {
         secret: IdentifierPrimeField::from(secret),

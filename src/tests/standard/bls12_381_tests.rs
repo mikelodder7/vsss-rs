@@ -8,7 +8,6 @@ use super::valid::*;
 use super::*;
 use crate::feldman::GenericArrayFeldmanVsss;
 use crate::pedersen::PedersenOptions;
-use crate::*;
 use bls12_381_plus::{
     multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
@@ -17,7 +16,7 @@ use elliptic_curve::{
     group::{Curve, Group},
     hash2curve::ExpandMsgXmd,
 };
-use generic_array::{typenum, GenericArray};
+use generic_array::typenum;
 use rstest::*;
 
 #[test]

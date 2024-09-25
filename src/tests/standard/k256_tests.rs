@@ -8,7 +8,7 @@ use crate::tests::standard::TestShare;
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use crate::*;
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
-use elliptic_curve::ff::{Field, PrimeField};
+use elliptic_curve::ff::PrimeField;
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use k256::{NonZeroScalar, SecretKey};
 use k256::{ProjectivePoint, Scalar};
