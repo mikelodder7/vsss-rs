@@ -1,6 +1,10 @@
-use core::ops::{Deref, DerefMut};
+use core::{
+    hash::{Hash, Hasher},
+    ops::{Deref, DerefMut},
+};
 use elliptic_curve::bigint::modular::constant_mod::{Residue, ResidueParams};
 use elliptic_curve::bigint::{ArrayEncoding, Uint};
+use zeroize::*;
 
 use super::*;
 use crate::*;
@@ -14,6 +18,33 @@ pub struct IdentifierResidue<MOD: ResidueParams<LIMBS>, const LIMBS: usize>(
 )
 where
     Uint<LIMBS>: ArrayEncoding;
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Hash for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.retrieve().hash(state);
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Ord for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.retrieve().cmp(&other.0.retrieve())
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> PartialOrd for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Deref for IdentifierResidue<MOD, LIMBS>
 where
@@ -83,6 +114,14 @@ where
     fn from(value: IdentifierResidue<MOD, LIMBS>) -> Self {
         value.0
     }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> DefaultIsZeroes
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding + DefaultIsZeroes,
+    Residue<MOD, LIMBS>: DefaultIsZeroes,
+{
 }
 
 impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> ShareElement for IdentifierResidue<MOD, LIMBS>

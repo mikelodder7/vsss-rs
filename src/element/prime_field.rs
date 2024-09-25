@@ -1,16 +1,44 @@
-use core::ops::{Deref, DerefMut, Mul};
-use crypto_bigint::modular::constant_mod::ResidueParams;
-use crypto_bigint::ArrayEncoding;
-use elliptic_curve::{bigint::Uint, ops::Reduce, Field, PrimeField};
-use rand_core::{CryptoRng, RngCore};
-
 use super::*;
 use crate::*;
+use core::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+    ops::{Deref, DerefMut, Mul},
+};
+use crypto_bigint::modular::constant_mod::ResidueParams;
+use crypto_bigint::ArrayEncoding;
+use elliptic_curve::{bigint::Uint, ops::Reduce, scalar::IsHigh, Field, PrimeField};
+use zeroize::*;
 
 /// A share identifier represented as a prime field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct IdentifierPrimeField<F: PrimeField>(pub F);
+
+impl<F: PrimeField> Hash for IdentifierPrimeField<F> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_repr().as_ref().hash(state);
+    }
+}
+
+#[allow(clippy::non_canonical_partial_ord_impl)]
+impl<F: PrimeField + IsHigh> PartialOrd for IdentifierPrimeField<F> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self.0.is_high().unwrap_u8(), other.0.is_high().unwrap_u8()) {
+            (1, 1) => Some(other.0.to_repr().as_ref().cmp(self.0.to_repr().as_ref())),
+            (0, 0) => Some(self.0.to_repr().as_ref().cmp(other.0.to_repr().as_ref())),
+            (1, 0) => Some(Ordering::Less),
+            (0, 1) => Some(Ordering::Greater),
+            (_, _) => None,
+        }
+    }
+}
+
+impl<F: PrimeField + IsHigh> Ord for IdentifierPrimeField<F> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).expect("invalid share identifier")
+    }
+}
 
 impl<F: PrimeField> Deref for IdentifierPrimeField<F> {
     type Target = F;
@@ -139,6 +167,8 @@ where
         Self(self.0 * rhs.0)
     }
 }
+
+impl<F: PrimeField + DefaultIsZeroes> DefaultIsZeroes for IdentifierPrimeField<F> {}
 
 impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     type Serialization = F::Repr;

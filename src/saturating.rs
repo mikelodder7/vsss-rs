@@ -8,12 +8,13 @@ use elliptic_curve::{
 };
 use num::traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
+use zeroize::Zeroize;
 
 /// Provides intentionally-saturating arithmetic on `T`.
 ///
 /// This is analogous to the [`core::num::Saturating`] but allows this crate to
 /// define trait impls for [`crypto-bigint::Uint`].
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash, Zeroize)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Saturating<const LIMBS: usize>(pub Uint<LIMBS>)

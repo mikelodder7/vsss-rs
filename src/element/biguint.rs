@@ -8,7 +8,7 @@ use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
 
 /// A share identifier represented as a big unsigned number
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct IdentifierBigUint(pub BigUint);

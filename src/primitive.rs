@@ -1,5 +1,8 @@
 use super::*;
-use core::fmt::{Debug, Display};
+use core::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 use num::{
     traits::{
         ConstOne, ConstZero, FromBytes, NumAssign, NumAssignRef, NumOps, NumRef, SaturatingAdd,
@@ -7,6 +10,7 @@ use num::{
     },
     PrimInt,
 };
+use zeroize::DefaultIsZeroes;
 
 /// An extension trait for primitive integers that are used as share identifiers.
 pub trait Primitive<const BYTES: usize>:
@@ -31,6 +35,8 @@ pub trait Primitive<const BYTES: usize>:
     + Debug
     + Display
     + 'static
+    + Hash
+    + DefaultIsZeroes
 {
 }
 
@@ -55,7 +61,9 @@ impl<
             + Default
             + Debug
             + Display
-            + 'static,
+            + 'static
+            + Hash
+            + DefaultIsZeroes,
         const BYTES: usize,
     > Primitive<BYTES> for P
 {

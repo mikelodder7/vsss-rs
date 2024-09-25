@@ -4,6 +4,7 @@ use crypto_bigint::modular::constant_mod::ResidueParams;
 use crypto_bigint::{ArrayEncoding, Uint};
 use elliptic_curve::ops::Reduce;
 use rand_core::{CryptoRng, RngCore};
+use zeroize::DefaultIsZeroes;
 
 /// A share element represented as a group field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
@@ -404,6 +405,8 @@ where
         self.0 *= id.0;
     }
 }
+
+impl<G: Group + GroupEncoding + Default + DefaultIsZeroes> DefaultIsZeroes for GroupElement<G> {}
 
 impl<G: Group + GroupEncoding + Default> GroupElement<G> {
     /// Create the additive identity element.

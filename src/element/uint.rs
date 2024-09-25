@@ -2,13 +2,14 @@ use core::ops::{Deref, DerefMut};
 use elliptic_curve::bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
+use zeroize::*;
 
 use super::*;
 use crate::*;
 
 /// A share identifier represented as a Big unsigned integer with
 /// a fixed number of limbs.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct IdentifierUint<const LIMBS: usize>(pub Saturating<LIMBS>)
@@ -69,6 +70,11 @@ where
     fn from(value: IdentifierUint<LIMBS>) -> Self {
         value.0
     }
+}
+
+impl<const LIMBS: usize> DefaultIsZeroes for IdentifierUint<LIMBS> where
+    Uint<LIMBS>: ArrayEncoding + DefaultIsZeroes
+{
 }
 
 impl<const LIMBS: usize> ShareElement for IdentifierUint<LIMBS>

@@ -4,6 +4,7 @@ use core::{
 };
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
+use zeroize::*;
 
 use super::*;
 use crate::*;
@@ -36,7 +37,7 @@ pub type IdentifierI128 = IdentifierPrimitive<i128, 16>;
 pub type IdentifierIsize = IdentifierPrimitive<isize, ISIZE_BYTES>;
 
 /// A share identifier represented as a primitive integer.
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
 pub struct IdentifierPrimitive<P: Primitive<BYTES>, const BYTES: usize>(pub P);
 
@@ -71,6 +72,8 @@ impl<P: Primitive<BYTES>, const BYTES: usize> From<P> for IdentifierPrimitive<P,
         Self(value)
     }
 }
+
+impl<P: Primitive<BYTES>, const BYTES: usize> DefaultIsZeroes for IdentifierPrimitive<P, BYTES> {}
 
 impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimitive<P, BYTES> {
     type Serialization = [u8; BYTES];
