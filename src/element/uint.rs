@@ -1,4 +1,7 @@
-use core::ops::{Deref, DerefMut};
+use core::{
+    fmt::{self, Display, Formatter},
+    ops::{Deref, DerefMut},
+};
 use elliptic_curve::bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
@@ -15,6 +18,18 @@ use crate::*;
 pub struct IdentifierUint<const LIMBS: usize>(pub Saturating<LIMBS>)
 where
     Uint<LIMBS>: ArrayEncoding;
+
+impl<const LIMBS: usize> Display for IdentifierUint<LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for &b in &self.to_generic_array() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
 
 impl<const LIMBS: usize> Deref for IdentifierUint<LIMBS>
 where

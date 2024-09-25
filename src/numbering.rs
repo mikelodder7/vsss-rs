@@ -1,7 +1,8 @@
-use core::num::NonZeroUsize;
+use core::fmt::Display;
 use core::{
     fmt::{self, Debug, Formatter},
     marker::PhantomData,
+    num::NonZeroUsize,
 };
 use rand_core::{CryptoRng, RngCore};
 use sha3::digest::ExtendableOutput;
@@ -38,6 +39,36 @@ pub enum ParticipantIdGeneratorType<'a, I: ShareIdentifier> {
         /// The list of identifiers to use. Once all have been used the generator will stop
         list: &'a [I],
     },
+}
+
+impl<I: ShareIdentifier + Display> Display for ParticipantIdGeneratorType<'_, I> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Sequential {
+                start,
+                increment,
+                count,
+            } => write!(
+                f,
+                "Sequential {{ start: {}, increment: {}, count: {} }}",
+                start, increment, count
+            ),
+            Self::Random { seed, count } => {
+                write!(f, "Random {{ seed: ")?;
+                for &b in seed {
+                    write!(f, "{:02x}", b)?;
+                }
+                write!(f, ", count: {} }}", count)
+            }
+            Self::List { list } => {
+                write!(f, "List {{ list: ")?;
+                for id in list.iter() {
+                    write!(f, "{}, ", id)?;
+                }
+                write!(f, "}}")
+            }
+        }
+    }
 }
 
 impl<I: ShareIdentifier> Default for ParticipantIdGeneratorType<'_, I> {

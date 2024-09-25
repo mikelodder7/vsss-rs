@@ -18,6 +18,7 @@ use generic_array::{
 use rand_core::{CryptoRng, RngCore};
 
 /// Options for Pedersen secret sharing
+#[derive(Debug)]
 pub struct PedersenOptions<'a, S: Share, V: ShareVerifier<S>> {
     /// The secret to split
     pub secret: S::Value,

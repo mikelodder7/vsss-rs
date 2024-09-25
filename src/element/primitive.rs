@@ -1,5 +1,5 @@
 use core::{
-    fmt::Debug,
+    fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
 use rand_core::{CryptoRng, RngCore};
@@ -40,6 +40,15 @@ pub type IdentifierIsize = IdentifierPrimitive<isize, ISIZE_BYTES>;
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
 pub struct IdentifierPrimitive<P: Primitive<BYTES>, const BYTES: usize>(pub P);
+
+impl<P: Primitive<BYTES>, const BYTES: usize> Display for IdentifierPrimitive<P, BYTES> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for b in &self.0.to_fixed_array() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
 
 impl<P: Primitive<BYTES>, const BYTES: usize> Deref for IdentifierPrimitive<P, BYTES> {
     type Target = P;

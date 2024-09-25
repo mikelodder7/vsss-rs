@@ -1,6 +1,9 @@
 use super::*;
 use crate::*;
-use core::ops::{Deref, DerefMut};
+use core::{
+    fmt::{self, Display, Formatter},
+    ops::{Deref, DerefMut},
+};
 use num::bigint::BigUint;
 use num::traits::{One, Zero};
 use num::CheckedDiv;
@@ -12,6 +15,12 @@ use subtle::Choice;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct IdentifierBigUint(pub BigUint);
+
+impl Display for IdentifierBigUint {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl Deref for IdentifierBigUint {
     type Target = BigUint;

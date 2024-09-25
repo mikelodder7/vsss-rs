@@ -1,5 +1,8 @@
 use crate::*;
-use core::ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::{
+    fmt::{self, Display, Formatter},
+    ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 use crypto_bigint::modular::constant_mod::ResidueParams;
 use crypto_bigint::{ArrayEncoding, Uint};
 use elliptic_curve::ops::Reduce;
@@ -10,6 +13,15 @@ use zeroize::DefaultIsZeroes;
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct GroupElement<G: Group + GroupEncoding + Default>(pub G);
+
+impl<G: Group + GroupEncoding + Default> Display for GroupElement<G> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for &b in self.0.to_bytes().as_ref() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
 
 impl<G: Group + GroupEncoding + Default> Deref for GroupElement<G> {
     type Target = G;

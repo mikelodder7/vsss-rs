@@ -1,4 +1,5 @@
 use core::{
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
 };
@@ -18,6 +19,18 @@ pub struct IdentifierResidue<MOD: ResidueParams<LIMBS>, const LIMBS: usize>(
 )
 where
     Uint<LIMBS>: ArrayEncoding;
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Display for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for &b in &self.0.retrieve().to_be_byte_array() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
 
 impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Hash for IdentifierResidue<MOD, LIMBS>
 where

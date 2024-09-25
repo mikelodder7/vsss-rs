@@ -2,6 +2,7 @@ use super::*;
 use crate::*;
 use core::{
     cmp::Ordering,
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut, Mul},
 };
@@ -14,6 +15,15 @@ use zeroize::*;
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct IdentifierPrimeField<F: PrimeField>(pub F);
+
+impl<F: PrimeField> Display for IdentifierPrimeField<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for &b in self.0.to_repr().as_ref() {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
 
 impl<F: PrimeField> Hash for IdentifierPrimeField<F> {
     fn hash<H: Hasher>(&self, state: &mut H) {
