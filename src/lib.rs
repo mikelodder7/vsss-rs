@@ -222,7 +222,6 @@ pub mod curve25519;
 pub use curve25519_dalek;
 pub use elliptic_curve;
 use elliptic_curve::group::GroupEncoding;
-#[cfg(feature = "std")]
 use elliptic_curve::Group;
 
 pub use subtle;

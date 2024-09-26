@@ -16,6 +16,7 @@ use zeroize::Zeroize;
 /// define trait impls for [`crypto-bigint::Uint`].
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash, Zeroize)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct Saturating<const LIMBS: usize>(pub Uint<LIMBS>)
 where

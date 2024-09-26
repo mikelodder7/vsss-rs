@@ -6,7 +6,9 @@ use super::super::utils::MockRng;
 use super::invalid::*;
 use super::valid::*;
 use super::*;
+#[cfg(any(feature = "alloc", feature = "std"))]
 use crate::feldman::GenericArrayFeldmanVsss;
+#[cfg(any(feature = "alloc", feature = "std"))]
 use crate::pedersen::PedersenOptions;
 use bls12_381_plus::{
     multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
@@ -16,6 +18,7 @@ use elliptic_curve::{
     group::{Curve, Group},
     hash2curve::ExpandMsgXmd,
 };
+#[cfg(any(feature = "alloc", feature = "std"))]
 use generic_array::typenum;
 use rstest::*;
 

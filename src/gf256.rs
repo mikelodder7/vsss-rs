@@ -22,17 +22,22 @@ use elliptic_curve::ff::{Field, PrimeField};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use crate::ParticipantIdGeneratorType;
 #[cfg(any(feature = "alloc", feature = "std"))]
+use crate::ParticipantIdGeneratorType;
 use rand_core::CryptoRng;
+use zeroize::DefaultIsZeroes;
 
+#[cfg(any(feature = "alloc", feature = "std"))]
 type GfShare = DefaultShare<IdentifierGf256, IdentifierGf256>;
 
 /// Represents the finite field GF(2^8) with 256 elements.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct Gf256(pub u8);
+
+impl DefaultIsZeroes for Gf256 {}
 
 impl Display for Gf256 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -700,10 +705,13 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
 /// We need this solely for Sequential Participant ID generation,
 /// because adding GF256 is xor which means the identifiers will oscillate between
 /// the start number and the incremented number instead of adding.
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct IdentifierGf256(pub Gf256);
+
+impl DefaultIsZeroes for IdentifierGf256 {}
 
 impl Deref for IdentifierGf256 {
     type Target = Gf256;

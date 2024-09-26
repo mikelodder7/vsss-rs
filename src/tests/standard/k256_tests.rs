@@ -5,7 +5,6 @@
 use super::invalid::*;
 use super::valid::*;
 use crate::tests::standard::TestShare;
-#[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use crate::*;
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use elliptic_curve::ff::PrimeField;

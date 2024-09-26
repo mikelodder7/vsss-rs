@@ -245,6 +245,7 @@ impl<F: PrimeField> IdentifierPrimeField<F> {
 }
 
 #[cfg(feature = "serde")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<F: PrimeField> serde::Serialize for IdentifierPrimeField<F> {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         serdect::array::serialize_hex_lower_or_bin(&self.0.to_repr(), s)
@@ -252,6 +253,7 @@ impl<F: PrimeField> serde::Serialize for IdentifierPrimeField<F> {
 }
 
 #[cfg(feature = "serde")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl<'de, F: PrimeField> serde::Deserialize<'de> for IdentifierPrimeField<F> {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let mut repr = F::Repr::default();

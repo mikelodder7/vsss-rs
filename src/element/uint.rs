@@ -14,6 +14,7 @@ use crate::*;
 /// a fixed number of limbs.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct IdentifierUint<const LIMBS: usize>(pub Saturating<LIMBS>)
 where

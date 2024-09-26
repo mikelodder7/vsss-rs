@@ -176,6 +176,7 @@ type Sub2<A> = <A as Sub<U2>>::Output;
 /// The result to use when the sizes are known or computed at compile time
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 pub struct GenericArrayPedersenResult<S, V, THRESHOLD, SHARES>
 where
     S: Share,

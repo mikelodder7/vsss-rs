@@ -89,6 +89,7 @@ where
 /// A default feldman implementation using [`GenericArray`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 pub struct GenericArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
 where
     S: Share,
