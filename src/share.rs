@@ -71,6 +71,13 @@ where
     pub value: V,
 }
 
+impl<I, V> Copy for DefaultShare<I, V>
+where
+    I: ShareIdentifier + Copy,
+    V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V> + Copy,
+{
+}
+
 impl<I, V> Ord for DefaultShare<I, V>
 where
     I: ShareIdentifier + Ord + PartialOrd,
