@@ -5,7 +5,7 @@ use core::{
     hash::{Hash, Hasher},
     ops::Mul,
 };
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A share.
 pub trait Share: Sized + Debug + Eq + PartialEq + Clone + Default {
@@ -110,6 +110,13 @@ where
         self.identifier.zeroize();
         self.value.zeroize();
     }
+}
+
+impl<I, V> ZeroizeOnDrop for DefaultShare<I, V>
+where
+    I: ShareIdentifier + ZeroizeOnDrop,
+    V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V> + ZeroizeOnDrop,
+{
 }
 
 #[cfg(feature = "serde")]
