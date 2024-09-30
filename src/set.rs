@@ -3,6 +3,7 @@
 //! Sizes greater than 32 should probably use Vec instead of fixed sizes
 //! due to stack allocations
 use crate::*;
+use core::marker::PhantomData;
 use generic_array::{ArrayLength, GenericArray};
 
 /// Represents a readable data store for secret shares
@@ -314,6 +315,135 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> FeldmanVerifierSet<S, G>
     }
 }
 
+/// A wrapper around a fixed size array of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, ArrayFeldmanVerifierSet};
+///
+/// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+/// type K256FeldmanVerifierSet = ArrayFeldmanVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, 3>;
+/// ```
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct ArrayFeldmanVerifierSet<S, V, const L: usize>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    /// The inner array set to threshold + 1
+    pub inner: [V; L],
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+impl<S, V, const L: usize> Default for ArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    [V; L]: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, const L: usize> FeldmanVerifierSet<S, V> for ArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn empty_feldman_set_with_capacity(size_hint: usize, generator: V) -> Self {
+        Self {
+            inner: <[V; L] as FeldmanVerifierSet<S, V>>::empty_feldman_set_with_capacity(
+                size_hint, generator,
+            ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn generator(&self) -> V {
+        <[V; L]>::generator(&self.inner)
+    }
+
+    fn verifiers(&self) -> &[V] {
+        <[V; L]>::verifiers(&self.inner)
+    }
+
+    fn verifiers_mut(&mut self) -> &mut [V] {
+        <[V; L]>::verifiers_mut(&mut self.inner)
+    }
+}
+
+/// A wrapper around a generic array of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, GenericArrayFeldmanVerifierSet};
+/// use generic_array::typenum::U3;
+///
+/// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+/// type K256FeldmanVerifierSet = GenericArrayFeldmanVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, U3>;
+/// ```
+#[derive(Debug, Clone)]
+#[repr(transparent)]
+pub struct GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    /// The inner generic array set to threshold + 1
+    pub inner: GenericArray<V, L>,
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+impl<S, V, L> Default for GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+    GenericArray<V, L>: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> FeldmanVerifierSet<S, V> for GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn empty_feldman_set_with_capacity(size_hint: usize, generator: V) -> Self {
+        Self {
+            inner:
+                <GenericArray<V, L> as FeldmanVerifierSet<S, V>>::empty_feldman_set_with_capacity(
+                    size_hint, generator,
+                ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn generator(&self) -> V {
+        <GenericArray<V, L>>::generator(&self.inner)
+    }
+
+    fn verifiers(&self) -> &[V] {
+        <GenericArray<V, L>>::verifiers(&self.inner)
+    }
+
+    fn verifiers_mut(&mut self) -> &mut [V] {
+        <GenericArray<V, L>>::verifiers_mut(&mut self.inner)
+    }
+}
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<S: Share, G: ShareVerifier<S>> FeldmanVerifierSet<S, G> for Vec<G> {
     fn empty_feldman_set_with_capacity(size_hint: usize, generator: G) -> Self {
@@ -330,6 +460,58 @@ impl<S: Share, G: ShareVerifier<S>> FeldmanVerifierSet<S, G> for Vec<G> {
 
     fn verifiers_mut(&mut self) -> &mut [G] {
         self[1..].as_mut()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// A wrapper around a Vec of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// #[cfg(any(feature = "alloc", feature = "std"))]
+/// {
+///     use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, VecFeldmanVerifierSet};
+///     type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+///     type K256FeldmanVerifierSet = VecFeldmanVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>>;
+/// }
+/// ```
+#[derive(Debug, Clone, Default)]
+#[repr(transparent)]
+pub struct VecFeldmanVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    /// The inner vec set to threshold + 1
+    pub inner: Vec<V>,
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> FeldmanVerifierSet<S, V> for VecFeldmanVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn empty_feldman_set_with_capacity(size_hint: usize, generator: V) -> Self {
+        Self {
+            inner: <Vec<V> as FeldmanVerifierSet<S, V>>::empty_feldman_set_with_capacity(
+                size_hint, generator,
+            ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn generator(&self) -> V {
+        <Vec<V>>::generator(&self.inner)
+    }
+
+    fn verifiers(&self) -> &[V] {
+        <Vec<V>>::verifiers(&self.inner)
+    }
+
+    fn verifiers_mut(&mut self) -> &mut [V] {
+        <Vec<V>>::verifiers_mut(&mut self.inner)
     }
 }
 
@@ -359,6 +541,77 @@ impl<S: Share, G: ShareVerifier<S>, const L: usize> PedersenVerifierSet<S, G> fo
 
     fn blind_verifiers_mut(&mut self) -> &mut [G] {
         self[2..].as_mut()
+    }
+}
+
+/// A wrapper around arrays of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, ArrayPedersenVerifierSet};
+/// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+/// type K256PedersenVerifierSet = ArrayPedersenVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, 4>;
+/// ```
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct ArrayPedersenVerifierSet<S, V, const L: usize>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    /// The inner array set to threshold + 2
+    pub inner: [V; L],
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+impl<S, V, const L: usize> Default for ArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    [V; L]: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, const L: usize> PedersenVerifierSet<S, V> for ArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn empty_pedersen_set_with_capacity(
+        size_hint: usize,
+        secret_generator: V,
+        blinder_generator: V,
+    ) -> Self {
+        Self {
+            inner: <[V; L] as PedersenVerifierSet<S, V>>::empty_pedersen_set_with_capacity(
+                size_hint,
+                secret_generator,
+                blinder_generator,
+            ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn secret_generator(&self) -> V {
+        <[V; L]>::secret_generator(&self.inner)
+    }
+
+    fn blinder_generator(&self) -> V {
+        <[V; L]>::blinder_generator(&self.inner)
+    }
+
+    fn blind_verifiers(&self) -> &[V] {
+        <[V; L]>::blind_verifiers(&self.inner)
+    }
+
+    fn blind_verifiers_mut(&mut self) -> &mut [V] {
+        <[V; L]>::blind_verifiers_mut(&mut self.inner)
     }
 }
 
@@ -393,6 +646,81 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> PedersenVerifierSet<S, G>
     }
 }
 
+/// A wrapper around a generic array of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, GenericArrayPedersenVerifierSet};
+/// use generic_array::typenum::U4;
+/// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+/// type K256PedersenVerifierSet = GenericArrayPedersenVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, U4>;
+#[derive(Debug, Clone)]
+#[repr(transparent)]
+pub struct GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    /// The inner generic array set to threshold + 2
+    pub inner: GenericArray<V, L>,
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+impl<S, V, L> Default for GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+    GenericArray<V, L>: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> PedersenVerifierSet<S, V> for GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn empty_pedersen_set_with_capacity(
+        size_hint: usize,
+        secret_generator: V,
+        blinder_generator: V,
+    ) -> Self {
+        Self {
+            inner:
+                <GenericArray<V, L> as PedersenVerifierSet<S, V>>::empty_pedersen_set_with_capacity(
+                    size_hint,
+                    secret_generator,
+                    blinder_generator,
+                ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn secret_generator(&self) -> V {
+        <GenericArray<V, L>>::secret_generator(&self.inner)
+    }
+
+    fn blinder_generator(&self) -> V {
+        <GenericArray<V, L>>::blinder_generator(&self.inner)
+    }
+
+    fn blind_verifiers(&self) -> &[V] {
+        <GenericArray<V, L>>::blind_verifiers(&self.inner)
+    }
+
+    fn blind_verifiers_mut(&mut self) -> &mut [V] {
+        <GenericArray<V, L>>::blind_verifiers_mut(&mut self.inner)
+    }
+}
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 impl<S: Share, V: ShareVerifier<S>> PedersenVerifierSet<S, V> for Vec<V> {
     fn empty_pedersen_set_with_capacity(
@@ -419,6 +747,68 @@ impl<S: Share, V: ShareVerifier<S>> PedersenVerifierSet<S, V> for Vec<V> {
 
     fn blind_verifiers_mut(&mut self) -> &mut [V] {
         self[2..].as_mut()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// A wrapper around a Vec of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// #[cfg(any(feature = "alloc", feature = "std"))]
+/// {
+///    use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, VecPedersenVerifierSet};
+///   type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+///  type K256PedersenVerifierSet = VecPedersenVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>>;
+/// }
+/// ```
+#[derive(Debug, Clone, Default)]
+#[repr(transparent)]
+pub struct VecPedersenVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    /// The inner vec set to threshold + 2
+    pub inner: Vec<V>,
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> PedersenVerifierSet<S, V> for VecPedersenVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn empty_pedersen_set_with_capacity(
+        size_hint: usize,
+        secret_generator: V,
+        blinder_generator: V,
+    ) -> Self {
+        Self {
+            inner: <Vec<V> as PedersenVerifierSet<S, V>>::empty_pedersen_set_with_capacity(
+                size_hint,
+                secret_generator,
+                blinder_generator,
+            ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn secret_generator(&self) -> V {
+        <Vec<V>>::secret_generator(&self.inner)
+    }
+
+    fn blinder_generator(&self) -> V {
+        <Vec<V>>::blinder_generator(&self.inner)
+    }
+
+    fn blind_verifiers(&self) -> &[V] {
+        <Vec<V>>::blind_verifiers(&self.inner)
+    }
+
+    fn blind_verifiers_mut(&mut self) -> &mut [V] {
+        <Vec<V>>::blind_verifiers_mut(&mut self.inner)
     }
 }
 

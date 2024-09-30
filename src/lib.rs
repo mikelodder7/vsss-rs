@@ -14,7 +14,7 @@
 //!
 //! Feldman and Pedersen are similar in many ways. It's hard to describe when to use
 //! one over the other. Indeed, both are used in
-//! <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.134.6445&rep=rep1&type=pdf>.
+//! [GennaroDKG](https://link.springer.com/article/10.1007/s00145-006-0347-3).
 //!
 //! Feldman reveals the public value of the verifier whereas Pedersen's hides it.
 //!

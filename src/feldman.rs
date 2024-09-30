@@ -17,7 +17,7 @@ use generic_array::{
 use rand_core::{CryptoRng, RngCore};
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
-/// (see https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf)
+/// (see [FeldmanVSS](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf))
 pub trait Feldman<S, V>: Shamir<S>
 where
     S: Share,

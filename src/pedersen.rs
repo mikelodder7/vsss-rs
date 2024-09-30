@@ -33,7 +33,7 @@ pub struct PedersenOptions<'a, S: Share, V: ShareVerifier<S>> {
 }
 
 /// A secret sharing scheme that uses pedersen commitments as verifiers
-/// (see https://www.cs.cornell.edu/courses/cs754/2001fa/129.PDF)
+/// (see [PedersenVSS](https://www.cs.cornell.edu/courses/cs754/2001fa/129.PDF))
 pub trait Pedersen<S, V>: Shamir<S>
 where
     S: Share,
