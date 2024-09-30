@@ -28,15 +28,18 @@
 //! Anything higher than 255 is pretty ridiculous but if such a use case exists please let me know.
 //! This said, any number of shares can be requested since identifiers can be any size.
 //!
-//! Shares are represented as byte arrays. Shares can represent finite fields or groups
+//! Shares are represented as [`ShareElement`]s. Shares can be represented by
+//! really but is most commonly finite fields or groups
 //! depending on the use case. In the simplest case,
-//! the first byte is reserved for the share identifier (x-coordinate)
-//! and everything else is the actual value of the share (y-coordinate).
+//! the share identifier is the x-coordinate
+//! and the actual value of the share the y-coordinate.
 //! However, anything can be used as the identifier as long as it implements the
 //! [`ShareIdentifier`] trait.
 //!
-//! When specifying share sizes, use the field size in bytes + 1 for the identifier in the easiest
-//! case.
+//! Feldman and Pedersen use the [`ShareVerifier`] trait to verify shares.
+//!
+//! In version 5, many of the required generics were removed and replaced with associated types.
+//! This simplifies the API and makes it easier to use and reduced the amount of necessary code.
 //!
 //! To split a p256 secret using Shamir
 //!
@@ -50,13 +53,14 @@
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
-//! let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
+//! let shared_secret = IdentifierPrimeField(*nzs.as_ref());
+//! let res = shamir::split_secret::<DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>>(2, 3, &shared_secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = combine_shares(&shares);
+//! let res = shares.combine();
 //! assert!(res.is_ok());
-//! let scalar: Scalar = res.unwrap();
-//! let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+//! let scalar = res.unwrap();
+//! let nzs_dup =  NonZeroScalar::from_repr(scalar.0.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 //! }
@@ -73,14 +77,14 @@
 //!
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
-//! let secret = *sk.to_nonzero_scalar();
-//! let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, secret, &mut osrng);
+//! let secret = IdentifierPrimeField(*sk.to_nonzero_scalar());
+//! let res = shamir::split_secret::<DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>>(2, 3, &secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = combine_shares(&shares);
+//! let res = shares.combine();
 //! assert!(res.is_ok());
-//! let scalar: Scalar = res.unwrap();
-//! let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+//! let scalar = res.unwrap();
+//! let nzs_dup = NonZeroScalar::from_repr(scalar.0.to_repr()).unwrap();
 //! let sk_dup = SecretKey::from(nzs_dup);
 //! assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 //! }
@@ -96,16 +100,16 @@
 //! use elliptic_curve::ff::Field;
 //!
 //! let mut rng = rand_core::OsRng::default();
-//! let secret = Scalar::random(&mut rng);
-//! let res = feldman::split_secret::<G1Projective, u8, Vec<u8>>(2, 3, secret, None, &mut rng);
+//! let secret = IdentifierPrimeField(Scalar::random(&mut rng));
+//! let res = feldman::split_secret::<DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>, GroupElement<G1Projective>>(2, 3, &secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
 //!     assert!(verifier.verify_share(s).is_ok());
 //! }
-//! let res = combine_shares(&shares);
+//! let res = shares.combine();
 //! assert!(res.is_ok());
-//! let secret_1: Scalar = res.unwrap();
+//! let secret_1 = res.unwrap();
 //! assert_eq!(secret, secret_1);
 //! }
 //! ```
@@ -117,7 +121,7 @@
 //! Here's an example of using Ed25519 and x25519
 //!
 //! ```
-//! #[cfg(feature = "curve25519")] {
+//! #[cfg(all(feature = "curve25519", any(feature = "alloc", feature = "std")))] {
 //! use curve25519_dalek::scalar::Scalar;
 //! use rand::Rng;
 //! use ed25519_dalek::SigningKey;
@@ -128,15 +132,16 @@
 //! let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SigningKey::from_bytes(&sc.to_bytes());
-//! let res = shamir::split_secret::<WrappedScalar, u8, Vec<u8>>(2, 3, sc.into(), &mut osrng);
+//! let secret = IdentifierPrimeField(WrappedScalar(sc));
+//! let res = shamir::split_secret::<DefaultShare<IdentifierPrimeField<WrappedScalar>, IdentifierPrimeField<WrappedScalar>>>(2, 3, &secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
-//! let res = combine_shares(&shares);
+//! let res = shares.combine();
 //! assert!(res.is_ok());
-//! let scalar: WrappedScalar = res.unwrap();
-//! assert_eq!(scalar.0, sc);
-//! let sk2 = StaticSecret::from(scalar.0.to_bytes());
-//! let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
+//! let scalar = res.unwrap();
+//! assert_eq!(scalar.0.0, sc);
+//! let sk2 = StaticSecret::from(scalar.0.0.to_bytes());
+//! let ske2 = SigningKey::from_bytes(&scalar.0.0.to_bytes());
 //! assert_eq!(sk2.to_bytes(), sk1.to_bytes());
 //! assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 //! }

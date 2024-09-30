@@ -60,14 +60,25 @@ where
 
 /// A default share implementation providing named fields for the identifier and value.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DefaultShare<I, V>
 where
     I: ShareIdentifier,
     V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V>,
 {
     /// The share identifier
+    #[cfg_attr(feature = "serde", serde(bound(serialize = "I: serde::Serialize")))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "I: serde::Deserialize<'de>"))
+    )]
     pub identifier: I,
     /// The share value
+    #[cfg_attr(feature = "serde", serde(bound(serialize = "V: serde::Serialize")))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "V: serde::Deserialize<'de>"))
+    )]
     pub value: V,
 }
 
@@ -94,7 +105,7 @@ where
     V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V>,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.identifier.partial_cmp(&other.identifier)
+        Some(self.identifier.cmp(&other.identifier))
     }
 }
 
@@ -126,117 +137,167 @@ where
 {
 }
 
-#[cfg(feature = "serde")]
-impl<I, V> serde::Serialize for DefaultShare<I, V>
-where
-    I: ShareIdentifier + serde::Serialize,
-    V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V> + serde::Serialize,
-{
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
+// #[cfg(feature = "serde")]
+// impl<I, V> serde::Serialize for DefaultShare<I, V>
+// where
+//     I: ShareIdentifier + serde::Serialize,
+//     V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V> + serde::Serialize,
+// {
+//     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+//         use serde::ser::SerializeStruct;
+//
+//         let mut state = s.serialize_struct("DefaultShare", 2)?;
+//         state.serialize_field("identifier", &self.identifier)?;
+//         state.serialize_field("value", &self.value)?;
+//         state.end()
+//     }
+// }
 
-        let mut state = s.serialize_struct("DefaultShare", 2)?;
-        state.serialize_field("identifier", &self.identifier)?;
-        state.serialize_field("value", &self.value)?;
-        state.end()
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, I, V> serde::Deserialize<'de> for DefaultShare<I, V>
-where
-    I: ShareIdentifier + serde::Deserialize<'de>,
-    V: ShareElement
-        + for<'a> From<&'a I>
-        + for<'a> Mul<&'a I, Output = V>
-        + serde::Deserialize<'de>,
-{
-    fn deserialize<D>(d: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct DefaultShareVisitor<'de, I, V>
-        where
-            I: ShareIdentifier + serde::Deserialize<'de>,
-            V: ShareElement
-                + for<'a> From<&'a I>
-                + for<'a> Mul<&'a I, Output = V>
-                + serde::Deserialize<'de>,
-        {
-            marker: core::marker::PhantomData<(&'de (), DefaultShare<I, V>)>,
-        }
-
-        impl<'de, I, V> serde::de::Visitor<'de> for DefaultShareVisitor<'de, I, V>
-        where
-            I: ShareIdentifier + serde::Deserialize<'de>,
-            V: ShareElement
-                + for<'a> From<&'a I>
-                + for<'a> Mul<&'a I, Output = V>
-                + serde::Deserialize<'de>,
-        {
-            type Value = DefaultShare<I, V>;
-
-            fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                write!(f, "struct DefaultShare")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let identifier = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-                let value = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                Ok(DefaultShare { identifier, value })
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let mut identifier = None;
-                let mut value = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        "identifier" => {
-                            if identifier.is_some() {
-                                return Err(serde::de::Error::duplicate_field("identifier"));
-                            }
-                            identifier = Some(map.next_value()?);
-                        }
-                        "value" => {
-                            if value.is_some() {
-                                return Err(serde::de::Error::duplicate_field("value"));
-                            }
-                            value = Some(map.next_value()?);
-                        }
-                        _ => {
-                            return Err(serde::de::Error::unknown_field(
-                                key,
-                                &["identifier", "value"],
-                            ));
-                        }
-                    }
-                }
-                let identifier =
-                    identifier.ok_or_else(|| serde::de::Error::missing_field("identifier"))?;
-                let value = value.ok_or_else(|| serde::de::Error::missing_field("value"))?;
-                Ok(DefaultShare { identifier, value })
-            }
-        }
-
-        d.deserialize_struct(
-            "DefaultShare",
-            &["identifier", "value"],
-            DefaultShareVisitor {
-                marker: core::marker::PhantomData,
-            },
-        )
-    }
-}
+// #[cfg(feature = "serde")]
+// impl<'de, I, V> serde::Deserialize<'de> for DefaultShare<I, V>
+// where
+//     I: ShareIdentifier + serde::Deserialize<'de>,
+//     V: ShareElement
+//         + for<'a> From<&'a I>
+//         + for<'a> Mul<&'a I, Output = V>
+//         + serde::Deserialize<'de>,
+// {
+//     fn deserialize<D>(d: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         struct DefaultShareVisitor<'de, I, V>
+//         where
+//             I: ShareIdentifier + serde::Deserialize<'de>,
+//             V: ShareElement
+//                 + for<'a> From<&'a I>
+//                 + for<'a> Mul<&'a I, Output = V>
+//                 + serde::Deserialize<'de>,
+//         {
+//             marker: core::marker::PhantomData<(&'de (), DefaultShare<I, V>)>,
+//         }
+//
+//         impl<'de, I, V> serde::de::Visitor<'de> for DefaultShareVisitor<'de, I, V>
+//         where
+//             I: ShareIdentifier + serde::Deserialize<'de>,
+//             V: ShareElement
+//                 + for<'a> From<&'a I>
+//                 + for<'a> Mul<&'a I, Output = V>
+//                 + serde::Deserialize<'de>,
+//         {
+//             type Value = DefaultShare<I, V>;
+//
+//             fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+//                 write!(f, "struct DefaultShare")
+//             }
+//
+//             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+//             where
+//                 A: serde::de::SeqAccess<'de>,
+//             {
+//                 struct ByteSeqDeserializer<'de, A> {
+//                     seq: A,
+//                     _marker: core::marker::PhantomData<&'de ()>,
+//                 };
+//
+//                 impl<'de, A: serde::de::SeqAccess<'de>> ByteSeqDeserializer<'de, A> {
+//                     fn new(seq: A) -> Self {
+//                         ByteSeqDeserializer {
+//                             seq,
+//                             _marker: core::marker::PhantomData,
+//                         }
+//                     }
+//                 }
+//
+//                 impl<'de, A: serde::de::SeqAccess<'de>> serde::Deserializer<'de> for ByteSeqDeserializer<'de, A> {
+//                     type Error = A::Error;
+//
+//                     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+//                     where
+//                         V: serde::de::Visitor<'de>,
+//                     {
+//                         visitor.visit_seq(self.seq)
+//                     }
+//
+//                     fn is_human_readable(&self) -> bool {
+//                         false
+//                     }
+//
+//                     // Forward to the default implementations for methods we don't need to change
+//                     serde::forward_to_deserialize_any! {
+//                         bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+//                         bytes byte_buf option unit unit_struct newtype_struct seq tuple
+//                         tuple_struct map struct enum identifier ignored_any
+//                     }
+//                 }
+//
+//                 let identifier = <I as serde::Deserialize>::deserialize(ByteSeqDeserializer::new(&mut seq))?;
+//                 let value = <V as serde::Deserialize>::deserialize(ByteSeqDeserializer::new(&mut seq))?;
+//
+//                 // let mut i_buf = I::zero().serialize();
+//                 // {
+//                 //     let i_buf_mut = i_buf.as_mut();
+//                 //     for (i, b) in i_buf_mut.iter_mut().enumerate() {
+//                 //         *b = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(i, &"identifier byte"))?;
+//                 //     }
+//                 // }
+//                 // let identifier = <I as ShareElement>::deserialize(&i_buf).map_err(|e| serde::de::Error::custom(e))?;
+//                 // let mut v_buf = V::zero().serialize();
+//                 // {
+//                 //     let v_buf_mut = v_buf.as_mut();
+//                 //     for (i, b) in v_buf_mut.iter_mut().enumerate() {
+//                 //         *b = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(i, &"value byte"))?;
+//                 //     }
+//                 // }
+//
+//                 // let value = <V as ShareElement>::deserialize(&v_buf).map_err(|e| serde::de::Error::custom(e))?;
+//                 Ok(DefaultShare { identifier, value })
+//             }
+//
+//             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+//             where
+//                 A: serde::de::MapAccess<'de>,
+//             {
+//                 let mut identifier = None;
+//                 let mut share_value = None;
+//                 while let Some(key) = map.next_key()? {
+//                     match key {
+//                         "identifier" => {
+//                             if identifier.is_some() {
+//                                 return Err(serde::de::Error::duplicate_field("identifier"));
+//                             }
+//                             identifier = Some(map.next_value()?);
+//                         }
+//                         "value" => {
+//                             if share_value.is_some() {
+//                                 return Err(serde::de::Error::duplicate_field("value"));
+//                             }
+//                             share_value = Some(map.next_value()?);
+//                         }
+//                         _ => {
+//                             return Err(serde::de::Error::unknown_field(
+//                                 key,
+//                                 &["identifier", "value"],
+//                             ));
+//                         }
+//                     }
+//                 }
+//                 let identifier =
+//                     identifier.ok_or_else(|| serde::de::Error::missing_field("identifier"))?;
+//                 let value = share_value.ok_or_else(|| serde::de::Error::missing_field("value"))?;
+//                 Ok(DefaultShare { identifier, value })
+//             }
+//         }
+//
+//         d.deserialize_struct(
+//             "DefaultShare",
+//             &["identifier", "value"],
+//             DefaultShareVisitor {
+//                 marker: core::marker::PhantomData,
+//             },
+//         )
+//     }
+// }
 
 impl<I, V> Share for DefaultShare<I, V>
 where

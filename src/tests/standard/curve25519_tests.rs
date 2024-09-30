@@ -58,7 +58,7 @@ fn key_tests() {
     assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 }
 
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(all(feature = "serde", any(feature = "alloc", feature = "std")))]
 #[test]
 fn pedersen_verifier_serde_test() {
     use rand::Rng;

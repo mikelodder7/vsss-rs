@@ -33,7 +33,6 @@ type GfShare = DefaultShare<IdentifierGf256, IdentifierGf256>;
 /// Represents the finite field GF(2^8) with 256 elements.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct Gf256(pub u8);
 
@@ -707,9 +706,14 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
 /// the start number and the incremented number instead of adding.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct IdentifierGf256(pub Gf256);
+
+impl Display for IdentifierGf256 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl DefaultIsZeroes for IdentifierGf256 {}
 

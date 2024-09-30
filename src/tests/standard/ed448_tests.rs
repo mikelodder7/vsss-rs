@@ -47,7 +47,7 @@ fn key_tests() {
     assert_eq!(scalar, sk);
 }
 
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(all(feature = "serde", any(feature = "alloc", feature = "std")))]
 #[test]
 fn pedersen_verifier_serde_test() {
     use rand::Rng;

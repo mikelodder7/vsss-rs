@@ -11,8 +11,11 @@ use zeroize::DefaultIsZeroes;
 
 /// A share element represented as a group field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
-pub struct GroupElement<G: Group + GroupEncoding + Default>(pub G);
+pub struct GroupElement<G: Group + GroupEncoding + Default>(
+    #[cfg_attr(feature = "serde", serde(with = "elliptic_curve_tools::group"))] pub G,
+);
 
 impl<G: Group + GroupEncoding + Default> Display for GroupElement<G> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -429,23 +432,5 @@ impl<G: Group + GroupEncoding + Default> GroupElement<G> {
     /// Create the multiplicative identity element.
     pub fn generator() -> Self {
         Self(G::generator())
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<G: Group + GroupEncoding + Default> serde::Serialize for GroupElement<G> {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        serdect::array::serialize_hex_lower_or_bin(&self.0.to_bytes(), s)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, G: Group + GroupEncoding + Default> serde::Deserialize<'de> for GroupElement<G> {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let mut repr = G::Repr::default();
-        serdect::array::deserialize_hex_or_bin(repr.as_mut(), d)?;
-        Option::from(G::from_bytes(&repr)).map(Self).ok_or_else(|| {
-            serde::de::Error::custom("failed to deserialize group element from bytes")
-        })
     }
 }
