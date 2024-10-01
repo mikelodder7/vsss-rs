@@ -3,7 +3,10 @@
 //! Sizes greater than 32 should probably use Vec instead of fixed sizes
 //! due to stack allocations
 use crate::*;
-use core::marker::PhantomData;
+use core::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 use generic_array::{ArrayLength, GenericArray};
 
 /// Represents a readable data store for secret shares
@@ -336,6 +339,74 @@ where
     pub _marker: PhantomData<S>,
 }
 
+impl<S, V, const L: usize> From<[V; L]> for ArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(inner: [V; L]) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, const L: usize> From<&[V; L]> for ArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(inner: &[V; L]) -> Self {
+        Self {
+            inner: *inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, const L: usize> From<ArrayFeldmanVerifierSet<S, V, L>> for [V; L]
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(set: ArrayFeldmanVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, const L: usize> From<&ArrayFeldmanVerifierSet<S, V, L>> for [V; L]
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(set: &ArrayFeldmanVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, const L: usize> Deref for ArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type Target = [V; L];
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S, V, const L: usize> DerefMut for ArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 impl<S, V, const L: usize> Default for ArrayFeldmanVerifierSet<S, V, L>
 where
     S: Share,
@@ -398,6 +469,80 @@ where
     pub inner: GenericArray<V, L>,
     /// Marker for phantom data
     pub _marker: PhantomData<S>,
+}
+
+impl<S, V, L> From<GenericArray<V, L>> for GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(inner: GenericArray<V, L>) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<&GenericArray<V, L>> for GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(inner: &GenericArray<V, L>) -> Self {
+        Self {
+            inner: inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<GenericArrayFeldmanVerifierSet<S, V, L>> for GenericArray<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(set: GenericArrayFeldmanVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, L> From<&GenericArrayFeldmanVerifierSet<S, V, L>> for GenericArray<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(set: &GenericArrayFeldmanVerifierSet<S, V, L>) -> Self {
+        set.inner.clone()
+    }
+}
+
+impl<S, V, L> Deref for GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    type Target = GenericArray<V, L>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S, V, L> DerefMut for GenericArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 impl<S, V, L> Default for GenericArrayFeldmanVerifierSet<S, V, L>
@@ -488,6 +633,80 @@ where
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<Vec<V>> for VecFeldmanVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(value: Vec<V>) -> Self {
+        Self {
+            inner: value,
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<&Vec<V>> for VecFeldmanVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(value: &Vec<V>) -> Self {
+        Self {
+            inner: value.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<VecFeldmanVerifierSet<S, V>> for Vec<V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(value: VecFeldmanVerifierSet<S, V>) -> Self {
+        value.inner
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<&VecFeldmanVerifierSet<S, V>> for Vec<V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(value: &VecFeldmanVerifierSet<S, V>) -> Self {
+        value.inner.clone()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Deref for VecFeldmanVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type Target = Vec<V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> DerefMut for VecFeldmanVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
 impl<S, V> FeldmanVerifierSet<S, V> for VecFeldmanVerifierSet<S, V>
 where
     S: Share,
@@ -562,6 +781,74 @@ where
     pub inner: [V; L],
     /// Marker for phantom data
     pub _marker: PhantomData<S>,
+}
+
+impl<S, V, const L: usize> From<[V; L]> for ArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(inner: [V; L]) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, const L: usize> From<&[V; L]> for ArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(inner: &[V; L]) -> Self {
+        Self {
+            inner: *inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, const L: usize> From<ArrayPedersenVerifierSet<S, V, L>> for [V; L]
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(set: ArrayPedersenVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, const L: usize> From<&ArrayPedersenVerifierSet<S, V, L>> for [V; L]
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(set: &ArrayPedersenVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, const L: usize> Deref for ArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type Target = [V; L];
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S, V, const L: usize> DerefMut for ArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 impl<S, V, const L: usize> Default for ArrayPedersenVerifierSet<S, V, L>
@@ -665,6 +952,80 @@ where
     pub inner: GenericArray<V, L>,
     /// Marker for phantom data
     pub _marker: PhantomData<S>,
+}
+
+impl<S, V, L> From<GenericArray<V, L>> for GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(inner: GenericArray<V, L>) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<&GenericArray<V, L>> for GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(inner: &GenericArray<V, L>) -> Self {
+        Self {
+            inner: inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<GenericArrayPedersenVerifierSet<S, V, L>> for GenericArray<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(set: GenericArrayPedersenVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, L> From<&GenericArrayPedersenVerifierSet<S, V, L>> for GenericArray<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn from(set: &GenericArrayPedersenVerifierSet<S, V, L>) -> Self {
+        set.inner.clone()
+    }
+}
+
+impl<S, V, L> Deref for GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    type Target = GenericArray<V, L>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S, V, L> DerefMut for GenericArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArrayLength,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 impl<S, V, L> Default for GenericArrayPedersenVerifierSet<S, V, L>
@@ -772,6 +1133,80 @@ where
     pub inner: Vec<V>,
     /// Marker for phantom data
     pub _marker: PhantomData<S>,
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<Vec<V>> for VecPedersenVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(inner: Vec<V>) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<&Vec<V>> for VecPedersenVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(inner: &Vec<V>) -> Self {
+        Self {
+            inner: (*inner).clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<VecPedersenVerifierSet<S, V>> for Vec<V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(set: VecPedersenVerifierSet<S, V>) -> Self {
+        set.inner
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> From<&VecPedersenVerifierSet<S, V>> for Vec<V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn from(set: &VecPedersenVerifierSet<S, V>) -> Self {
+        set.inner.clone()
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> Deref for VecPedersenVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    type Target = Vec<V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<S, V> DerefMut for VecPedersenVerifierSet<S, V>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
