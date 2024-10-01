@@ -11,6 +11,9 @@ use crypto_bigint::ArrayEncoding;
 use elliptic_curve::{bigint::Uint, ops::Reduce, scalar::IsHigh, Field, PrimeField};
 use zeroize::*;
 
+/// A share value represented as a [`PrimeField`].
+pub type ValuePrimeField<F> = IdentifierPrimeField<F>;
+
 /// A share identifier represented as a prime field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

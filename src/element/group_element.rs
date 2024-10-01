@@ -9,15 +9,18 @@ use elliptic_curve::ops::Reduce;
 use rand_core::{CryptoRng, RngCore};
 use zeroize::DefaultIsZeroes;
 
+/// A share verifier group element.
+pub type ShareVerifierGroup<G> = ValueGroup<G>;
+
 /// A share element represented as a group field element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
-pub struct GroupElement<G: Group + GroupEncoding + Default>(
+pub struct ValueGroup<G: Group + GroupEncoding + Default>(
     #[cfg_attr(feature = "serde", serde(with = "elliptic_curve_tools::group"))] pub G,
 );
 
-impl<G: Group + GroupEncoding + Default> Display for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Display for ValueGroup<G> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for &b in self.0.to_bytes().as_ref() {
             write!(f, "{:02x}", b)?;
@@ -26,7 +29,7 @@ impl<G: Group + GroupEncoding + Default> Display for GroupElement<G> {
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Deref for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Deref for ValueGroup<G> {
     type Target = G;
 
     fn deref(&self) -> &Self::Target {
@@ -34,31 +37,31 @@ impl<G: Group + GroupEncoding + Default> Deref for GroupElement<G> {
     }
 }
 
-impl<G: Group + GroupEncoding + Default> DerefMut for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> DerefMut for ValueGroup<G> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<G: Group + GroupEncoding + Default> AsRef<G> for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> AsRef<G> for ValueGroup<G> {
     fn as_ref(&self) -> &G {
         &self.0
     }
 }
 
-impl<G: Group + GroupEncoding + Default> AsMut<G> for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> AsMut<G> for ValueGroup<G> {
     fn as_mut(&mut self) -> &mut G {
         &mut self.0
     }
 }
 
-impl<G: Group + GroupEncoding + Default> From<G> for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> From<G> for ValueGroup<G> {
     fn from(value: G) -> Self {
         Self(value)
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Add for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Add for ValueGroup<G> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -66,13 +69,13 @@ impl<G: Group + GroupEncoding + Default> Add for GroupElement<G> {
     }
 }
 
-impl<G: Group + GroupEncoding + Default> AddAssign for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> AddAssign for ValueGroup<G> {
     fn add_assign(&mut self, rhs: Self) {
         self.0 += rhs.0;
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Sub for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Sub for ValueGroup<G> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -80,13 +83,13 @@ impl<G: Group + GroupEncoding + Default> Sub for GroupElement<G> {
     }
 }
 
-impl<G: Group + GroupEncoding + Default> SubAssign for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> SubAssign for ValueGroup<G> {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 -= rhs.0;
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Neg for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Neg for ValueGroup<G> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -94,7 +97,7 @@ impl<G: Group + GroupEncoding + Default> Neg for GroupElement<G> {
     }
 }
 
-impl<G: Group + GroupEncoding + Default> ShareElement for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> ShareElement for ValueGroup<G> {
     type Serialization = G::Repr;
 
     type Inner = G;
@@ -141,7 +144,7 @@ impl<G: Group + GroupEncoding + Default> ShareElement for GroupElement<G> {
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Mul<IdentifierPrimeField<G::Scalar>> for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Mul<IdentifierPrimeField<G::Scalar>> for ValueGroup<G> {
     type Output = Self;
 
     fn mul(self, rhs: IdentifierPrimeField<G::Scalar>) -> Self::Output {
@@ -149,7 +152,7 @@ impl<G: Group + GroupEncoding + Default> Mul<IdentifierPrimeField<G::Scalar>> fo
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Mul<&IdentifierPrimeField<G::Scalar>> for GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> Mul<&IdentifierPrimeField<G::Scalar>> for ValueGroup<G> {
     type Output = Self;
 
     fn mul(self, rhs: &IdentifierPrimeField<G::Scalar>) -> Self::Output {
@@ -157,26 +160,24 @@ impl<G: Group + GroupEncoding + Default> Mul<&IdentifierPrimeField<G::Scalar>> f
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Mul<IdentifierPrimeField<G::Scalar>> for &GroupElement<G> {
-    type Output = GroupElement<G>;
+impl<G: Group + GroupEncoding + Default> Mul<IdentifierPrimeField<G::Scalar>> for &ValueGroup<G> {
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: IdentifierPrimeField<G::Scalar>) -> Self::Output {
-        GroupElement(self.0 * rhs.0)
+        ValueGroup(self.0 * rhs.0)
     }
 }
 
-impl<G: Group + GroupEncoding + Default> Mul<&IdentifierPrimeField<G::Scalar>>
-    for &GroupElement<G>
-{
-    type Output = GroupElement<G>;
+impl<G: Group + GroupEncoding + Default> Mul<&IdentifierPrimeField<G::Scalar>> for &ValueGroup<G> {
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: &IdentifierPrimeField<G::Scalar>) -> Self::Output {
-        GroupElement(self.0 * rhs.0)
+        ValueGroup(self.0 * rhs.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default> MulAssign<IdentifierPrimeField<G::Scalar>>
-    for GroupElement<G>
+    for ValueGroup<G>
 {
     fn mul_assign(&mut self, rhs: IdentifierPrimeField<G::Scalar>) {
         self.0 *= rhs.0;
@@ -184,23 +185,21 @@ impl<G: Group + GroupEncoding + Default> MulAssign<IdentifierPrimeField<G::Scala
 }
 
 impl<G: Group + GroupEncoding + Default> MulAssign<&IdentifierPrimeField<G::Scalar>>
-    for GroupElement<G>
+    for ValueGroup<G>
 {
     fn mul_assign(&mut self, rhs: &IdentifierPrimeField<G::Scalar>) {
         self.0 *= rhs.0;
     }
 }
 
-impl<G: Group + GroupEncoding + Default> From<&IdentifierPrimeField<G::Scalar>>
-    for GroupElement<G>
-{
+impl<G: Group + GroupEncoding + Default> From<&IdentifierPrimeField<G::Scalar>> for ValueGroup<G> {
     fn from(id: &IdentifierPrimeField<G::Scalar>) -> Self {
         Self(G::generator() * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
-    Mul<IdentifierPrimitive<P, BYTES>> for GroupElement<G>
+    Mul<IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
     type Output = Self;
 
@@ -211,7 +210,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
 }
 
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
-    Mul<&IdentifierPrimitive<P, BYTES>> for GroupElement<G>
+    Mul<&IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
     type Output = Self;
 
@@ -222,29 +221,29 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
 }
 
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
-    Mul<IdentifierPrimitive<P, BYTES>> for &GroupElement<G>
+    Mul<IdentifierPrimitive<P, BYTES>> for &ValueGroup<G>
 {
-    type Output = GroupElement<G>;
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: IdentifierPrimitive<P, BYTES>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
-        GroupElement(self.0 * id.0)
+        ValueGroup(self.0 * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
-    Mul<&IdentifierPrimitive<P, BYTES>> for &GroupElement<G>
+    Mul<&IdentifierPrimitive<P, BYTES>> for &ValueGroup<G>
 {
-    type Output = GroupElement<G>;
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: &IdentifierPrimitive<P, BYTES>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
-        GroupElement(self.0 * id.0)
+        ValueGroup(self.0 * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
-    MulAssign<IdentifierPrimitive<P, BYTES>> for GroupElement<G>
+    MulAssign<IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
     fn mul_assign(&mut self, rhs: IdentifierPrimitive<P, BYTES>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
@@ -253,7 +252,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
 }
 
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
-    MulAssign<&IdentifierPrimitive<P, BYTES>> for GroupElement<G>
+    MulAssign<&IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
     fn mul_assign(&mut self, rhs: &IdentifierPrimitive<P, BYTES>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
@@ -262,7 +261,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
 }
 
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<IdentifierUint<LIMBS>>
-    for GroupElement<G>
+    for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -276,7 +275,7 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
-    for GroupElement<G>
+    for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -290,35 +289,35 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<IdentifierUint<LIMBS>>
-    for &GroupElement<G>
+    for &ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
 {
-    type Output = GroupElement<G>;
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: IdentifierUint<LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
-        GroupElement(self.0 * id.0)
+        ValueGroup(self.0 * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
-    for &GroupElement<G>
+    for &ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
 {
-    type Output = GroupElement<G>;
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: &IdentifierUint<LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
-        GroupElement(self.0 * id.0)
+        ValueGroup(self.0 * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<IdentifierUint<LIMBS>>
-    for GroupElement<G>
+    for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -330,7 +329,7 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&IdentifierUint<LIMBS>>
-    for GroupElement<G>
+    for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -342,7 +341,7 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    Mul<IdentifierResidue<MOD, LIMBS>> for GroupElement<G>
+    Mul<IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -356,7 +355,7 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    Mul<&IdentifierResidue<MOD, LIMBS>> for GroupElement<G>
+    Mul<&IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -370,35 +369,35 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    Mul<IdentifierResidue<MOD, LIMBS>> for &GroupElement<G>
+    Mul<IdentifierResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
 {
-    type Output = GroupElement<G>;
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: IdentifierResidue<MOD, LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
-        GroupElement(self.0 * id.0)
+        ValueGroup(self.0 * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    Mul<&IdentifierResidue<MOD, LIMBS>> for &GroupElement<G>
+    Mul<&IdentifierResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
 {
-    type Output = GroupElement<G>;
+    type Output = ValueGroup<G>;
 
     fn mul(self, rhs: &IdentifierResidue<MOD, LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
-        GroupElement(self.0 * id.0)
+        ValueGroup(self.0 * id.0)
     }
 }
 
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    MulAssign<IdentifierResidue<MOD, LIMBS>> for GroupElement<G>
+    MulAssign<IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -410,7 +409,7 @@ where
 }
 
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    MulAssign<&IdentifierResidue<MOD, LIMBS>> for GroupElement<G>
+    MulAssign<&IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<Uint<LIMBS>>,
@@ -421,9 +420,9 @@ where
     }
 }
 
-impl<G: Group + GroupEncoding + Default + DefaultIsZeroes> DefaultIsZeroes for GroupElement<G> {}
+impl<G: Group + GroupEncoding + Default + DefaultIsZeroes> DefaultIsZeroes for ValueGroup<G> {}
 
-impl<G: Group + GroupEncoding + Default> GroupElement<G> {
+impl<G: Group + GroupEncoding + Default> ValueGroup<G> {
     /// Create the additive identity element.
     pub fn identity() -> Self {
         Self(G::identity())

@@ -11,7 +11,7 @@ use crate::tests::standard::TestShare;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<TestShare<Scalar>, GroupElement<ProjectivePoint>>();
+    split_invalid_args::<TestShare<Scalar>, ValueGroup<ProjectivePoint>>();
     combine_invalid::<Scalar>();
 }
 

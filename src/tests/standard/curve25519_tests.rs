@@ -16,9 +16,9 @@ use x25519_dalek::StaticSecret;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<TestShare<WrappedScalar>, GroupElement<WrappedRistretto>>();
+    split_invalid_args::<TestShare<WrappedScalar>, ValueGroup<WrappedRistretto>>();
     combine_invalid::<WrappedScalar>();
-    split_invalid_args::<TestShare<WrappedScalar>, GroupElement<WrappedEdwards>>();
+    split_invalid_args::<TestShare<WrappedScalar>, ValueGroup<WrappedEdwards>>();
     combine_invalid::<WrappedScalar>();
 }
 
@@ -66,7 +66,7 @@ fn pedersen_verifier_serde_test() {
     let mut osrng = rand::rngs::OsRng::default();
     let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
     let sk = IdentifierPrimeField(WrappedScalar(sc));
-    let res = pedersen::split_secret::<TestShare<WrappedScalar>, GroupElement<WrappedEdwards>>(
+    let res = pedersen::split_secret::<TestShare<WrappedScalar>, ValueGroup<WrappedEdwards>>(
         2, 3, &sk, None, None, None, &mut osrng,
     );
     assert!(res.is_ok());
@@ -90,22 +90,22 @@ fn pedersen_verifier_serde_test() {
     }
     assert!(res.is_ok());
     let v_str = res.unwrap();
-    let res = serde_json::from_str::<Vec<GroupElement<WrappedEdwards>>>(&v_str);
+    let res = serde_json::from_str::<Vec<ValueGroup<WrappedEdwards>>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(
-        <Vec<GroupElement<WrappedEdwards>> as PedersenVerifierSet::<TestShare<WrappedScalar>, GroupElement<WrappedEdwards>>>::secret_generator(&pedersen_verifier_set),
-        PedersenVerifierSet::<TestShare<WrappedScalar>, GroupElement<WrappedEdwards>>::secret_generator(&verifier2)
+        <Vec<ValueGroup<WrappedEdwards>> as PedersenVerifierSet::<TestShare<WrappedScalar>, ValueGroup<WrappedEdwards>>>::secret_generator(&pedersen_verifier_set),
+        PedersenVerifierSet::<TestShare<WrappedScalar>, ValueGroup<WrappedEdwards>>::secret_generator(&verifier2)
     );
 
     let res = serde_bare::to_vec(&pedersen_verifier_set);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res = serde_bare::from_slice::<Vec<GroupElement<WrappedEdwards>>>(&v_bytes);
+    let res = serde_bare::from_slice::<Vec<ValueGroup<WrappedEdwards>>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(
-        <Vec<GroupElement<WrappedEdwards>> as PedersenVerifierSet::<TestShare<WrappedScalar>, GroupElement<WrappedEdwards>>>::secret_generator(&pedersen_verifier_set),
-        PedersenVerifierSet::<TestShare<WrappedScalar>, GroupElement<WrappedEdwards>>::secret_generator(&verifier2)
+        <Vec<ValueGroup<WrappedEdwards>> as PedersenVerifierSet::<TestShare<WrappedScalar>, ValueGroup<WrappedEdwards>>>::secret_generator(&pedersen_verifier_set),
+        PedersenVerifierSet::<TestShare<WrappedScalar>, ValueGroup<WrappedEdwards>>::secret_generator(&verifier2)
     );
 }

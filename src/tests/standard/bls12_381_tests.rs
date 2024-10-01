@@ -31,16 +31,15 @@ fn simple() {
     let secret = Scalar::random(&mut rng);
     let sk = IdentifierPrimeField(secret);
 
-    let shares =
-        FixedArrayVsss8Of15::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret(
-            THRESHOLD, SHARES, &sk, &mut rng,
-        )
-        .unwrap();
+    let shares = FixedArrayVsss8Of15::<TestShare<Scalar>, ValueGroup<G1Projective>>::split_secret(
+        THRESHOLD, SHARES, &sk, &mut rng,
+    )
+    .unwrap();
     let secret2 = (&shares[..THRESHOLD]).combine().unwrap();
     assert_eq!(sk, secret2);
 
     let (shares, verifiers) =
-        FixedArrayVsss8Of15::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret_with_verifier(THRESHOLD, SHARES, &sk, None, &mut rng).unwrap();
+        FixedArrayVsss8Of15::<TestShare<Scalar>, ValueGroup<G1Projective>>::split_secret_with_verifier(THRESHOLD, SHARES, &sk, None, &mut rng).unwrap();
     for s in &shares[..SHARES] {
         assert!(verifiers.verify_share(s).is_ok());
     }
@@ -57,7 +56,7 @@ fn simple_std() {
 
     let shares = GenericArrayFeldmanVsss::<
         TestShare<Scalar>,
-        GroupElement<G1Projective>,
+        ValueGroup<G1Projective>,
         typenum::U3,
         typenum::U5,
     >::split_secret(THRESHOLD, SHARES, &secret, &mut rng)
@@ -66,7 +65,7 @@ fn simple_std() {
     assert_eq!(secret, secret2);
 
     let (shares, verifiers) =
-        StdVsss::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret_with_verifier(
+        StdVsss::<TestShare<Scalar>, ValueGroup<G1Projective>>::split_secret_with_verifier(
             THRESHOLD, SHARES, &secret, None, &mut rng,
         )
         .unwrap();
@@ -83,7 +82,7 @@ fn simple_std() {
         participant_generators: &[numbering],
     };
     let ped_res =
-        StdPedersenResult::<TestShare<Scalar>, GroupElement<G1Projective>>::split_secret_with_blind_verifiers(
+        StdPedersenResult::<TestShare<Scalar>, ValueGroup<G1Projective>>::split_secret_with_blind_verifiers(
             THRESHOLD,
             SHARES,
             &options,
@@ -108,8 +107,8 @@ fn simple_std() {
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<TestShare<Scalar>, GroupElement<G1Projective>>();
-    split_invalid_args::<TestShare<Scalar>, GroupElement<G2Projective>>();
+    split_invalid_args::<TestShare<Scalar>, ValueGroup<G1Projective>>();
+    split_invalid_args::<TestShare<Scalar>, ValueGroup<G2Projective>>();
     combine_invalid::<Scalar>();
 }
 
@@ -145,11 +144,11 @@ fn group_combine() {
     let msg = b"1234567890";
     let mut sig_shares1 = [(
         IdentifierPrimeField::<Scalar>::ZERO,
-        GroupElement::<G1Projective>::identity(),
+        ValueGroup::<G1Projective>::identity(),
     ); 5];
     let mut sig_shares2 = [(
         IdentifierPrimeField::<Scalar>::ZERO,
-        GroupElement::<G2Projective>::identity(),
+        ValueGroup::<G2Projective>::identity(),
     ); 5];
     for (i, s) in shares.iter().enumerate() {
         let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
@@ -236,9 +235,9 @@ fn point_combine() {
         .iter()
         .map(|s| {
             let pt = G1Projective::GENERATOR * s.value().0;
-            <(IdentifierPrimeField<Scalar>, GroupElement<G1Projective>)>::with_identifier_and_value(
+            <(IdentifierPrimeField<Scalar>, ValueGroup<G1Projective>)>::with_identifier_and_value(
                 s.identifier().clone(),
-                GroupElement(pt),
+                ValueGroup(pt),
             )
         })
         .collect::<Vec<_>>();

@@ -11,30 +11,56 @@ use crate::*;
 
 /// A share identifier represented as u8
 pub type IdentifierU8 = IdentifierPrimitive<u8, 1>;
+/// A share value represented as u8
+pub type ValueU8 = IdentifierU8;
 /// A share identifier represented as u16
 pub type IdentifierU16 = IdentifierPrimitive<u16, 2>;
+/// A share value represented as u16
+pub type ValueU16 = IdentifierU16;
 /// A share identifier represented as u32
 pub type IdentifierU32 = IdentifierPrimitive<u32, 4>;
+/// A share value represented as u32
+pub type ValueU32 = IdentifierU32;
 /// A share identifier represented as u64
 pub type IdentifierU64 = IdentifierPrimitive<u64, 8>;
+/// A share value represented as u64
+pub type ValueU64 = IdentifierU64;
 #[cfg(target_pointer_width = "64")]
 /// A share identifier represent as u128
 pub type IdentifierU128 = IdentifierPrimitive<u128, 16>;
+#[cfg(target_pointer_width = "64")]
+/// A share value represent as u128
+pub type ValueU128 = IdentifierU128;
 /// A share identifier represented as usize
 pub type IdentifierUsize = IdentifierPrimitive<usize, USIZE_BYTES>;
+/// A share value represented as usize
+pub type ValueUsize = IdentifierUsize;
 /// A share identifier represented as i8
 pub type IdentifierI8 = IdentifierPrimitive<i8, 1>;
+/// A share value represented as i8
+pub type ValueI8 = IdentifierI8;
 /// A share identifier represented as i16
 pub type IdentifierI16 = IdentifierPrimitive<i16, 2>;
+/// A share identifier represented as i16
+pub type ValueI16 = IdentifierI16;
 /// A share identifier represented as i32
 pub type IdentifierI32 = IdentifierPrimitive<i32, 4>;
+/// A share value represented as i32
+pub type ValueI32 = IdentifierI32;
 /// A share identifier represented as i64
 pub type IdentifierI64 = IdentifierPrimitive<i64, 8>;
+/// A share value represented as i64
+pub type ValueI64 = IdentifierI64;
 #[cfg(target_pointer_width = "64")]
 /// A share identifier represented as i128
 pub type IdentifierI128 = IdentifierPrimitive<i128, 16>;
+#[cfg(target_pointer_width = "64")]
+/// A share value represented as i128
+pub type ValueI128 = IdentifierI128;
 /// A share identifier represented as isize
 pub type IdentifierIsize = IdentifierPrimitive<isize, ISIZE_BYTES>;
+/// A share value represented as isize
+pub type ValueIsize = IdentifierIsize;
 
 /// A share identifier represented as a primitive integer.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]

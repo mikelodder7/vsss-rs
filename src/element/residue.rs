@@ -10,10 +10,12 @@ use zeroize::*;
 use super::*;
 use crate::*;
 
+/// A share value represented as a [`Residue<MOD, LIMBS>`]
+pub type ValueResidue<MOD, const LIMBS: usize> = IdentifierResidue<MOD, LIMBS>;
+
 /// A share identifier represented as a residue modulo known at compile time.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[repr(transparent)]
 pub struct IdentifierResidue<MOD: ResidueParams<LIMBS>, const LIMBS: usize>(
     pub Residue<MOD, LIMBS>,

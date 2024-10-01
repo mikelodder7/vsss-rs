@@ -374,6 +374,7 @@ where
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret.
+///
 /// If None, a random value is generated in [`S::Value`].
 /// `share_generator` is the generator to use for shares.
 /// If None, the default generator is used.

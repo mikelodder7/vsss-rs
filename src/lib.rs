@@ -50,11 +50,13 @@
 //! use elliptic_curve::ff::PrimeField;
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
 //!
+//! type P256Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
+//!
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
 //! let shared_secret = IdentifierPrimeField(*nzs.as_ref());
-//! let res = shamir::split_secret::<DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>>(2, 3, &shared_secret, &mut osrng);
+//! let res = shamir::split_secret::<P256Share>(2, 3, &shared_secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
 //! let res = shares.combine();
@@ -75,10 +77,12 @@
 //! use elliptic_curve::ff::PrimeField;
 //! use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 //!
+//! type K256Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
+//!
 //! let mut osrng = rand_core::OsRng::default();
 //! let sk = SecretKey::random(&mut osrng);
 //! let secret = IdentifierPrimeField(*sk.to_nonzero_scalar());
-//! let res = shamir::split_secret::<DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>>(2, 3, &secret, &mut osrng);
+//! let res = shamir::split_secret::<K256Share>(2, 3, &secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
 //! let res = shares.combine();
@@ -99,9 +103,12 @@
 //! use bls12_381_plus::{Scalar, G1Projective};
 //! use elliptic_curve::ff::Field;
 //!
+//! type BlsShare = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
+//! type BlsShareVerifier = ShareVerifierGroup<G1Projective>;
+//!
 //! let mut rng = rand_core::OsRng::default();
 //! let secret = IdentifierPrimeField(Scalar::random(&mut rng));
-//! let res = feldman::split_secret::<DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>, GroupElement<G1Projective>>(2, 3, &secret, None, &mut rng);
+//! let res = feldman::split_secret::<BlsShare, BlsShareVerifier>(2, 3, &secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
@@ -128,12 +135,14 @@
 //! use vsss_rs::{curve25519::WrappedScalar, *};
 //! use x25519_dalek::StaticSecret;
 //!
+//! type Ed25519Share = DefaultShare<IdentifierPrimeField<WrappedScalar>, IdentifierPrimeField<WrappedScalar>>;
+//!
 //! let mut osrng = rand::rngs::OsRng::default();
 //! let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SigningKey::from_bytes(&sc.to_bytes());
 //! let secret = IdentifierPrimeField(WrappedScalar(sc));
-//! let res = shamir::split_secret::<DefaultShare<IdentifierPrimeField<WrappedScalar>, IdentifierPrimeField<WrappedScalar>>>(2, 3, &secret, &mut osrng);
+//! let res = shamir::split_secret::<Ed25519Share>(2, 3, &secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
 //! let res = shares.combine();

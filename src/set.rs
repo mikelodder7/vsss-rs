@@ -321,10 +321,10 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> FeldmanVerifierSet<S, G>
 /// A wrapper around a fixed size array of verifiers
 /// Allows for convenient type aliasing
 /// ```
-/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, ArrayFeldmanVerifierSet};
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, ShareVerifierGroup, ArrayFeldmanVerifierSet};
 ///
 /// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
-/// type K256FeldmanVerifierSet = ArrayFeldmanVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, 3>;
+/// type K256FeldmanVerifierSet = ArrayFeldmanVerifierSet<K256Share, ShareVerifierGroup<k256::ProjectivePoint>, 3>;
 /// ```
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
@@ -451,11 +451,11 @@ where
 /// A wrapper around a generic array of verifiers
 /// Allows for convenient type aliasing
 /// ```
-/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, GenericArrayFeldmanVerifierSet};
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, GenericArrayFeldmanVerifierSet};
 /// use generic_array::typenum::U3;
 ///
 /// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
-/// type K256FeldmanVerifierSet = GenericArrayFeldmanVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, U3>;
+/// type K256FeldmanVerifierSet = GenericArrayFeldmanVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>, U3>;
 /// ```
 #[derive(Debug, Clone)]
 #[repr(transparent)]
@@ -614,9 +614,9 @@ impl<S: Share, G: ShareVerifier<S>> FeldmanVerifierSet<S, G> for Vec<G> {
 /// ```
 /// #[cfg(any(feature = "alloc", feature = "std"))]
 /// {
-///     use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, VecFeldmanVerifierSet};
+///     use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, VecFeldmanVerifierSet};
 ///     type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
-///     type K256FeldmanVerifierSet = VecFeldmanVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>>;
+///     type K256FeldmanVerifierSet = VecFeldmanVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>>;
 /// }
 /// ```
 #[derive(Debug, Clone, Default)]
@@ -766,9 +766,9 @@ impl<S: Share, G: ShareVerifier<S>, const L: usize> PedersenVerifierSet<S, G> fo
 /// A wrapper around arrays of verifiers
 /// Allows for convenient type aliasing
 /// ```
-/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, ArrayPedersenVerifierSet};
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, ArrayPedersenVerifierSet};
 /// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
-/// type K256PedersenVerifierSet = ArrayPedersenVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, 4>;
+/// type K256PedersenVerifierSet = ArrayPedersenVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>, 4>;
 /// ```
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
@@ -936,10 +936,10 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> PedersenVerifierSet<S, G>
 /// A wrapper around a generic array of verifiers
 /// Allows for convenient type aliasing
 /// ```
-/// use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, GenericArrayPedersenVerifierSet};
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, GenericArrayPedersenVerifierSet};
 /// use generic_array::typenum::U4;
 /// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
-/// type K256PedersenVerifierSet = GenericArrayPedersenVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>, U4>;
+/// type K256PedersenVerifierSet = GenericArrayPedersenVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>, U4>;
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct GenericArrayPedersenVerifierSet<S, V, L>
@@ -1117,9 +1117,9 @@ impl<S: Share, V: ShareVerifier<S>> PedersenVerifierSet<S, V> for Vec<V> {
 /// ```
 /// #[cfg(any(feature = "alloc", feature = "std"))]
 /// {
-///    use vsss_rs::{DefaultShare, IdentifierPrimeField, GroupElement, VecPedersenVerifierSet};
+///    use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, VecPedersenVerifierSet};
 ///   type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
-///  type K256PedersenVerifierSet = VecPedersenVerifierSet<K256Share, GroupElement<k256::ProjectivePoint>>;
+///  type K256PedersenVerifierSet = VecPedersenVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>>;
 /// }
 /// ```
 #[derive(Debug, Clone, Default)]
@@ -1250,18 +1250,23 @@ where
 #[test]
 fn test_feldman_with_generator_and_verifiers() {
     type IdK256 = IdentifierPrimeField<k256::Scalar>;
-    type ElemK256 = GroupElement<k256::ProjectivePoint>;
-    type K256Share = (IdK256, IdK256);
+    type VK256 = ValuePrimeField<k256::Scalar>;
+    type ShareVerifierK256 = ShareVerifierGroup<k256::ProjectivePoint>;
+    type K256Share = (IdK256, VK256);
 
-    let set = <[ElemK256; 8] as FeldmanVerifierSet<K256Share, ElemK256>>::feldman_set_with_generator_and_verifiers(
-        GroupElement(k256::ProjectivePoint::GENERATOR),
-        &[GroupElement(k256::ProjectivePoint::IDENTITY); 7]);
+    let set = <[ShareVerifierK256; 8] as FeldmanVerifierSet<K256Share, ShareVerifierK256>>::feldman_set_with_generator_and_verifiers(
+        ValueGroup(k256::ProjectivePoint::GENERATOR),
+        &[ValueGroup(k256::ProjectivePoint::IDENTITY); 7]);
     assert_eq!(
-        GroupElement(k256::ProjectivePoint::GENERATOR),
-        <[ElemK256; 8] as FeldmanVerifierSet<K256Share, ElemK256>>::generator(&set)
+        ValueGroup(k256::ProjectivePoint::GENERATOR),
+        <[ShareVerifierK256; 8] as FeldmanVerifierSet<K256Share, ShareVerifierK256>>::generator(
+            &set
+        )
     );
     assert_eq!(
-        [GroupElement(k256::ProjectivePoint::IDENTITY); 7],
-        <[ElemK256; 8] as FeldmanVerifierSet<K256Share, ElemK256>>::verifiers(&set)
+        [ValueGroup(k256::ProjectivePoint::IDENTITY); 7],
+        <[ShareVerifierK256; 8] as FeldmanVerifierSet<K256Share, ShareVerifierK256>>::verifiers(
+            &set
+        )
     );
 }

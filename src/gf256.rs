@@ -700,13 +700,14 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
     r as u8
 }
 
-/// Represents an identifier in the Galois Field GF(2^8).
-/// We need this solely for Sequential Participant ID generation,
-/// because adding GF256 is xor which means the identifiers will oscillate between
-/// the start number and the incremented number instead of adding.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
+/// Represents an identifier in the Galois Field GF(2^8).
+///
+/// Used solely for Sequential Participant ID generation,
+/// since GF256 addition = xor i.e. identifiers just oscillate between
+/// the start number and the incremented number instead of adding.
 pub struct IdentifierGf256(pub Gf256);
 
 impl Display for IdentifierGf256 {

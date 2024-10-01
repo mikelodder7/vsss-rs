@@ -13,7 +13,7 @@ use elliptic_curve::hash2curve::ExpandMsgXmd;
 
 #[test]
 fn invalid_tests() {
-    split_invalid_args::<TestShare<Scalar>, GroupElement<EdwardsPoint>>();
+    split_invalid_args::<TestShare<Scalar>, ValueGroup<EdwardsPoint>>();
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn pedersen_verifier_serde_test() {
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
     let sk = IdentifierPrimeField(sc);
-    let res = pedersen::split_secret::<TestShare<Scalar>, GroupElement<EdwardsPoint>>(
+    let res = pedersen::split_secret::<TestShare<Scalar>, ValueGroup<EdwardsPoint>>(
         2, 3, &sk, None, None, None, &mut osrng,
     );
     assert!(res.is_ok());
@@ -82,15 +82,15 @@ fn pedersen_verifier_serde_test() {
     }
     assert!(res.is_ok());
     let v_str = res.unwrap();
-    let res = serde_json::from_str::<Vec<GroupElement<EdwardsPoint>>>(&v_str);
+    let res = serde_json::from_str::<Vec<ValueGroup<EdwardsPoint>>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(
-        <Vec<GroupElement<EdwardsPoint>> as PedersenVerifierSet::<
+        <Vec<ValueGroup<EdwardsPoint>> as PedersenVerifierSet::<
             TestShare<Scalar>,
-            GroupElement<EdwardsPoint>,
+            ValueGroup<EdwardsPoint>,
         >>::secret_generator(&pedersen_verifier_set),
-        PedersenVerifierSet::<TestShare<Scalar>, GroupElement<EdwardsPoint>>::secret_generator(
+        PedersenVerifierSet::<TestShare<Scalar>, ValueGroup<EdwardsPoint>>::secret_generator(
             &verifier2
         )
     );
@@ -98,15 +98,15 @@ fn pedersen_verifier_serde_test() {
     let res = serde_bare::to_vec(&pedersen_verifier_set);
     assert!(res.is_ok());
     let v_bytes = res.unwrap();
-    let res = serde_bare::from_slice::<Vec<GroupElement<EdwardsPoint>>>(&v_bytes);
+    let res = serde_bare::from_slice::<Vec<ValueGroup<EdwardsPoint>>>(&v_bytes);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();
     assert_eq!(
-        <Vec<GroupElement<EdwardsPoint>> as PedersenVerifierSet::<
+        <Vec<ValueGroup<EdwardsPoint>> as PedersenVerifierSet::<
             TestShare<Scalar>,
-            GroupElement<EdwardsPoint>,
+            ValueGroup<EdwardsPoint>,
         >>::secret_generator(&pedersen_verifier_set),
-        PedersenVerifierSet::<TestShare<Scalar>, GroupElement<EdwardsPoint>>::secret_generator(
+        PedersenVerifierSet::<TestShare<Scalar>, ValueGroup<EdwardsPoint>>::secret_generator(
             &verifier2
         )
     );
