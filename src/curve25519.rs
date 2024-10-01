@@ -15,6 +15,7 @@ use core::{
     iter::{Iterator, Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use crypto_bigint::{Encoding, U256, U512};
 use curve25519_dalek::{
     constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
     edwards::{CompressedEdwardsY, EdwardsPoint},
@@ -22,8 +23,10 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use elliptic_curve::{
-    ff::{helpers, Field, PrimeField},
+    ff::{helpers, Field, FieldBits, FromUniformBytes, PrimeField, PrimeFieldBits},
     group::{Group, GroupEncoding},
+    ops::{Invert, Reduce},
+    scalar::FromUintUnchecked,
 };
 use rand_core::RngCore;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -734,6 +737,63 @@ impl PrimeField for WrappedScalar {
     const ROOT_OF_UNITY: Self = Self(<Scalar as PrimeField>::ROOT_OF_UNITY);
     const ROOT_OF_UNITY_INV: Self = Self(<Scalar as PrimeField>::ROOT_OF_UNITY_INV);
     const DELTA: Self = Self(<Scalar as PrimeField>::DELTA);
+}
+
+impl PrimeFieldBits for WrappedScalar {
+    type ReprBits = [u8; 32];
+
+    fn to_le_bits(&self) -> FieldBits<Self::ReprBits> {
+        <Scalar as PrimeFieldBits>::to_le_bits(&self.0)
+    }
+
+    fn char_le_bits() -> FieldBits<Self::ReprBits> {
+        <Scalar as PrimeFieldBits>::char_le_bits()
+    }
+}
+
+impl FromUniformBytes<64> for WrappedScalar {
+    fn from_uniform_bytes(bytes: &[u8; 64]) -> Self {
+        Self(Scalar::from_bytes_mod_order_wide(&bytes))
+    }
+}
+
+impl Reduce<U256> for WrappedScalar {
+    type Bytes = [u8; 32];
+
+    fn reduce(n: U256) -> Self {
+        Self(Scalar::from_bytes_mod_order(n.to_le_bytes()))
+    }
+
+    fn reduce_bytes(bytes: &Self::Bytes) -> Self {
+        Self(Scalar::from_bytes_mod_order(*bytes))
+    }
+}
+
+impl Reduce<U512> for WrappedScalar {
+    type Bytes = [u8; 32];
+
+    fn reduce(n: U512) -> Self {
+        Self(Scalar::from_bytes_mod_order_wide(&n.to_le_bytes()))
+    }
+
+    fn reduce_bytes(bytes: &Self::Bytes) -> Self {
+        Self(Scalar::from_bytes_mod_order(*bytes))
+    }
+}
+
+impl Invert for WrappedScalar {
+    type Output = Self;
+    fn invert(&self) -> Self {
+        Self(Scalar::invert(&self.0))
+    }
+}
+
+impl FromUintUnchecked for WrappedScalar {
+    type Uint = U256;
+
+    fn from_uint_unchecked(n: U256) -> Self {
+        Self(Scalar::from_bytes_mod_order(n.to_le_bytes()))
+    }
 }
 
 impl From<u64> for WrappedScalar {
