@@ -140,55 +140,83 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
                     },
                 ))
             }
-            Self::List { list } => {
-                if list.is_empty() {
-                    return Err(Error::InvalidGenerator("The list must not be empty"));
-                }
-                Ok(ParticipantIdGeneratorState::List(
-                    ListParticipantNumberGenerator { list, index: 0 },
-                ))
-            }
+            Self::List { list } => Ok(ParticipantIdGeneratorState::List(
+                ListParticipantNumberGenerator { list, index: 0 },
+            )),
         }
     }
 }
 
-#[cfg(test)]
-pub(crate) struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
-    pub(crate) generators: &'a mut [ParticipantIdGeneratorState<'b, I>],
-    pub(crate) index: usize,
+/// A collection of participant number generators
+#[derive(Debug)]
+pub struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
+    /// The collection of participant id generators
+    pub generators: &'a [ParticipantIdGeneratorType<'b, I>],
 }
 
-#[cfg(test)]
-impl<'a, 'b, I: ShareIdentifier> Iterator for ParticipantIdGeneratorCollection<'a, 'b, I> {
-    type Item = I;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.index >= self.generators.len() {
-                return None;
-            }
-            let generator = self.generators.get_mut(self.index)?;
-            match generator.next() {
-                Some(id) => {
-                    return Some(id);
-                }
-                None => {
-                    self.index += 1;
-                }
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-impl<'a, 'b, I: ShareIdentifier> From<&'a mut [ParticipantIdGeneratorState<'b, I>]>
+impl<'a, 'b, I: ShareIdentifier> From<&'a [ParticipantIdGeneratorType<'b, I>]>
     for ParticipantIdGeneratorCollection<'a, 'b, I>
 {
-    fn from(generators: &'a mut [ParticipantIdGeneratorState<'b, I>]) -> Self {
+    fn from(generators: &'a [ParticipantIdGeneratorType<'b, I>]) -> Self {
+        Self { generators }
+    }
+}
+
+impl<'a, 'b, I: ShareIdentifier, const L: usize> From<&'a [ParticipantIdGeneratorType<'b, I>; L]>
+    for ParticipantIdGeneratorCollection<'a, 'b, I>
+{
+    fn from(generators: &'a [ParticipantIdGeneratorType<'b, I>; L]) -> Self {
+        Self { generators }
+    }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<'a, 'b, I: ShareIdentifier> From<&'a crate::Vec<ParticipantIdGeneratorType<'b, I>>>
+    for ParticipantIdGeneratorCollection<'a, 'b, I>
+{
+    fn from(generators: &'a crate::Vec<ParticipantIdGeneratorType<'b, I>>) -> Self {
         Self {
-            generators,
-            index: 0,
+            generators: generators.as_slice(),
         }
+    }
+}
+
+impl<'a, 'b, I: ShareIdentifier> ParticipantIdGeneratorCollection<'a, 'b, I> {
+    /// Returns an iterator that generates participant identifiers.
+    ///
+    /// The iterator will halt if an internal error occurs or an identifier
+    /// is generated that is the zero element.
+    pub fn iter(&self) -> impl Iterator<Item = I> + '_ {
+        let mut participant_id_iter = self.generators.iter().map(|g| g.try_into_generator());
+        let mut current: Option<ParticipantIdGeneratorState<'a, I>> = None;
+        core::iter::from_fn(move || {
+            loop {
+                if let Some(ref mut generator) = current {
+                    match generator.next() {
+                        Some(id) => {
+                            if id.is_zero().into() {
+                                current = None; // Move to next generator
+                                continue;
+                            }
+                            return Some(id);
+                        }
+                        None => {
+                            current = None; // Current generator exhausted, move to next
+                        }
+                    }
+                }
+
+                // If we're here, we need a new generator
+                match participant_id_iter.next() {
+                    Some(Ok(new_generator)) => {
+                        current = Some(new_generator);
+                        // Continue to next iteration to start using this generator
+                    }
+                    Some(Err(_)) => return None, // Errored generator
+                    None => return None,         // All generators exhausted
+                }
+            }
+        })
     }
 }
 
@@ -411,35 +439,36 @@ mod tests {
             IdentifierPrimeField::from(Scalar::from(40u64)),
             IdentifierPrimeField::from(Scalar::from(50u64)),
         ];
-        let mut generators = [
-            ParticipantIdGeneratorState::List(ListParticipantNumberGenerator {
-                list: &list,
-                index: 0,
-            }),
-            ParticipantIdGeneratorState::Sequential(SequentialParticipantNumberGenerator {
-                start: IdentifierPrimeField::from(Scalar::from(51u64)),
-                increment: IdentifierPrimeField::<Scalar>::ONE,
-                index: 0,
-                count: 5,
-            }),
+        let set = [
+            ParticipantIdGeneratorType::list(&list),
+            ParticipantIdGeneratorType::sequential(
+                Some(IdentifierPrimeField::from(Scalar::from(51u64))),
+                Some(IdentifierPrimeField::<Scalar>::ONE),
+                NonZeroUsize::new(5).unwrap(),
+            ),
         ];
-        let collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
+        let collection = ParticipantIdGeneratorCollection::from(&set[..]);
 
-        let list: Vec<_> = collection.collect();
-        assert_eq!(list.len(), 10);
-        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
-        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(20u64)));
-        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(30u64)));
-        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(40u64)));
-        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(50u64)));
-        assert_eq!(list[5], IdentifierPrimeField::from(Scalar::from(51u64)));
-        assert_eq!(list[6], IdentifierPrimeField::from(Scalar::from(52u64)));
-        assert_eq!(list[7], IdentifierPrimeField::from(Scalar::from(53u64)));
-        assert_eq!(list[8], IdentifierPrimeField::from(Scalar::from(54u64)));
-        assert_eq!(list[9], IdentifierPrimeField::from(Scalar::from(55u64)));
+        let expected = [
+            IdentifierPrimeField::from(Scalar::from(10u64)),
+            IdentifierPrimeField::from(Scalar::from(20u64)),
+            IdentifierPrimeField::from(Scalar::from(30u64)),
+            IdentifierPrimeField::from(Scalar::from(40u64)),
+            IdentifierPrimeField::from(Scalar::from(50u64)),
+            IdentifierPrimeField::from(Scalar::from(51u64)),
+            IdentifierPrimeField::from(Scalar::from(52u64)),
+            IdentifierPrimeField::from(Scalar::from(53u64)),
+            IdentifierPrimeField::from(Scalar::from(54u64)),
+            IdentifierPrimeField::from(Scalar::from(55u64)),
+        ];
+        let mut last_i = 0;
+        for (i, id) in collection.iter().enumerate() {
+            assert_eq!(id, expected[i]);
+            last_i = i;
+        }
+        assert_eq!(last_i, expected.len() - 1);
     }
 
-    #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn test_list_and_random_number_generator() {
         let list = [
@@ -452,63 +481,71 @@ mod tests {
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([1u8; 32]);
         let mut dst = [0u8; 32];
         rng.fill_bytes(&mut dst);
-        let mut generators = [
-            ParticipantIdGeneratorState::List(ListParticipantNumberGenerator {
-                list: &list,
-                index: 0,
-            }),
-            ParticipantIdGeneratorState::Random(RandomParticipantNumberGenerator {
-                dst,
-                index: 0,
-                count: 5,
-                _markers: PhantomData,
-            }),
+        let set = [
+            ParticipantIdGeneratorType::list(&list),
+            ParticipantIdGeneratorType::random(dst, NonZeroUsize::new(5).unwrap()),
         ];
-        let collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
-        let list: Vec<_> = collection.collect();
-        assert_eq!(list.len(), 10);
-        assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
-        assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(20u64)));
-        assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(30u64)));
-        assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(40u64)));
-        assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(50u64)));
-        let mut repr = FieldBytes::default();
-        for (i, s) in [
-            "134de46908fd0867a9c14ed96e90cd34be47e2b052ca266499687adae4cfe445",
-            "5b182d31afa277bcfb5d6316c31e231004d29f2c99e4dec0c384d7a46439c8ca",
-            "cb15c36dfe7b15c253e3f9fde1fd9ccfbd75839ff6dccca49700cb831dc5802e",
-            "bb3a92d716f6a8d94d82295fd120b23d42ec8543a405ecd82e519ab0fe4ef965",
-            "a0fff4c9e992f0d1acc8bc90fe6ae31dee280a0175a028a6333dde56de2121ec",
-        ]
-        .iter()
-        .enumerate()
-        {
-            repr.copy_from_slice(&hex::decode(s).unwrap());
-            assert_eq!(
-                list[i + 5],
-                IdentifierPrimeField::from(Scalar::from_repr(repr).unwrap())
-            );
+        let collection = ParticipantIdGeneratorCollection::from(&set);
+        let expected = [
+            IdentifierPrimeField::from(Scalar::from(10u64)),
+            IdentifierPrimeField::from(Scalar::from(20u64)),
+            IdentifierPrimeField::from(Scalar::from(30u64)),
+            IdentifierPrimeField::from(Scalar::from(40u64)),
+            IdentifierPrimeField::from(Scalar::from(50u64)),
+            hex::decode("134de46908fd0867a9c14ed96e90cd34be47e2b052ca266499687adae4cfe445")
+                .map(|b| {
+                    IdentifierPrimeField::from(
+                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                    )
+                })
+                .unwrap(),
+            hex::decode("5b182d31afa277bcfb5d6316c31e231004d29f2c99e4dec0c384d7a46439c8ca")
+                .map(|b| {
+                    IdentifierPrimeField::from(
+                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                    )
+                })
+                .unwrap(),
+            hex::decode("cb15c36dfe7b15c253e3f9fde1fd9ccfbd75839ff6dccca49700cb831dc5802e")
+                .map(|b| {
+                    IdentifierPrimeField::from(
+                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                    )
+                })
+                .unwrap(),
+            hex::decode("bb3a92d716f6a8d94d82295fd120b23d42ec8543a405ecd82e519ab0fe4ef965")
+                .map(|b| {
+                    IdentifierPrimeField::from(
+                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                    )
+                })
+                .unwrap(),
+            hex::decode("a0fff4c9e992f0d1acc8bc90fe6ae31dee280a0175a028a6333dde56de2121ec")
+                .map(|b| {
+                    IdentifierPrimeField::from(
+                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                    )
+                })
+                .unwrap(),
+        ];
+        let mut last_i = 0;
+        for (i, id) in collection.iter().enumerate() {
+            assert_eq!(id, expected[i]);
+            last_i = i;
         }
+        assert_eq!(last_i, expected.len() - 1);
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn test_empty_list_and_sequential_number_generator() {
-        let list = [];
-        let mut generators = [
-            ParticipantIdGeneratorState::List(ListParticipantNumberGenerator {
-                list: &list,
-                index: 0,
-            }),
-            ParticipantIdGeneratorState::Sequential(SequentialParticipantNumberGenerator {
-                start: IdentifierPrimeField::<Scalar>::ONE,
-                increment: IdentifierPrimeField::<Scalar>::ONE,
-                index: 0,
-                count: 5,
-            }),
+        let list: [IdentifierPrimeField<Scalar>; 0] = [];
+        let generators = [
+            ParticipantIdGeneratorType::list(&list),
+            ParticipantIdGeneratorType::sequential(None, None, NonZeroUsize::new(5).unwrap()),
         ];
-        let collection = ParticipantIdGeneratorCollection::from(&mut generators[..]);
-        let list: Vec<_> = collection.collect();
+        let collection = ParticipantIdGeneratorCollection::from(&generators);
+        let list: Vec<_> = collection.iter().collect();
         assert_eq!(list.len(), 5);
         assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(1u64)));
         assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(2u64)));

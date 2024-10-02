@@ -593,26 +593,13 @@ impl Gf256 {
         }
         let mut shares = Vec::with_capacity(limit);
 
-        let mut participant_id_iter = participant_generators
-            .iter()
-            .map(|g| g.try_into_generator());
-        let mut current = participant_id_iter
-            .next()
-            .ok_or(Error::SharingInvalidIdentifier)??;
+        let collection = ParticipantIdGeneratorCollection::from(participant_generators);
+        let mut participant_id_iter = collection.iter();
 
         for _ in 0..limit {
-            let id = match current.next() {
-                Some(x) => x,
-                None => {
-                    current = participant_id_iter
-                        .next()
-                        .ok_or(Error::SharingInvalidIdentifier)??;
-                    current.next().ok_or(Error::SharingInvalidIdentifier)?
-                }
-            };
-            if id.is_zero().into() {
-                return Err(Error::SharingInvalidIdentifier);
-            }
+            let id = participant_id_iter
+                .next()
+                .ok_or(Error::NotEnoughShareIdentifiers)?;
             let mut inner = Vec::with_capacity(limit + 1);
             inner.push(id.0 .0);
             shares.push(inner);

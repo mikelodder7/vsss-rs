@@ -68,26 +68,14 @@ where
     let mut shares = SS::create(limit);
     let indexer = shares.as_mut();
 
-    let mut participant_id_iter = participant_generators
-        .iter()
-        .map(|g| g.try_into_generator());
-    let mut current = participant_id_iter
-        .next()
-        .ok_or(Error::SharingInvalidIdentifier)??;
+    let participant_id_collection = ParticipantIdGeneratorCollection::from(participant_generators);
+
+    let mut participant_id_iter = participant_id_collection.iter();
 
     for s in indexer.iter_mut().take(limit) {
-        let id = match current.next() {
-            Some(x) => x,
-            None => {
-                current = participant_id_iter
-                    .next()
-                    .ok_or(Error::SharingInvalidIdentifier)??;
-                current.next().ok_or(Error::SharingInvalidIdentifier)?
-            }
-        };
-        if id.is_zero().into() {
-            return Err(Error::SharingInvalidIdentifier);
-        }
+        let id = participant_id_iter
+            .next()
+            .ok_or(Error::NotEnoughShareIdentifiers)?;
         let value = polynomial.evaluate(&id, threshold);
         let share = S::with_identifier_and_value(id, value);
         *s = share;

@@ -44,6 +44,9 @@ pub enum Error {
     /// Invalid share element
     #[error("Invalid share element")]
     InvalidShareElement,
+    /// Not enough share identifiers available when creating shares
+    #[error("Not enough share identifiers available")]
+    NotEnoughShareIdentifiers,
 }
 
 /// Results returned by this crate
