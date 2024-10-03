@@ -14,7 +14,7 @@ use sha3::{
 use crate::{Error, ShareIdentifier, VsssResult};
 
 /// The types of participant number generators
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParticipantIdGeneratorType<'a, I: ShareIdentifier> {
     /// Generate participant numbers sequentially beginning at `start` and incrementing by `increment`
     /// until `count` is reached then this generator stops.
@@ -40,6 +40,8 @@ pub enum ParticipantIdGeneratorType<'a, I: ShareIdentifier> {
         list: &'a [I],
     },
 }
+
+impl<'a, I: ShareIdentifier + Copy> Copy for ParticipantIdGeneratorType<'a, I> {}
 
 impl<I: ShareIdentifier + Display> Display for ParticipantIdGeneratorType<'_, I> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -148,11 +150,13 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
 }
 
 /// A collection of participant number generators
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
     /// The collection of participant id generators
     pub generators: &'a [ParticipantIdGeneratorType<'b, I>],
 }
+
+impl<'a, 'b, I: ShareIdentifier + Copy> Copy for ParticipantIdGeneratorCollection<'a, 'b, I> {}
 
 impl<'a, 'b, I: ShareIdentifier> From<&'a [ParticipantIdGeneratorType<'b, I>]>
     for ParticipantIdGeneratorCollection<'a, 'b, I>
