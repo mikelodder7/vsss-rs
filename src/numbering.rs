@@ -83,6 +83,19 @@ impl<I: ShareIdentifier> Default for ParticipantIdGeneratorType<'_, I> {
     }
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
+impl<'a, I: ShareIdentifier> From<&'a crate::Vec<I>> for ParticipantIdGeneratorType<'a, I> {
+    fn from(list: &'a crate::Vec<I>) -> Self {
+        Self::List { list }
+    }
+}
+
+impl<'a, I: ShareIdentifier> From<&'a [I]> for ParticipantIdGeneratorType<'a, I> {
+    fn from(list: &'a [I]) -> Self {
+        Self::List { list }
+    }
+}
+
 impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
     /// Create a new sequential participant number generator
     pub fn sequential(start: Option<I>, increment: Option<I>, count: NonZeroUsize) -> Self {
