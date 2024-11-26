@@ -15,6 +15,7 @@ use core::{
     iter::{Iterator, Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+#[cfg(feature = "bigint")]
 use crypto_bigint::{Encoding, U256, U512};
 use curve25519_dalek::{
     constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
@@ -25,10 +26,13 @@ use curve25519_dalek::{
 use elliptic_curve::{
     ff::{helpers, Field, FieldBits, FromUniformBytes, PrimeField, PrimeFieldBits},
     group::{Group, GroupEncoding},
-    ops::{Invert, Reduce},
-    scalar::FromUintUnchecked,
+    ops::Invert,
 };
+#[cfg(feature = "bigint")]
+use elliptic_curve::{ops::Reduce, scalar::FromUintUnchecked};
+
 use rand_core::RngCore;
+#[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -277,6 +281,7 @@ impl From<RistrettoPoint> for WrappedRistretto {
     }
 }
 
+#[cfg(feature = "serde")]
 impl Serialize for WrappedRistretto {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -287,6 +292,7 @@ impl Serialize for WrappedRistretto {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for WrappedRistretto {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -609,6 +615,7 @@ impl From<WrappedRistretto> for WrappedEdwards {
     }
 }
 
+#[cfg(feature = "serde")]
 impl Serialize for WrappedEdwards {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -619,6 +626,7 @@ impl Serialize for WrappedEdwards {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for WrappedEdwards {
     fn deserialize<D>(d: D) -> Result<Self, D::Error>
     where
@@ -757,6 +765,7 @@ impl FromUniformBytes<64> for WrappedScalar {
     }
 }
 
+#[cfg(feature = "bigint")]
 impl Reduce<U256> for WrappedScalar {
     type Bytes = [u8; 32];
 
@@ -769,6 +778,7 @@ impl Reduce<U256> for WrappedScalar {
     }
 }
 
+#[cfg(feature = "bigint")]
 impl Reduce<U512> for WrappedScalar {
     type Bytes = [u8; 32];
 
@@ -788,6 +798,7 @@ impl Invert for WrappedScalar {
     }
 }
 
+#[cfg(feature = "bigint")]
 impl FromUintUnchecked for WrappedScalar {
     type Uint = U256;
 
@@ -1000,8 +1011,10 @@ impl From<Scalar> for WrappedScalar {
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl zeroize::DefaultIsZeroes for WrappedScalar {}
 
+#[cfg(feature = "serde")]
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -1012,6 +1025,7 @@ impl Serialize for WrappedScalar {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -1085,6 +1099,7 @@ impl<'a> Product<&'a WrappedScalar> for WrappedScalar {
     }
 }
 
+#[cfg(feature = "serde")]
 fn serialize_arr<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
     if s.is_human_readable() {
         let mut space = [0u8; 64];
@@ -1095,6 +1110,7 @@ fn serialize_arr<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Erro
     }
 }
 
+#[cfg(feature = "serde")]
 fn deserialize_arr<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
     if d.is_human_readable() {
         let s = <&str>::deserialize(d)?;

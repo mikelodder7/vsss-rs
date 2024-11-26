@@ -5,7 +5,6 @@ use core::{
 };
 use elliptic_curve::bigint::modular::constant_mod::{Residue, ResidueParams};
 use elliptic_curve::bigint::{ArrayEncoding, Uint};
-use zeroize::*;
 
 use super::*;
 use crate::*;
@@ -132,11 +131,12 @@ where
     }
 }
 
-impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> DefaultIsZeroes
+#[cfg(feature = "zeroize")]
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> zeroize::DefaultIsZeroes
     for IdentifierResidue<MOD, LIMBS>
 where
-    Uint<LIMBS>: ArrayEncoding + DefaultIsZeroes,
-    Residue<MOD, LIMBS>: DefaultIsZeroes,
+    Uint<LIMBS>: ArrayEncoding + zeroize::DefaultIsZeroes,
+    Residue<MOD, LIMBS>: zeroize::DefaultIsZeroes,
 {
 }
 

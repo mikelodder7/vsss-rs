@@ -3,10 +3,12 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use crypto_bigint::modular::constant_mod::ResidueParams;
-use crypto_bigint::{ArrayEncoding, Uint};
+#[cfg(feature = "bigint")]
+use crypto_bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint};
+#[cfg(feature = "bigint")]
 use elliptic_curve::ops::Reduce;
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "zeroize")]
 use zeroize::DefaultIsZeroes;
 
 /// A share verifier group element.
@@ -198,6 +200,7 @@ impl<G: Group + GroupEncoding + Default> From<&IdentifierPrimeField<G::Scalar>> 
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     Mul<IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
@@ -209,6 +212,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     Mul<&IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
@@ -220,6 +224,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     Mul<IdentifierPrimitive<P, BYTES>> for &ValueGroup<G>
 {
@@ -231,6 +236,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     Mul<&IdentifierPrimitive<P, BYTES>> for &ValueGroup<G>
 {
@@ -242,6 +248,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     MulAssign<IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
@@ -251,6 +258,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize>
     MulAssign<&IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
@@ -260,6 +268,7 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
@@ -274,6 +283,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
@@ -288,6 +298,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<IdentifierUint<LIMBS>>
     for &ValueGroup<G>
 where
@@ -302,6 +313,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
     for &ValueGroup<G>
 where
@@ -316,6 +328,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
@@ -328,6 +341,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
@@ -340,6 +354,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
@@ -354,6 +369,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<&IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
@@ -368,6 +384,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<IdentifierResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
@@ -382,6 +399,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<&IdentifierResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
@@ -396,6 +414,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     MulAssign<IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
@@ -408,6 +427,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     MulAssign<&IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
@@ -420,6 +440,7 @@ where
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl<G: Group + GroupEncoding + Default + DefaultIsZeroes> DefaultIsZeroes for ValueGroup<G> {}
 
 impl<G: Group + GroupEncoding + Default> ValueGroup<G> {

@@ -6,10 +6,12 @@ use core::{
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut, Mul},
 };
-use crypto_bigint::modular::constant_mod::ResidueParams;
-use crypto_bigint::ArrayEncoding;
-use elliptic_curve::{bigint::Uint, ops::Reduce, scalar::IsHigh, Field, PrimeField};
-use zeroize::*;
+#[cfg(feature = "bigint")]
+use crypto_bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint};
+#[cfg(feature = "bigint")]
+use elliptic_curve::ops::Reduce;
+
+use elliptic_curve::{scalar::IsHigh, Field, PrimeField};
 
 /// A share value represented as a [`PrimeField`].
 pub type ValuePrimeField<F> = IdentifierPrimeField<F>;
@@ -94,6 +96,7 @@ impl<F: PrimeField> From<&IdentifierPrimeField<F>> for IdentifierPrimeField<F> {
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> From<&IdentifierPrimitive<P, BYTES>>
     for IdentifierPrimeField<F>
 {
@@ -115,6 +118,7 @@ impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> From<&IdentifierPri
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<F: PrimeField + Reduce<Uint<LIMBS>>, const LIMBS: usize> From<&IdentifierUint<LIMBS>>
     for IdentifierPrimeField<F>
 where
@@ -128,6 +132,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<F: PrimeField + Reduce<Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
@@ -147,6 +152,7 @@ impl<F: PrimeField> Mul<&IdentifierPrimeField<F>> for IdentifierPrimeField<F> {
     }
 }
 
+#[cfg(feature = "primitive")]
 impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> Mul<&IdentifierPrimitive<P, BYTES>>
     for IdentifierPrimeField<F>
 {
@@ -158,6 +164,7 @@ impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> Mul<&IdentifierPrim
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<F: PrimeField + Reduce<Uint<LIMBS>>, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
     for IdentifierPrimeField<F>
 where
@@ -171,6 +178,7 @@ where
     }
 }
 
+#[cfg(feature = "bigint")]
 impl<F: PrimeField + Reduce<Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
@@ -184,7 +192,11 @@ where
     }
 }
 
-impl<F: PrimeField + DefaultIsZeroes> DefaultIsZeroes for IdentifierPrimeField<F> {}
+#[cfg(feature = "zeroize")]
+impl<F: PrimeField + zeroize::DefaultIsZeroes> zeroize::DefaultIsZeroes
+    for IdentifierPrimeField<F>
+{
+}
 
 impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     type Serialization = F::Repr;

@@ -4,16 +4,22 @@
 mod biguint;
 mod group_element;
 mod prime_field;
+#[cfg(feature = "primitive")]
 mod primitive;
+#[cfg(feature = "bigint")]
 mod residue;
+#[cfg(feature = "bigint")]
 mod uint;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use biguint::*;
 pub use group_element::*;
 pub use prime_field::*;
+#[cfg(feature = "primitive")]
 pub use primitive::*;
+#[cfg(feature = "bigint")]
 pub use residue::*;
+#[cfg(feature = "bigint")]
 pub use uint::*;
 
 use crate::*;
@@ -22,7 +28,8 @@ use core::{
     fmt::Debug,
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use elliptic_curve::bigint::{Encoding, Random, Zero as CryptoZero};
+#[cfg(feature = "bigint")]
+use crypto_bigint::{Encoding, Random, Zero as CryptoZero};
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
 

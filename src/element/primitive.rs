@@ -4,6 +4,7 @@ use core::{
 };
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
+#[cfg(feature = "zeroize")]
 use zeroize::*;
 
 use super::*;
@@ -108,6 +109,7 @@ impl<P: Primitive<BYTES>, const BYTES: usize> From<P> for IdentifierPrimitive<P,
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl<P: Primitive<BYTES>, const BYTES: usize> DefaultIsZeroes for IdentifierPrimitive<P, BYTES> {}
 
 impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimitive<P, BYTES> {

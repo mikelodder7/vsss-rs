@@ -10,7 +10,13 @@ use num::{
     },
     PrimInt,
 };
-use zeroize::DefaultIsZeroes;
+
+#[cfg(feature = "zeroize")]
+/// Placeholder for conditionally compiling in [`zeroize::DefaultIsZeroes`].
+pub trait PrimitiveZeroize: zeroize::DefaultIsZeroes {}
+#[cfg(not(feature = "zeroize"))]
+/// Placeholder for conditionally compiling in [`zeroize::DefaultIsZeroes`].
+pub trait PrimitiveZeroize {}
 
 /// An extension trait for primitive integers that are used as share identifiers.
 pub trait Primitive<const BYTES: usize>:
@@ -36,7 +42,7 @@ pub trait Primitive<const BYTES: usize>:
     + Display
     + 'static
     + Hash
-    + DefaultIsZeroes
+    + PrimitiveZeroize
 {
 }
 
@@ -63,7 +69,7 @@ impl<
             + Display
             + 'static
             + Hash
-            + DefaultIsZeroes,
+            + PrimitiveZeroize,
         const BYTES: usize,
     > Primitive<BYTES> for P
 {

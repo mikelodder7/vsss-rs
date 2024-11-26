@@ -199,7 +199,9 @@ mod gf256;
 mod numbering;
 pub mod pedersen;
 mod polynomial;
+#[cfg(feature = "primitive")]
 mod primitive;
+#[cfg(feature = "bigint")]
 mod saturating;
 mod set;
 pub mod shamir;
@@ -217,7 +219,9 @@ pub use gf256::*;
 pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;
+#[cfg(feature = "primitive")]
 pub use primitive::*;
+#[cfg(feature = "bigint")]
 pub use saturating::*;
 pub use set::*;
 pub use shamir::Shamir;

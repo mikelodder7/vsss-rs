@@ -6,6 +6,7 @@ use core::{
     ops::Mul,
 };
 use elliptic_curve::PrimeField;
+#[cfg(feature = "zeroize")]
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A share.
@@ -120,6 +121,7 @@ where
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl<I, V> Zeroize for DefaultShare<I, V>
 where
     I: ShareIdentifier + Zeroize,
@@ -131,6 +133,7 @@ where
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl<I, V> ZeroizeOnDrop for DefaultShare<I, V>
 where
     I: ShareIdentifier + ZeroizeOnDrop,

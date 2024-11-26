@@ -2,10 +2,9 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
-use elliptic_curve::bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
+use crypto_bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
-use zeroize::*;
 
 use super::*;
 use crate::*;
@@ -90,8 +89,9 @@ where
     }
 }
 
-impl<const LIMBS: usize> DefaultIsZeroes for IdentifierUint<LIMBS> where
-    Uint<LIMBS>: ArrayEncoding + DefaultIsZeroes
+#[cfg(feature = "zeroize")]
+impl<const LIMBS: usize> zeroize::DefaultIsZeroes for IdentifierUint<LIMBS> where
+    Uint<LIMBS>: ArrayEncoding + zeroize::DefaultIsZeroes
 {
 }
 

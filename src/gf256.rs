@@ -25,6 +25,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 #[cfg(any(feature = "alloc", feature = "std"))]
 use crate::ParticipantIdGeneratorType;
 use rand_core::CryptoRng;
+#[cfg(feature = "zeroize")]
 use zeroize::DefaultIsZeroes;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -36,6 +37,7 @@ type GfShare = DefaultShare<IdentifierGf256, IdentifierGf256>;
 #[repr(transparent)]
 pub struct Gf256(pub u8);
 
+#[cfg(feature = "zeroize")]
 impl DefaultIsZeroes for Gf256 {}
 
 impl Display for Gf256 {
@@ -703,6 +705,7 @@ impl Display for IdentifierGf256 {
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl DefaultIsZeroes for IdentifierGf256 {}
 
 impl Deref for IdentifierGf256 {
