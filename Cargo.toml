@@ -19,7 +19,7 @@ bigint = ["dep:crypto-bigint"]
 curve25519 = ["curve25519-dalek", "alloc", "hex"]
 primitive = ["num"]
 serde = ["dep:serde", "crypto-bigint/serde", "num/serde", "generic-array/serde", "elliptic-curve-tools"]
-std = ["num/std", "num/rand", "rand_core/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve-tools?/std"]
+std = ["alloc", "num/std", "num/rand", "rand_core/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve-tools?/std"]
 zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 
 [dependencies]

@@ -18,6 +18,11 @@ pub trait PrimitiveZeroize: zeroize::DefaultIsZeroes {}
 /// Placeholder for conditionally compiling in [`zeroize::DefaultIsZeroes`].
 pub trait PrimitiveZeroize {}
 
+#[cfg(feature = "zeroize")]
+impl<T: zeroize::DefaultIsZeroes> PrimitiveZeroize for T {}
+#[cfg(not(feature = "zeroize"))]
+impl<T> PrimitiveZeroize for T {}
+
 /// An extension trait for primitive integers that are used as share identifiers.
 pub trait Primitive<const BYTES: usize>:
     Sized
