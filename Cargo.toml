@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "5.0.0-rc2"
+version = "5.0.0"
 
 [features]
 default = ["bigint", "primitive", "serde", "std", "zeroize"]
@@ -30,7 +30,7 @@ elliptic-curve-tools = { version = "0.1.1", default-features = false, optional =
 generic-array = "1"
 num = { version = "0.4", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
-rand_core = "0.6"
+rand_core = { version = "0.6", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.6" }
 sha3 = { version = "0.10", default-features = false }
@@ -44,8 +44,6 @@ ed448-goldilocks-plus = "0.13"
 hex = "0.4"
 k256 = { version = "0.13", features = ["arithmetic", "bits"] }
 p256 = { version = "0.13", features = ["arithmetic", "bits"] }
-p384 = { version = "0.13", features = ["arithmetic", "bits"] }
-p521 = { version = "0.13", features = ["arithmetic"] }
 postcard = { version = "1.0", features = ["use-std"] }
 rand = { version = "0.8", default-features = false }
 rand_chacha = "0.3.1"
@@ -54,6 +52,5 @@ rstest = "0.23"
 serde_bare = "0.5"
 serde_cbor = "0.11.2"
 serde_json = "1.0"
-serde_yaml = "0.9"
 sha2 = "0.10"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
