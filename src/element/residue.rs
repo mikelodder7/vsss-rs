@@ -1,7 +1,7 @@
 use core::{
     fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Mul},
 };
 use elliptic_curve::bigint::modular::constant_mod::{Residue, ResidueParams};
 use elliptic_curve::bigint::{ArrayEncoding, Uint};
@@ -121,6 +121,16 @@ where
     }
 }
 
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> From<&IdentifierResidue<MOD, LIMBS>>
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn from(value: &IdentifierResidue<MOD, LIMBS>) -> Self {
+        Self(value.0)
+    }
+}
+
 impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> From<IdentifierResidue<MOD, LIMBS>>
     for Residue<MOD, LIMBS>
 where
@@ -128,6 +138,18 @@ where
 {
     fn from(value: IdentifierResidue<MOD, LIMBS>) -> Self {
         value.0
+    }
+}
+
+impl<MOD: ResidueParams<LIMBS>, const LIMBS: usize> Mul<&IdentifierResidue<MOD, LIMBS>>
+    for IdentifierResidue<MOD, LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    type Output = IdentifierResidue<MOD, LIMBS>;
+
+    fn mul(self, rhs: &IdentifierResidue<MOD, LIMBS>) -> Self {
+        Self(Residue::<MOD, LIMBS>::mul(&self, &rhs))
     }
 }
 
