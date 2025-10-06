@@ -29,7 +29,7 @@ use core::{
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 #[cfg(feature = "bigint")]
-use crypto_bigint::{Encoding, Random, Zero as CryptoZero};
+use elliptic_curve::bigint::{Encoding, Random, Zero as CryptoZero};
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
 

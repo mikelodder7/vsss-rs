@@ -16,7 +16,7 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 #[cfg(feature = "bigint")]
-use crypto_bigint::{Encoding, U256, U512};
+use elliptic_curve::bigint::{Encoding, U256, U512};
 use curve25519_dalek::{
     constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
     edwards::{CompressedEdwardsY, EdwardsPoint},

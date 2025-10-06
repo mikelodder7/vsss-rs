@@ -2,7 +2,7 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
-use crypto_bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
+use elliptic_curve::bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
 

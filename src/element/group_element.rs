@@ -4,9 +4,10 @@ use core::{
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 #[cfg(feature = "bigint")]
-use crypto_bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint};
-#[cfg(feature = "bigint")]
-use elliptic_curve::ops::Reduce;
+use elliptic_curve::{
+    bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint},
+    ops::Reduce,
+};
 use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "zeroize")]
 use zeroize::DefaultIsZeroes;

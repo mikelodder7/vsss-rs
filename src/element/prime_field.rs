@@ -7,9 +7,10 @@ use core::{
     ops::{Deref, DerefMut, Mul},
 };
 #[cfg(feature = "bigint")]
-use crypto_bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint};
-#[cfg(feature = "bigint")]
-use elliptic_curve::ops::Reduce;
+use elliptic_curve::{
+    bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint},
+    ops::Reduce,
+};
 
 use elliptic_curve::{scalar::IsHigh, Field, PrimeField};
 
