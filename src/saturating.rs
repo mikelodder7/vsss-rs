@@ -12,7 +12,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 /// Provides intentionally-saturating arithmetic on `T`.
 ///
 /// This is analogous to the [`core::num::Saturating`] but allows this crate to
-/// define trait impls for [`crypto-bigint::Uint`].
+/// define trait impls for [`Uint`](https://docs.rs/crypto-bigint/latest/crypto_bigint/struct.Uint.html).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]

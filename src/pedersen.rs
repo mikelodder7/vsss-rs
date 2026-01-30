@@ -487,7 +487,7 @@ where
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret.
 ///
-/// If None, a random value is generated in [`S::Value`].
+/// If None, a random value is generated in [`Share::Value`].
 /// `share_generator` is the generator to use for shares.
 /// If None, the default generator is used.
 /// `blind_factor_generator` is the generator point to use for blinding factor shares.

@@ -75,7 +75,7 @@ where
     }
 }
 
-impl<'a> Neg for &'a WrappedRistretto {
+impl Neg for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -99,7 +99,7 @@ impl PartialEq for WrappedRistretto {
     }
 }
 
-impl<'a, 'b> Add<&'b WrappedRistretto> for &'a WrappedRistretto {
+impl<'b> Add<&'b WrappedRistretto> for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -117,7 +117,7 @@ impl<'b> Add<&'b WrappedRistretto> for WrappedRistretto {
     }
 }
 
-impl<'a> Add<WrappedRistretto> for &'a WrappedRistretto {
+impl Add<WrappedRistretto> for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -149,7 +149,7 @@ impl<'b> AddAssign<&'b WrappedRistretto> for WrappedRistretto {
     }
 }
 
-impl<'a, 'b> Sub<&'b WrappedRistretto> for &'a WrappedRistretto {
+impl<'b> Sub<&'b WrappedRistretto> for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -167,7 +167,7 @@ impl<'b> Sub<&'b WrappedRistretto> for WrappedRistretto {
     }
 }
 
-impl<'a> Sub<WrappedRistretto> for &'a WrappedRistretto {
+impl Sub<WrappedRistretto> for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -199,7 +199,7 @@ impl<'b> SubAssign<&'b WrappedRistretto> for WrappedRistretto {
     }
 }
 
-impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedRistretto {
+impl<'b> Mul<&'b WrappedScalar> for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -217,7 +217,7 @@ impl<'b> Mul<&'b WrappedScalar> for WrappedRistretto {
     }
 }
 
-impl<'a> Mul<WrappedScalar> for &'a WrappedRistretto {
+impl Mul<WrappedScalar> for &WrappedRistretto {
     type Output = WrappedRistretto;
 
     #[inline]
@@ -390,7 +390,7 @@ where
     }
 }
 
-impl<'a> Neg for &'a WrappedEdwards {
+impl Neg for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -414,7 +414,7 @@ impl PartialEq for WrappedEdwards {
     }
 }
 
-impl<'a, 'b> Add<&'b WrappedEdwards> for &'a WrappedEdwards {
+impl<'b> Add<&'b WrappedEdwards> for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -432,7 +432,7 @@ impl<'b> Add<&'b WrappedEdwards> for WrappedEdwards {
     }
 }
 
-impl<'a> Add<WrappedEdwards> for &'a WrappedEdwards {
+impl Add<WrappedEdwards> for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -464,7 +464,7 @@ impl<'b> AddAssign<&'b WrappedEdwards> for WrappedEdwards {
     }
 }
 
-impl<'a, 'b> Sub<&'b WrappedEdwards> for &'a WrappedEdwards {
+impl<'b> Sub<&'b WrappedEdwards> for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -482,7 +482,7 @@ impl<'b> Sub<&'b WrappedEdwards> for WrappedEdwards {
     }
 }
 
-impl<'a> Sub<WrappedEdwards> for &'a WrappedEdwards {
+impl Sub<WrappedEdwards> for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -514,7 +514,7 @@ impl<'b> SubAssign<&'b WrappedEdwards> for WrappedEdwards {
     }
 }
 
-impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedEdwards {
+impl<'b> Mul<&'b WrappedScalar> for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -532,7 +532,7 @@ impl<'b> Mul<&'b WrappedScalar> for WrappedEdwards {
     }
 }
 
-impl<'a> Mul<WrappedScalar> for &'a WrappedEdwards {
+impl Mul<WrappedScalar> for &WrappedEdwards {
     type Output = WrappedEdwards;
 
     #[inline]
@@ -761,7 +761,7 @@ impl PrimeFieldBits for WrappedScalar {
 
 impl FromUniformBytes<64> for WrappedScalar {
     fn from_uniform_bytes(bytes: &[u8; 64]) -> Self {
-        Self(Scalar::from_bytes_mod_order_wide(&bytes))
+        Self(Scalar::from_bytes_mod_order_wide(bytes))
     }
 }
 
@@ -831,7 +831,7 @@ impl PartialEq for WrappedScalar {
     }
 }
 
-impl<'a, 'b> Add<&'b WrappedScalar> for &'a WrappedScalar {
+impl<'b> Add<&'b WrappedScalar> for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]
@@ -849,7 +849,7 @@ impl<'b> Add<&'b WrappedScalar> for WrappedScalar {
     }
 }
 
-impl<'a> Add<WrappedScalar> for &'a WrappedScalar {
+impl Add<WrappedScalar> for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]
@@ -881,7 +881,7 @@ impl<'b> AddAssign<&'b WrappedScalar> for WrappedScalar {
     }
 }
 
-impl<'a, 'b> Sub<&'b WrappedScalar> for &'a WrappedScalar {
+impl<'b> Sub<&'b WrappedScalar> for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]
@@ -899,7 +899,7 @@ impl<'b> Sub<&'b WrappedScalar> for WrappedScalar {
     }
 }
 
-impl<'a> Sub<WrappedScalar> for &'a WrappedScalar {
+impl Sub<WrappedScalar> for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]
@@ -931,7 +931,7 @@ impl<'b> SubAssign<&'b WrappedScalar> for WrappedScalar {
     }
 }
 
-impl<'a, 'b> Mul<&'b WrappedScalar> for &'a WrappedScalar {
+impl<'b> Mul<&'b WrappedScalar> for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]
@@ -949,7 +949,7 @@ impl<'b> Mul<&'b WrappedScalar> for WrappedScalar {
     }
 }
 
-impl<'a> Mul<WrappedScalar> for &'a WrappedScalar {
+impl Mul<WrappedScalar> for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]
@@ -981,7 +981,7 @@ impl<'b> MulAssign<&'b WrappedScalar> for WrappedScalar {
     }
 }
 
-impl<'a> Neg for &'a WrappedScalar {
+impl Neg for &WrappedScalar {
     type Output = WrappedScalar;
 
     #[inline]

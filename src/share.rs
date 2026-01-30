@@ -107,7 +107,7 @@ where
     V: ShareElement + for<'a> From<&'a I> + for<'a> Mul<&'a I, Output = V>,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.identifier.cmp(&other.identifier))
+        Some(self.cmp(other))
     }
 }
 
