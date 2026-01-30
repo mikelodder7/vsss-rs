@@ -15,14 +15,14 @@ use core::{
     iter::{Iterator, Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-#[cfg(feature = "bigint")]
-use elliptic_curve::bigint::{Encoding, U256, U512};
 use curve25519_dalek::{
     constants::{ED25519_BASEPOINT_POINT, RISTRETTO_BASEPOINT_POINT},
     edwards::{CompressedEdwardsY, EdwardsPoint},
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+#[cfg(feature = "bigint")]
+use elliptic_curve::bigint::{Encoding, U256, U512};
 use elliptic_curve::{
     ff::{helpers, Field, FieldBits, FromUniformBytes, PrimeField, PrimeFieldBits},
     group::{Group, GroupEncoding},

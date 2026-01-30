@@ -8,6 +8,7 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use generic_array::{ArrayLength, GenericArray};
+use hybrid_array::{Array, ArraySize};
 
 /// Represents a readable data store for secret shares
 pub trait ReadableShareSet<S>: AsRef<[S]>
@@ -85,6 +86,16 @@ impl<S, L> WriteableShareSet<S> for GenericArray<S, L>
 where
     S: Share,
     L: ArrayLength,
+{
+    fn create(_size_hint: usize) -> Self {
+        Self::try_from_iter((0..L::to_usize()).map(|_| S::default())).unwrap()
+    }
+}
+
+impl<S, L> WriteableShareSet<S> for Array<S, L>
+where
+    S: Share,
+    L: ArraySize,
 {
     fn create(_size_hint: usize) -> Self {
         Self::try_from_iter((0..L::to_usize()).map(|_| S::default())).unwrap()
@@ -299,6 +310,26 @@ impl<S: Share, G: ShareVerifier<S>, const L: usize> FeldmanVerifierSet<S, G> for
 impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> FeldmanVerifierSet<S, G>
     for GenericArray<G, L>
 {
+    fn empty_feldman_set_with_capacity(_size_hint: usize, generator: G) -> Self {
+        let mut t = Self::default();
+        t[0] = generator;
+        t
+    }
+
+    fn generator(&self) -> G {
+        self[0]
+    }
+
+    fn verifiers(&self) -> &[G] {
+        &self[1..]
+    }
+
+    fn verifiers_mut(&mut self) -> &mut [G] {
+        self[1..].as_mut()
+    }
+}
+
+impl<S: Share, G: ShareVerifier<S>, L: ArraySize> FeldmanVerifierSet<S, G> for Array<G, L> {
     fn empty_feldman_set_with_capacity(_size_hint: usize, generator: G) -> Self {
         let mut t = Self::default();
         t[0] = generator;
@@ -586,6 +617,146 @@ where
 
     fn verifiers_mut(&mut self) -> &mut [V] {
         <GenericArray<V, L>>::verifiers_mut(&mut self.inner)
+    }
+}
+
+/// A wrapper around a hybrid array of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, HybridArrayFeldmanVerifierSet};
+/// use hybrid_array::typenum::U3;
+///
+/// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+/// type K256FeldmanVerifierSet = HybridArrayFeldmanVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>, U3>;
+/// ```
+#[derive(Debug, Clone)]
+#[repr(transparent)]
+pub struct HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    /// The inner hybrid array set to threshold + 1
+    pub inner: Array<V, L>,
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+impl<S, V, L> From<Array<V, L>> for HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(inner: Array<V, L>) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<&Array<V, L>> for HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(inner: &Array<V, L>) -> Self {
+        Self {
+            inner: inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<HybridArrayFeldmanVerifierSet<S, V, L>> for Array<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(set: HybridArrayFeldmanVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, L> From<&HybridArrayFeldmanVerifierSet<S, V, L>> for Array<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(set: &HybridArrayFeldmanVerifierSet<S, V, L>) -> Self {
+        set.inner.clone()
+    }
+}
+
+impl<S, V, L> Deref for HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    type Target = Array<V, L>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S, V, L> DerefMut for HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<S, V, L> Default for HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+    Array<V, L>: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> FeldmanVerifierSet<S, V> for HybridArrayFeldmanVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn empty_feldman_set_with_capacity(size_hint: usize, generator: V) -> Self {
+        Self {
+            inner: <Array<V, L> as FeldmanVerifierSet<S, V>>::empty_feldman_set_with_capacity(
+                size_hint, generator,
+            ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn generator(&self) -> V {
+        <Array<V, L>>::generator(&self.inner)
+    }
+
+    fn verifiers(&self) -> &[V] {
+        <Array<V, L>>::verifiers(&self.inner)
+    }
+
+    fn verifiers_mut(&mut self) -> &mut [V] {
+        <Array<V, L>>::verifiers_mut(&mut self.inner)
     }
 }
 
@@ -933,6 +1104,35 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> PedersenVerifierSet<S, G>
     }
 }
 
+impl<S: Share, G: ShareVerifier<S>, L: ArraySize> PedersenVerifierSet<S, G> for Array<G, L> {
+    fn empty_pedersen_set_with_capacity(
+        _size_hint: usize,
+        secret_generator: G,
+        blinder_generator: G,
+    ) -> Self {
+        let mut t = Self::default();
+        t[0] = secret_generator;
+        t[1] = blinder_generator;
+        t
+    }
+
+    fn secret_generator(&self) -> G {
+        self[0]
+    }
+
+    fn blinder_generator(&self) -> G {
+        self[1]
+    }
+
+    fn blind_verifiers(&self) -> &[G] {
+        &self[2..]
+    }
+
+    fn blind_verifiers_mut(&mut self) -> &mut [G] {
+        self[2..].as_mut()
+    }
+}
+
 /// A wrapper around a generic array of verifiers
 /// Allows for convenient type aliasing
 /// ```
@@ -940,6 +1140,7 @@ impl<S: Share, G: ShareVerifier<S>, L: ArrayLength> PedersenVerifierSet<S, G>
 /// use generic_array::typenum::U4;
 /// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
 /// type K256PedersenVerifierSet = GenericArrayPedersenVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>, U4>;
+/// ```
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct GenericArrayPedersenVerifierSet<S, V, L>
@@ -1079,6 +1280,153 @@ where
 
     fn blind_verifiers_mut(&mut self) -> &mut [V] {
         <GenericArray<V, L>>::blind_verifiers_mut(&mut self.inner)
+    }
+}
+
+/// A wrapper around a hybrid array of verifiers
+/// Allows for convenient type aliasing
+/// ```
+/// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, HybridArrayPedersenVerifierSet};
+/// use hybrid_array::typenum::U4;
+/// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
+/// type K256PedersenVerifierSet = HybridArrayPedersenVerifierSet<K256Share, ValueGroup<k256::ProjectivePoint>, U4>;
+/// ```
+pub struct HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    /// The inner hybrid array set to threshold + 2
+    pub inner: Array<V, L>,
+    /// Marker for phantom data
+    pub _marker: PhantomData<S>,
+}
+
+impl<S, V, L> From<Array<V, L>> for HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(inner: Array<V, L>) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<&Array<V, L>> for HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(inner: &Array<V, L>) -> Self {
+        Self {
+            inner: inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> From<HybridArrayPedersenVerifierSet<S, V, L>> for Array<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(set: HybridArrayPedersenVerifierSet<S, V, L>) -> Self {
+        set.inner
+    }
+}
+
+impl<S, V, L> From<&HybridArrayPedersenVerifierSet<S, V, L>> for Array<V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn from(set: &HybridArrayPedersenVerifierSet<S, V, L>) -> Self {
+        set.inner.clone()
+    }
+}
+
+impl<S, V, L> Deref for HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    type Target = Array<V, L>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S, V, L> DerefMut for HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<S, V, L> Default for HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+    Array<V, L>: Default,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, V, L> PedersenVerifierSet<S, V> for HybridArrayPedersenVerifierSet<S, V, L>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    L: ArraySize,
+{
+    fn empty_pedersen_set_with_capacity(
+        size_hint: usize,
+        secret_generator: V,
+        blinder_generator: V,
+    ) -> Self {
+        Self {
+            inner: <Array<V, L> as PedersenVerifierSet<S, V>>::empty_pedersen_set_with_capacity(
+                size_hint,
+                secret_generator,
+                blinder_generator,
+            ),
+            _marker: PhantomData,
+        }
+    }
+
+    fn secret_generator(&self) -> V {
+        <Array<V, L>>::secret_generator(&self.inner)
+    }
+
+    fn blinder_generator(&self) -> V {
+        <Array<V, L>>::blinder_generator(&self.inner)
+    }
+
+    fn blind_verifiers(&self) -> &[V] {
+        <Array<V, L>>::blind_verifiers(&self.inner)
+    }
+
+    fn blind_verifiers_mut(&mut self) -> &mut [V] {
+        <Array<V, L>>::blind_verifiers_mut(&mut self.inner)
     }
 }
 

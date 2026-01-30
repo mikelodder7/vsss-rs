@@ -149,7 +149,7 @@ where
     type Output = IdentifierResidue<MOD, LIMBS>;
 
     fn mul(self, rhs: &IdentifierResidue<MOD, LIMBS>) -> Self {
-        Self(Residue::<MOD, LIMBS>::mul(&self, &rhs))
+        Self(Residue::<MOD, LIMBS>::mul(&self, rhs))
     }
 }
 
@@ -191,12 +191,12 @@ where
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
-        IdentifierUint::<LIMBS>::deserialize(serialized)
+        uint5::IdentifierUint::<LIMBS>::deserialize(serialized)
             .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
     }
 
     fn from_slice(vec: &[u8]) -> VsssResult<Self> {
-        IdentifierUint::<LIMBS>::from_slice(vec)
+        uint5::IdentifierUint::<LIMBS>::from_slice(vec)
             .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
     }
 

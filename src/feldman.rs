@@ -14,6 +14,7 @@ use generic_array::{
     typenum::{Add1, Sub1, B1},
     ArrayLength, GenericArray,
 };
+use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
@@ -126,6 +127,48 @@ where
     Sub1<Add1<THRESHOLD>>: ArrayLength,
 {
     type VerifierSet = GenericArray<V, Add1<THRESHOLD>>;
+}
+
+/// A default feldman implementation using [`Array`]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+pub struct HybridArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+{
+    /// Marker for the share type
+    pub marker: PhantomData<(S, V, Add1<THRESHOLD>, SHARES)>,
+}
+
+impl<S, V, THRESHOLD, SHARES> Shamir<S> for HybridArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+{
+    type InnerPolynomial = Array<S, THRESHOLD>;
+    type ShareSet = Array<S, SHARES>;
+}
+
+impl<S, V, THRESHOLD, SHARES> Feldman<S, V> for HybridArrayFeldmanVsss<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+{
+    type VerifierSet = Array<V, Add1<THRESHOLD>>;
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]

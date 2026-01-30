@@ -15,6 +15,7 @@ use generic_array::{
     typenum::{Add1, Sub1, B1, U2},
     ArrayLength, GenericArray,
 };
+use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 
 /// Options for Pedersen secret sharing
@@ -281,6 +282,117 @@ where
 {
     type FeldmanVerifierSet = GenericArray<V, Add1<THRESHOLD>>;
     type PedersenVerifierSet = GenericArray<V, Add2<THRESHOLD>>;
+    type PedersenResult = Self;
+}
+
+/// The result to use when the sizes are known or computed at compile time
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+pub struct HybridArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + Add<U2> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArraySize + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+    Sub2<Add2<THRESHOLD>>: ArraySize,
+{
+    /// The blinder used to create pedersen commitments
+    pub(crate) blinder: S::Value,
+    /// The secret shares
+    pub(crate) secret_shares: Array<S, SHARES>,
+    /// The blinder shares
+    pub(crate) blinder_shares: Array<S, SHARES>,
+    /// The feldman verifiers
+    pub(crate) feldman_verifier_set: Array<V, Add1<THRESHOLD>>,
+    /// The pedersen verifiers
+    pub(crate) pedersen_verifier_set: Array<V, Add2<THRESHOLD>>,
+}
+
+impl<S, V, THRESHOLD, SHARES> PedersenResult<S, V>
+    for HybridArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + Add<U2> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArraySize + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+    Sub2<Add2<THRESHOLD>>: ArraySize,
+{
+    type ShareSet = Array<S, SHARES>;
+    type FeldmanVerifierSet = Array<V, Add1<THRESHOLD>>;
+    type PedersenVerifierSet = Array<V, Add2<THRESHOLD>>;
+
+    fn new(
+        blinder: S::Value,
+        secret_shares: Self::ShareSet,
+        blinder_shares: Self::ShareSet,
+        feldman_verifier_set: Self::FeldmanVerifierSet,
+        pedersen_verifier_set: Self::PedersenVerifierSet,
+    ) -> Self {
+        Self {
+            blinder,
+            secret_shares,
+            blinder_shares,
+            feldman_verifier_set,
+            pedersen_verifier_set,
+        }
+    }
+
+    fn blinder(&self) -> &S::Value {
+        &self.blinder
+    }
+
+    fn secret_shares(&self) -> &Self::ShareSet {
+        &self.secret_shares
+    }
+
+    fn blinder_shares(&self) -> &Self::ShareSet {
+        &self.blinder_shares
+    }
+
+    fn feldman_verifier_set(&self) -> &Self::FeldmanVerifierSet {
+        &self.feldman_verifier_set
+    }
+
+    fn pedersen_verifier_set(&self) -> &Self::PedersenVerifierSet {
+        &self.pedersen_verifier_set
+    }
+}
+
+impl<S, V, THRESHOLD, SHARES> Shamir<S> for HybridArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + Add<U2> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArraySize + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+    Sub2<Add2<THRESHOLD>>: ArraySize,
+{
+    type InnerPolynomial = Array<S, THRESHOLD>;
+    type ShareSet = Array<S, SHARES>;
+}
+
+impl<S, V, THRESHOLD, SHARES> Pedersen<S, V> for HybridArrayPedersenResult<S, V, THRESHOLD, SHARES>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+    SHARES: ArraySize,
+    THRESHOLD: Add<B1> + Add<U2> + ArraySize,
+    Add1<THRESHOLD>: ArraySize + Sub<B1, Output = THRESHOLD>,
+    Add2<THRESHOLD>: ArraySize + Sub<U2, Output = THRESHOLD>,
+    Sub1<Add1<THRESHOLD>>: ArraySize,
+    Sub2<Add2<THRESHOLD>>: ArraySize,
+{
+    type FeldmanVerifierSet = Array<V, Add1<THRESHOLD>>;
+    type PedersenVerifierSet = Array<V, Add2<THRESHOLD>>;
     type PedersenResult = Self;
 }
 

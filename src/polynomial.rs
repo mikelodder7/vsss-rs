@@ -4,6 +4,7 @@
 
 use crate::*;
 use generic_array::{ArrayLength, GenericArray};
+use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 
 /// The polynomial used for generating the shares
@@ -78,6 +79,20 @@ impl<S: Share, const L: usize> Polynomial<S> for [S; L] {
 impl<S: Share, L: ArrayLength> Polynomial<S> for GenericArray<S, L> {
     fn create(_size_hint: usize) -> Self {
         GenericArray::default()
+    }
+
+    fn coefficients(&self) -> &[S] {
+        self.as_ref()
+    }
+
+    fn coefficients_mut(&mut self) -> &mut [S] {
+        self.as_mut()
+    }
+}
+
+impl<S: Share, L: ArraySize> Polynomial<S> for Array<S, L> {
+    fn create(_size_hint: usize) -> Self {
+        Array::default()
     }
 
     fn coefficients(&self) -> &[S] {

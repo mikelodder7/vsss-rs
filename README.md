@@ -46,7 +46,7 @@ The `Share` trait has been modified as follows:
 Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all array sizes are supported. 
 
 In addition, GenericArray of any size is supported.
-`crypto-bigint` Uint types are supported as well.
+`crypto-bigint` Uint types (0.5 and 0.6) and Montgomery-form residue types (ConstMontyForm and MontyForm) are supported; see *Share elements (bigint feature)* below.
 
 Now tuples with the identifier as `.0` and the share as `.1` are supported.
 
@@ -93,6 +93,47 @@ If the share identifier is `u8` then the additional implementations exist.
 - \[u8; N+1\] where N is the share size and the first byte is the identifier
 - GenericArray<u8, N+1> where N is the share size and the first byte is the identifier
 - Vec<u8> where the first byte is the identifier
+
+### Share elements (bigint feature)
+
+With the `bigint` feature (enabled by default), the crate supports share identifiers and values based on **crypto-bigint** in two versions:
+
+- **crypto-bigint 0.5** (via `elliptic-curve`): used by curve types and by `IdentifierResidue` (constant-modulus residue) and `IdentifierUint` in `element::uint5` (with saturating arithmetic).
+- **crypto-bigint 0.6**: used by `IdentifierUint` in `element::uint`, and by Montgomery-form residue types.
+
+**Uint-based identifiers**
+
+- **`element::uint5::IdentifierUint<LIMBS>`** — wraps `crypto-bigint` 0.5 `Uint` (from `elliptic-curve::bigint`) with saturating arithmetic; works with curve scalars and `IdentifierResidue`.
+- **`element::uint::IdentifierUint<LIMBS>`** — wraps `crypto-bigint` 0.6 `Uint`; interoperates with prime-field and group elements via word conversion.
+
+**Residue-based identifiers (modular arithmetic)**
+
+- **`IdentifierResidue<MOD, LIMBS>`** / **`ValueResidue<MOD, LIMBS>`** — constant modulus via `elliptic_curve::bigint::Residue` and `ResidueParams` (crypto-bigint 0.5). `MOD` is a type implementing `ResidueParams<LIMBS>`.
+- **`IdentifierConstMontyResidue<MOD, LIMBS>`** / **`ValueConstMontyResidue<MOD, LIMBS>`** — constant modulus in Montgomery form (crypto-bigint 0.6 `ConstMontyForm`). Define the modulus with `crypto_bigint::impl_modulus!` and use the type as share identifier or value; implements `ShareElement` and `ShareIdentifier`.
+- **`IdentifierMontyResidue<LIMBS>`** / **`ValueMontyResidue<LIMBS>`** — runtime modulus in Montgomery form (crypto-bigint 0.6 `MontyForm`). The modulus is given by `MontyParams<LIMBS>`. Create values with `zero_with_params`, `one_with_params`, `new`, or `random_with_params`; this type does not implement `ShareElement` because zero/one require the runtime params.
+
+Example with a **constant modulus** (ConstMontyForm):
+
+```rust
+use crypto_bigint::{impl_modulus, U256};
+use vsss_rs::IdentifierConstMontyResidue;
+
+impl_modulus!(MyModulus, U256, "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
+
+type MyResidue = IdentifierConstMontyResidue<MyModulus, 4>;
+```
+
+Example with a **runtime modulus** (MontyForm):
+
+```rust
+use crypto_bigint::{modular::MontyParams, Odd, U256};
+use vsss_rs::IdentifierMontyResidue;
+
+let modulus = Odd::new(U256::from(97u64)).expect("odd modulus");
+let params = MontyParams::<4>::new(modulus);
+let zero = IdentifierMontyResidue::<4>::zero_with_params(params);
+let one = IdentifierMontyResidue::<4>::one_with_params(params);
+```
 
 ### Polynomials
 `Polynomial` holds the coefficients of the polynomial and provides methods to evaluate the polynomial at a given point.

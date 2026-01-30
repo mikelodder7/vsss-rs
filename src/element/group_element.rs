@@ -1,11 +1,13 @@
 use crate::*;
+#[cfg(feature = "bigint")]
+use super::{uint, uint5};
 use core::{
     fmt::{self, Display, Formatter},
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 #[cfg(feature = "bigint")]
 use elliptic_curve::{
-    bigint::{modular::constant_mod::ResidueParams, ArrayEncoding, Uint},
+    bigint::{self, modular::constant_mod::ResidueParams, ArrayEncoding},
     ops::Reduce,
 };
 use rand_core::{CryptoRng, RngCore};
@@ -270,86 +272,276 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<IdentifierUint<LIMBS>>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint5::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
 
-    fn mul(self, rhs: IdentifierUint<LIMBS>) -> Self::Output {
+    fn mul(self, rhs: uint5::IdentifierUint<LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
         Self(self.0 * id.0)
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint5::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
 
-    fn mul(self, rhs: &IdentifierUint<LIMBS>) -> Self::Output {
+    fn mul(self, rhs: &uint5::IdentifierUint<LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
         Self(self.0 * id.0)
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<IdentifierUint<LIMBS>>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint5::IdentifierUint<LIMBS>>
     for &ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
 
-    fn mul(self, rhs: IdentifierUint<LIMBS>) -> Self::Output {
+    fn mul(self, rhs: uint5::IdentifierUint<LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
         ValueGroup(self.0 * id.0)
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&IdentifierUint<LIMBS>>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint5::IdentifierUint<LIMBS>>
     for &ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
 
-    fn mul(self, rhs: &IdentifierUint<LIMBS>) -> Self::Output {
+    fn mul(self, rhs: &uint5::IdentifierUint<LIMBS>) -> Self::Output {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
         ValueGroup(self.0 * id.0)
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<IdentifierUint<LIMBS>>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<uint5::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
-    fn mul_assign(&mut self, rhs: IdentifierUint<LIMBS>) {
+    fn mul_assign(&mut self, rhs: uint5::IdentifierUint<LIMBS>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
         self.0 *= id.0;
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&IdentifierUint<LIMBS>>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&uint5::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
-    fn mul_assign(&mut self, rhs: &IdentifierUint<LIMBS>) {
+    fn mul_assign(&mut self, rhs: &uint5::IdentifierUint<LIMBS>) {
+        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
+        self.0 *= id.0;
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint::IdentifierUint<LIMBS>>
+    for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: uint::IdentifierUint<LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
+        Self(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint::IdentifierUint<LIMBS>>
+    for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: &uint::IdentifierUint<LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
+        Self(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint::IdentifierUint<LIMBS>>
+    for &ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = ValueGroup<G>;
+
+    fn mul(self, rhs: uint::IdentifierUint<LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
+        ValueGroup(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint::IdentifierUint<LIMBS>>
+    for &ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = ValueGroup<G>;
+
+    fn mul(self, rhs: &uint::IdentifierUint<LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
+        ValueGroup(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<uint::IdentifierUint<LIMBS>>
+    for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    fn mul_assign(&mut self, rhs: uint::IdentifierUint<LIMBS>) {
+        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
+        self.0 *= id.0;
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&uint::IdentifierUint<LIMBS>>
+    for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    fn mul_assign(&mut self, rhs: &uint::IdentifierUint<LIMBS>) {
+        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
+        self.0 *= id.0;
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<
+        G: Group + GroupEncoding + Default,
+        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+        const LIMBS: usize,
+    > Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: IdentifierConstMontyResidue<MOD, LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
+        Self(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<
+        G: Group + GroupEncoding + Default,
+        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+        const LIMBS: usize,
+    > Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: &IdentifierConstMontyResidue<MOD, LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
+        Self(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<
+        G: Group + GroupEncoding + Default,
+        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+        const LIMBS: usize,
+    > Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = ValueGroup<G>;
+
+    fn mul(self, rhs: IdentifierConstMontyResidue<MOD, LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
+        ValueGroup(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<
+        G: Group + GroupEncoding + Default,
+        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+        const LIMBS: usize,
+    > Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    type Output = ValueGroup<G>;
+
+    fn mul(self, rhs: &IdentifierConstMontyResidue<MOD, LIMBS>) -> Self::Output {
+        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
+        ValueGroup(self.0 * id.0)
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<
+        G: Group + GroupEncoding + Default,
+        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+        const LIMBS: usize,
+    > MulAssign<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    fn mul_assign(&mut self, rhs: IdentifierConstMontyResidue<MOD, LIMBS>) {
+        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
+        self.0 *= id.0;
+    }
+}
+
+#[cfg(feature = "bigint")]
+impl<
+        G: Group + GroupEncoding + Default,
+        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+        const LIMBS: usize,
+    > MulAssign<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+where
+    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
+{
+    fn mul_assign(&mut self, rhs: &IdentifierConstMontyResidue<MOD, LIMBS>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
         self.0 *= id.0;
     }
@@ -359,8 +551,8 @@ where
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
 
@@ -374,8 +566,8 @@ where
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<&IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
 
@@ -389,8 +581,8 @@ where
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<IdentifierResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
 
@@ -404,8 +596,8 @@ where
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     Mul<&IdentifierResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
 
@@ -419,8 +611,8 @@ where
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     MulAssign<IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     fn mul_assign(&mut self, rhs: IdentifierResidue<MOD, LIMBS>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
@@ -432,8 +624,8 @@ where
 impl<G: Group + GroupEncoding + Default, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     MulAssign<&IdentifierResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<Uint<LIMBS>>,
+    bigint::Uint<LIMBS>: ArrayEncoding,
+    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     fn mul_assign(&mut self, rhs: &IdentifierResidue<MOD, LIMBS>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);

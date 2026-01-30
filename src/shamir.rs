@@ -6,6 +6,7 @@
 //! and combine methods for field and group elements
 use super::*;
 use generic_array::{ArrayLength, GenericArray};
+use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 
 /// A Polynomial that can create secret shares
@@ -101,6 +102,11 @@ impl<S: Share, const L: usize> Shamir<S> for [S; L] {
 impl<S: Share, L: ArrayLength> Shamir<S> for GenericArray<S, L> {
     type InnerPolynomial = GenericArray<S, L>;
     type ShareSet = GenericArray<S, L>;
+}
+
+impl<S: Share, L: ArraySize> Shamir<S> for Array<S, L> {
+    type InnerPolynomial = Array<S, L>;
+    type ShareSet = Array<S, L>;
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]

@@ -7,9 +7,13 @@ mod prime_field;
 #[cfg(feature = "primitive")]
 mod primitive;
 #[cfg(feature = "bigint")]
+mod monty_residue;
+#[cfg(feature = "bigint")]
 mod residue;
 #[cfg(feature = "bigint")]
-mod uint;
+pub mod uint5;
+#[cfg(feature = "bigint")]
+pub mod uint;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use biguint::*;
@@ -18,9 +22,9 @@ pub use prime_field::*;
 #[cfg(feature = "primitive")]
 pub use primitive::*;
 #[cfg(feature = "bigint")]
-pub use residue::*;
+pub use monty_residue::*;
 #[cfg(feature = "bigint")]
-pub use uint::*;
+pub use residue::*;
 
 use crate::*;
 
