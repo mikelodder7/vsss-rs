@@ -57,7 +57,7 @@ jobs:
         with: 
           toolchain: nightly
       - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall cargo-careful
+      - run: cargo binstall --no-confirm cargo-careful
       - run: cargo careful test tests --release
         
   clippy:
@@ -96,7 +96,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: cargo-bins/cargo-binstall@main
-      - run: cargo binstall cargo-udeps
+      - run: cargo binstall --no-confirm cargo-udeps
       - run: cargo udeps --all-targets --all-features
 
   outdated:
@@ -107,7 +107,7 @@ jobs:
         with:
           toolchain: nightly
       - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall cargo-outdated
+      - run: cargo binstall --no-confirm cargo-outdated
       - run: cargo outdated --root-deps-only --exit-code 1 --exclude rand_core --exclude crypto-bigint --ignore rand_core --ignore crypto-bigint
 
   pants:
@@ -118,5 +118,5 @@ jobs:
         with:
           toolchain: nightly
       - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall cargo-pants
+      - run: cargo binstall --no-confirm cargo-pants
       - run: cargo pants --loud --dev
