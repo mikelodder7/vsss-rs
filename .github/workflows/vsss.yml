@@ -40,7 +40,6 @@ jobs:
           toolchain: stable
       - run: cargo build --all-features
 
-
   test:
     runs-on: ubuntu-latest
     steps:
@@ -54,8 +53,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-careful
+      - uses: dtolnay/rust-toolchain@master
+        with: 
+          toolchain: nightly
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall cargo-careful
       - run: cargo careful test tests --release
         
   clippy:
@@ -91,22 +93,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-udeps
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: cargo-bins/cargo-binstall@main
+      - run: cargo binstall cargo-udeps
       - run: cargo udeps --all-targets --all-features
 
   outdated:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-outdated
+      - uses: dtolnay/rust-toolchain@main
+        with:
+          toolchain: nightly
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall cargo-outdated
       - run: cargo outdated --root-deps-only --exit-code 1 --exclude rand_core --exclude crypto-bigint --ignore rand_core --ignore crypto-bigint
 
   pants:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-pants
+      - uses: dtolnay/rust-toolchain@main
+        with:
+          toolchain: nightly
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall cargo-pants
       - run: cargo pants --loud --dev
