@@ -106,23 +106,23 @@ pub trait ShareVerifier<S: Share>:
 }
 
 impl<
-        S: Share,
-        SV: ShareElement
-            + Copy
-            + Add<Output = Self>
-            + Sub<Output = Self>
-            + AddAssign
-            + SubAssign
-            + Neg<Output = Self>
-            + Mul<S::Identifier, Output = Self>
-            + Mul<S::Value, Output = Self>
-            + MulAssign<S::Identifier>
-            + MulAssign<S::Value>
-            + for<'a> Mul<&'a S::Identifier, Output = Self>
-            + for<'a> Mul<&'a S::Value, Output = Self>
-            + for<'a> MulAssign<&'a S::Identifier>
-            + for<'a> MulAssign<&'a S::Value>,
-    > ShareVerifier<S> for SV
+    S: Share,
+    SV: ShareElement
+        + Copy
+        + Add<Output = Self>
+        + Sub<Output = Self>
+        + AddAssign
+        + SubAssign
+        + Neg<Output = Self>
+        + Mul<S::Identifier, Output = Self>
+        + Mul<S::Value, Output = Self>
+        + MulAssign<S::Identifier>
+        + MulAssign<S::Value>
+        + for<'a> Mul<&'a S::Identifier, Output = Self>
+        + for<'a> Mul<&'a S::Value, Output = Self>
+        + for<'a> MulAssign<&'a S::Identifier>
+        + for<'a> MulAssign<&'a S::Value>,
+> ShareVerifier<S> for SV
 {
 }
 
@@ -147,22 +147,22 @@ pub trait ShareElementInner:
 }
 
 impl<
-        I: Sized
-            + Debug
-            + Eq
-            + PartialEq
-            + Clone
-            + Default
-            + 'static
-            + Add<Output = Self>
-            + Sub<Output = Self>
-            + AddAssign
-            + SubAssign
-            + for<'a> Add<&'a Self, Output = Self>
-            + for<'a> Sub<&'a Self, Output = Self>
-            + for<'a> AddAssign<&'a Self>
-            + for<'a> SubAssign<&'a Self>,
-    > ShareElementInner for I
+    I: Sized
+        + Debug
+        + Eq
+        + PartialEq
+        + Clone
+        + Default
+        + 'static
+        + Add<Output = Self>
+        + Sub<Output = Self>
+        + AddAssign
+        + SubAssign
+        + for<'a> Add<&'a Self, Output = Self>
+        + for<'a> Sub<&'a Self, Output = Self>
+        + for<'a> AddAssign<&'a Self>
+        + for<'a> SubAssign<&'a Self>,
+> ShareElementInner for I
 {
 }
 
@@ -177,11 +177,11 @@ pub trait ShareIdentifierInner:
 }
 
 impl<
-        E: ShareElementInner
-            + Mul<Output = Self>
-            + MulAssign
-            + for<'a> Mul<&'a Self, Output = Self>
-            + for<'a> MulAssign<&'a Self>,
-    > ShareIdentifierInner for E
+    E: ShareElementInner
+        + Mul<Output = Self>
+        + MulAssign
+        + for<'a> Mul<&'a Self, Output = Self>
+        + for<'a> MulAssign<&'a Self>,
+> ShareIdentifierInner for E
 {
 }

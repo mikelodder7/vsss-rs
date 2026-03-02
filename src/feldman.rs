@@ -11,8 +11,8 @@ use core::{
     ops::{Add, Sub},
 };
 use generic_array::{
-    typenum::{Add1, Sub1, B1},
     ArrayLength, GenericArray,
+    typenum::{Add1, B1, Sub1},
 };
 use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};

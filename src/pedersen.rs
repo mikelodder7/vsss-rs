@@ -12,8 +12,8 @@ use crate::shamir::create_shares_with_participant_generator;
 use crate::*;
 use core::ops::{Add, Sub};
 use generic_array::{
-    typenum::{Add1, Sub1, B1, U2},
     ArrayLength, GenericArray,
+    typenum::{Add1, B1, Sub1, U2},
 };
 use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
@@ -46,12 +46,12 @@ where
     type PedersenVerifierSet: PedersenVerifierSet<S, V>;
     /// The result from running `split_secret_with_verifier`
     type PedersenResult: PedersenResult<
-        S,
-        V,
-        ShareSet = <Self as Shamir<S>>::ShareSet,
-        FeldmanVerifierSet = Self::FeldmanVerifierSet,
-        PedersenVerifierSet = Self::PedersenVerifierSet,
-    >;
+            S,
+            V,
+            ShareSet = <Self as Shamir<S>>::ShareSet,
+            FeldmanVerifierSet = Self::FeldmanVerifierSet,
+            PedersenVerifierSet = Self::PedersenVerifierSet,
+        >;
 
     /// Create shares from a secret and options.
     /// `blinder` is the blinding factor.

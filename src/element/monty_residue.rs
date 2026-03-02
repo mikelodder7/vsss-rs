@@ -22,8 +22,8 @@ use core::{
     ops::{Deref, DerefMut, Mul},
 };
 use crypto_bigint::{
-    modular::{ConstMontyForm, ConstMontyParams, MontyForm, MontyParams, SafeGcdInverter},
     Encoding, Odd, PrecomputeInverter, RandomMod, Uint,
+    modular::{ConstMontyForm, ConstMontyParams, MontyForm, MontyParams, SafeGcdInverter},
 };
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;

@@ -603,7 +603,7 @@ impl Gf256 {
                 .next()
                 .ok_or(Error::NotEnoughShareIdentifiers)?;
             let mut inner = Vec::with_capacity(limit + 1);
-            inner.push(id.0 .0);
+            inner.push(id.0.0);
             shares.push(inner);
         }
         for b in secret {
@@ -616,7 +616,7 @@ impl Gf256 {
                 participant_generators,
             )?;
             for (share, inner_share) in shares.iter_mut().zip(inner_shares.iter()) {
-                share.push(inner_share.value.0 .0);
+                share.push(inner_share.value.0.0);
             }
         }
         Ok(shares)
@@ -642,7 +642,7 @@ impl Gf256 {
             for (inner_share, share) in inner_shares.iter_mut().zip(shares.iter()) {
                 inner_share.value = IdentifierGf256(Gf256(share[i]));
             }
-            secret.push(inner_shares.combine()?.0 .0);
+            secret.push(inner_shares.combine()?.0.0);
         }
         Ok(secret)
     }
@@ -776,7 +776,7 @@ impl ShareElement for IdentifierGf256 {
     }
 
     fn serialize(&self) -> Self::Serialization {
-        [self.0 .0]
+        [self.0.0]
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
@@ -792,13 +792,13 @@ impl ShareElement for IdentifierGf256 {
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
-        vec![self.0 .0]
+        vec![self.0.0]
     }
 }
 
 impl ShareIdentifier for IdentifierGf256 {
     fn inc(&mut self, increment: &Self) {
-        self.0 .0 = self.0 .0.saturating_add(increment.0 .0);
+        self.0.0 = self.0.0.saturating_add(increment.0.0);
     }
 
     fn invert(&self) -> VsssResult<Self> {
@@ -829,8 +829,8 @@ mod tests {
     fn compatibility() {
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for _ in 0..1000 {
-            let a = rng.gen::<u8>();
-            let b = rng.gen::<u8>();
+            let a = rng.r#gen::<u8>();
+            let b = rng.r#gen::<u8>();
             let y = Gf256(a);
             let z = Gf256(b);
 
@@ -838,8 +838,8 @@ mod tests {
         }
         rng = ChaCha8Rng::from_entropy();
         for _ in 0..1000 {
-            let a = rng.gen::<u8>();
-            let b = rng.gen::<u8>();
+            let a = rng.r#gen::<u8>();
+            let b = rng.r#gen::<u8>();
             let y = Gf256(a);
             let z = Gf256(b);
 
@@ -848,9 +848,9 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for _ in 0..1000 {
-            let mut a = rng.gen::<u8>();
+            let mut a = rng.r#gen::<u8>();
             while a == 0 {
-                a = rng.gen::<u8>();
+                a = rng.r#gen::<u8>();
             }
             let y = Gf256(a);
 
@@ -864,35 +864,35 @@ mod tests {
         for i in 1..=255 {
             let secret = IdentifierGf256(Gf256(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
-            assert_eq!(shares[0].identifier.0 .0, 1);
-            assert_eq!(shares[1].identifier.0 .0, 2);
-            assert_eq!(shares[2].identifier.0 .0, 3);
-            assert_eq!(shares[3].identifier.0 .0, 4);
-            assert_eq!(shares[4].identifier.0 .0, 5);
+            assert_eq!(shares[0].identifier.0.0, 1);
+            assert_eq!(shares[1].identifier.0.0, 2);
+            assert_eq!(shares[2].identifier.0.0, 3);
+            assert_eq!(shares[3].identifier.0.0, 4);
+            assert_eq!(shares[4].identifier.0.0, 5);
             let res = &shares[0..3].to_vec().combine();
             assert!(
                 res.is_ok(),
                 "Failed at iteration {}, secret: {}",
                 i,
-                secret.0 .0
+                secret.0.0
             );
             assert_eq!(
                 res.unwrap(),
                 secret,
                 "Failed at iteration {}, secret: {}",
                 i,
-                secret.0 .0
+                secret.0.0
             );
         }
         rng = ChaCha8Rng::from_entropy();
         for i in 1..=255 {
             let secret = IdentifierGf256(Gf256(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
-            assert_eq!(shares[0].identifier.0 .0, 1);
-            assert_eq!(shares[1].identifier.0 .0, 2);
-            assert_eq!(shares[2].identifier.0 .0, 3);
-            assert_eq!(shares[3].identifier.0 .0, 4);
-            assert_eq!(shares[4].identifier.0 .0, 5);
+            assert_eq!(shares[0].identifier.0.0, 1);
+            assert_eq!(shares[1].identifier.0.0, 2);
+            assert_eq!(shares[2].identifier.0.0, 3);
+            assert_eq!(shares[3].identifier.0.0, 4);
+            assert_eq!(shares[4].identifier.0.0, 5);
             let res = &shares[2..].to_vec().combine();
             assert_eq!(res.unwrap(), secret);
         }
@@ -935,11 +935,11 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_entropy();
         for _ in 0..25 {
-            let threshold = rng.gen::<u8>().saturating_add(1);
+            let threshold = rng.r#gen::<u8>().saturating_add(1);
 
             let mut shares = Vec::with_capacity(threshold as usize);
             for i in 0..threshold {
-                let share = vec![i; (rng.gen::<usize>() % 64) + 1];
+                let share = vec![i; (rng.r#gen::<usize>() % 64) + 1];
                 shares.push(share);
             }
             assert!(Gf256::combine_array(shares).is_err());

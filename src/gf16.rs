@@ -622,7 +622,7 @@ impl Gf16 {
                 .next()
                 .ok_or(Error::NotEnoughShareIdentifiers)?;
             let mut inner = Vec::with_capacity(limit + 1);
-            inner.push(id.0 .0);
+            inner.push(id.0.0);
             shares.push(inner);
         }
         for b in secret {
@@ -650,7 +650,7 @@ impl Gf16 {
                 .iter_mut()
                 .zip(lo_shares.iter().zip(hi_shares.iter()))
             {
-                share.push((hi_s.value.0 .0 << 4) | lo_s.value.0 .0);
+                share.push((hi_s.value.0.0 << 4) | lo_s.value.0.0);
             }
         }
         Ok(shares)
@@ -686,8 +686,8 @@ impl Gf16 {
                 lo_s.value = IdentifierGf16(Gf16(share[i] & 0x0f));
                 hi_s.value = IdentifierGf16(Gf16((share[i] >> 4) & 0x0f));
             }
-            let lo = lo_inner.combine()?.0 .0 & 0x0f;
-            let hi = hi_inner.combine()?.0 .0 & 0x0f;
+            let lo = lo_inner.combine()?.0.0 & 0x0f;
+            let hi = hi_inner.combine()?.0.0 & 0x0f;
             secret.push((hi << 4) | lo);
         }
         Ok(secret)
@@ -841,7 +841,7 @@ impl ShareElement for IdentifierGf16 {
     }
 
     fn serialize(&self) -> Self::Serialization {
-        [self.0 .0]
+        [self.0.0]
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
@@ -857,13 +857,13 @@ impl ShareElement for IdentifierGf16 {
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     fn to_vec(&self) -> Vec<u8> {
-        vec![self.0 .0]
+        vec![self.0.0]
     }
 }
 
 impl ShareIdentifier for IdentifierGf16 {
     fn inc(&mut self, increment: &Self) {
-        self.0 .0 = self.0 .0.saturating_add(increment.0 .0);
+        self.0.0 = self.0.0.saturating_add(increment.0.0);
     }
 
     fn invert(&self) -> VsssResult<Self> {
@@ -894,8 +894,8 @@ mod tests {
     fn compatibility() {
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for _ in 0..1000 {
-            let a = rng.gen::<u8>() & 0x0f;
-            let b = rng.gen::<u8>() & 0x0f;
+            let a = rng.r#gen::<u8>() & 0x0f;
+            let b = rng.r#gen::<u8>() & 0x0f;
             let y = Gf16(a);
             let z = Gf16(b);
 
@@ -903,8 +903,8 @@ mod tests {
         }
         rng = ChaCha8Rng::from_entropy();
         for _ in 0..1000 {
-            let a = rng.gen::<u8>() & 0x0f;
-            let b = rng.gen::<u8>() & 0x0f;
+            let a = rng.r#gen::<u8>() & 0x0f;
+            let b = rng.r#gen::<u8>() & 0x0f;
             let y = Gf16(a);
             let z = Gf16(b);
 
@@ -924,9 +924,9 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for _ in 0..15 {
-            let mut a = rng.gen::<u8>() & 0x0f;
+            let mut a = rng.r#gen::<u8>() & 0x0f;
             while a == 0 {
-                a = rng.gen::<u8>() & 0x0f;
+                a = rng.r#gen::<u8>() & 0x0f;
             }
             let y = Gf16(a);
 
@@ -941,9 +941,9 @@ mod tests {
         // x^8=5, x^9=10, x^10=7, x^11=14, x^12=15, x^13=13, x^14=9, x^15=1
         let powers: [u8; 15] = [2, 4, 8, 3, 6, 12, 11, 5, 10, 7, 14, 15, 13, 9, 1];
         let mut val = Gf16(1);
-        let gen = Gf16(2);
+        let generator = Gf16(2);
         for &expected in &powers {
-            val = val * gen;
+            val = val * generator;
             assert_eq!(val.0, expected);
         }
 
@@ -963,35 +963,35 @@ mod tests {
         for i in 1u8..=15 {
             let secret = IdentifierGf16(Gf16(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
-            assert_eq!(shares[0].identifier.0 .0, 1);
-            assert_eq!(shares[1].identifier.0 .0, 2);
-            assert_eq!(shares[2].identifier.0 .0, 3);
-            assert_eq!(shares[3].identifier.0 .0, 4);
-            assert_eq!(shares[4].identifier.0 .0, 5);
+            assert_eq!(shares[0].identifier.0.0, 1);
+            assert_eq!(shares[1].identifier.0.0, 2);
+            assert_eq!(shares[2].identifier.0.0, 3);
+            assert_eq!(shares[3].identifier.0.0, 4);
+            assert_eq!(shares[4].identifier.0.0, 5);
             let res = &shares[0..3].to_vec().combine();
             assert!(
                 res.is_ok(),
                 "Failed at iteration {}, secret: {}",
                 i,
-                secret.0 .0
+                secret.0.0
             );
             assert_eq!(
                 res.unwrap(),
                 secret,
                 "Failed at iteration {}, secret: {}",
                 i,
-                secret.0 .0
+                secret.0.0
             );
         }
         rng = ChaCha8Rng::from_entropy();
         for i in 1u8..=15 {
             let secret = IdentifierGf16(Gf16(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
-            assert_eq!(shares[0].identifier.0 .0, 1);
-            assert_eq!(shares[1].identifier.0 .0, 2);
-            assert_eq!(shares[2].identifier.0 .0, 3);
-            assert_eq!(shares[3].identifier.0 .0, 4);
-            assert_eq!(shares[4].identifier.0 .0, 5);
+            assert_eq!(shares[0].identifier.0.0, 1);
+            assert_eq!(shares[1].identifier.0.0, 2);
+            assert_eq!(shares[2].identifier.0.0, 3);
+            assert_eq!(shares[3].identifier.0.0, 4);
+            assert_eq!(shares[4].identifier.0.0, 5);
             let res = &shares[2..].to_vec().combine();
             assert_eq!(res.unwrap(), secret);
         }
@@ -1034,11 +1034,11 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_entropy();
         for _ in 0..25 {
-            let threshold = (rng.gen::<u8>() & 0x0f).saturating_add(1);
+            let threshold = (rng.r#gen::<u8>() & 0x0f).saturating_add(1);
 
             let mut shares = Vec::with_capacity(threshold as usize);
             for i in 0..threshold {
-                let share = vec![i; (rng.gen::<usize>() % 16) + 1];
+                let share = vec![i; (rng.r#gen::<usize>() % 16) + 1];
                 shares.push(share);
             }
             assert!(Gf16::combine_array(shares).is_err());

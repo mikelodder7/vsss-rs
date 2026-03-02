@@ -4,11 +4,11 @@ use core::{
     hash::Hash,
 };
 use num::{
+    PrimInt,
     traits::{
         ConstOne, ConstZero, FromBytes, NumAssign, NumAssignRef, NumOps, NumRef, SaturatingAdd,
         SaturatingMul, SaturatingSub, ToBytes, ToPrimitive,
     },
-    PrimInt,
 };
 
 #[cfg(feature = "zeroize")]
@@ -52,30 +52,30 @@ pub trait Primitive<const BYTES: usize>:
 }
 
 impl<
-        P: Sized
-            + PrimInt
-            + NumOps
-            + NumRef
-            + NumAssignRef
-            + NumAssign
-            + SaturatingAdd
-            + SaturatingSub
-            + SaturatingMul
-            + ConstOne
-            + ConstZero
-            + FixedArray<BYTES>
-            + ToBytes
-            + FromBytes<Bytes = <Self as ToBytes>::Bytes>
-            + ToPrimitive
-            + Copy
-            + Clone
-            + Default
-            + Debug
-            + Display
-            + 'static
-            + Hash
-            + PrimitiveZeroize,
-        const BYTES: usize,
-    > Primitive<BYTES> for P
+    P: Sized
+        + PrimInt
+        + NumOps
+        + NumRef
+        + NumAssignRef
+        + NumAssign
+        + SaturatingAdd
+        + SaturatingSub
+        + SaturatingMul
+        + ConstOne
+        + ConstZero
+        + FixedArray<BYTES>
+        + ToBytes
+        + FromBytes<Bytes = <Self as ToBytes>::Bytes>
+        + ToPrimitive
+        + Copy
+        + Clone
+        + Default
+        + Debug
+        + Display
+        + 'static
+        + Hash
+        + PrimitiveZeroize,
+    const BYTES: usize,
+> Primitive<BYTES> for P
 {
 }

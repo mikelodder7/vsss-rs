@@ -4,9 +4,9 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
+use num::CheckedDiv;
 use num::bigint::BigUint;
 use num::traits::{One, Zero};
-use num::CheckedDiv;
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
 

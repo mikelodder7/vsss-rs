@@ -34,7 +34,7 @@ fn key_tests() {
 
     let mut osrng = rand::rngs::OsRng::default();
     let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
-        &osrng.gen::<[u8; 32]>(),
+        &osrng.r#gen::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
     let sk = IdentifierPrimeField(sc);
@@ -54,7 +54,7 @@ fn pedersen_verifier_serde_test() {
 
     let mut osrng = rand::rngs::OsRng::default();
     let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
-        &osrng.gen::<[u8; 32]>(),
+        &osrng.r#gen::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
     let sk = IdentifierPrimeField(sc);

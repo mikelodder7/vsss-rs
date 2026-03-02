@@ -192,12 +192,12 @@ where
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
         uint5::IdentifierUint::<LIMBS>::deserialize(serialized)
-            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
+            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0.0)))
     }
 
     fn from_slice(vec: &[u8]) -> VsssResult<Self> {
         uint5::IdentifierUint::<LIMBS>::from_slice(vec)
-            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0 .0)))
+            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0.0)))
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]

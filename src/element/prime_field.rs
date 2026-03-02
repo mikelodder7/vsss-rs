@@ -8,11 +8,11 @@ use core::{
 };
 #[cfg(feature = "bigint")]
 use elliptic_curve::{
-    bigint::{self, modular::constant_mod::ResidueParams, ArrayEncoding},
+    bigint::{self, ArrayEncoding, modular::constant_mod::ResidueParams},
     ops::Reduce,
 };
 
-use elliptic_curve::{scalar::IsHigh, Field, PrimeField};
+use elliptic_curve::{Field, PrimeField, scalar::IsHigh};
 
 /// A share value represented as a [`PrimeField`].
 pub type ValuePrimeField<F> = IdentifierPrimeField<F>;
@@ -127,18 +127,17 @@ where
 {
     fn from(value: &uint5::IdentifierUint<LIMBS>) -> Self {
         if LIMBS * 8 != F::Repr::default().as_ref().len() {
-            panic!("cannot convert from IdentifierUint to IdentifierPrimeField with different limb size");
+            panic!(
+                "cannot convert from IdentifierUint to IdentifierPrimeField with different limb size"
+            );
         }
-        Self(F::reduce(value.0 .0))
+        Self(F::reduce(value.0.0))
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<
-        F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
-        MOD: ResidueParams<LIMBS>,
-        const LIMBS: usize,
-    > From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+    From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
 {
@@ -183,11 +182,8 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-        F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
-        MOD: ResidueParams<LIMBS>,
-        const LIMBS: usize,
-    > Mul<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
+    Mul<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
 {
@@ -207,7 +203,9 @@ where
 {
     fn from(value: &uint::IdentifierUint<LIMBS>) -> Self {
         if LIMBS * 8 != F::Repr::default().as_ref().len() {
-            panic!("cannot convert from IdentifierUint to IdentifierPrimeField with different limb size");
+            panic!(
+                "cannot convert from IdentifierUint to IdentifierPrimeField with different limb size"
+            );
         }
         Self(F::reduce(bigint::Uint::from_words(value.0.to_words())))
     }
@@ -229,10 +227,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > From<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+    F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> From<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
 {
@@ -244,10 +242,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+    F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
 {

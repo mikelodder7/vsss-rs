@@ -44,10 +44,12 @@ pub fn combine_single<G: Group + GroupEncoding + Default>() {
         .iter()
         .zip(p_res.blinder_shares[..3].iter())
     {
-        assert!(p_res
-            .pedersen_verifier_set
-            .verify_share_and_blinder(s, b)
-            .is_ok());
+        assert!(
+            p_res
+                .pedersen_verifier_set
+                .verify_share_and_blinder(s, b)
+                .is_ok()
+        );
     }
     let res = (&shares[..2]).combine();
     assert!(res.is_ok());
@@ -90,15 +92,19 @@ pub fn combine_single<G: Group + GroupEncoding + Default>() {
         .iter()
         .zip(p_res.blinder_shares[..3].iter())
     {
-        assert!(p_res
-            .pedersen_verifier_set
-            .verify_share_and_blinder(s, b)
-            .is_ok());
+        assert!(
+            p_res
+                .pedersen_verifier_set
+                .verify_share_and_blinder(s, b)
+                .is_ok()
+        );
     }
-    assert!(p_res
-        .pedersen_verifier_set
-        .verify_share_and_blinder(&bad_share, &bad_share)
-        .is_err());
+    assert!(
+        p_res
+            .pedersen_verifier_set
+            .verify_share_and_blinder(&bad_share, &bad_share)
+            .is_err()
+    );
 
     let res = (&shares[..2]).combine();
     assert!(res.is_ok());
@@ -137,10 +143,12 @@ pub fn combine_all<G: Group + GroupEncoding + Default>() {
         assert!(ped_res.feldman_verifier_set().verify_share(s).is_err());
 
         assert!(verifier.verify_share(&feldman_shares[i]).is_ok());
-        assert!(ped_res
-            .pedersen_verifier_set()
-            .verify_share_and_blinder(&ped_res.secret_shares()[i], &ped_res.blinder_shares()[i])
-            .is_ok());
+        assert!(
+            ped_res
+                .pedersen_verifier_set()
+                .verify_share_and_blinder(&ped_res.secret_shares()[i], &ped_res.blinder_shares()[i])
+                .is_ok()
+        );
     }
 
     // There is 5*4*3 possible choices

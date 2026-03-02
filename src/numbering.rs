@@ -7,8 +7,8 @@ use core::{
 use rand_core::{CryptoRng, RngCore};
 use sha3::digest::ExtendableOutput;
 use sha3::{
-    digest::{Update, XofReader},
     Shake256,
+    digest::{Update, XofReader},
 };
 
 use crate::{Error, ShareIdentifier, VsssResult};
@@ -248,9 +248,9 @@ impl<'a, I: ShareIdentifier> Iterator for ParticipantIdGeneratorState<'a, I> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Sequential(gen) => gen.next(),
-            Self::Random(gen) => gen.next(),
-            Self::List(gen) => gen.next(),
+            Self::Sequential(iter) => iter.next(),
+            Self::Random(iter) => iter.next(),
+            Self::List(iter) => iter.next(),
         }
     }
 }
@@ -376,13 +376,13 @@ mod tests {
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
     fn test_sequential_participant_number_generator() {
-        let gen = SequentialParticipantNumberGenerator::<IdentifierPrimeField<Scalar>> {
+        let generator = SequentialParticipantNumberGenerator::<IdentifierPrimeField<Scalar>> {
             start: IdentifierPrimeField::<Scalar>::ONE,
             increment: IdentifierPrimeField::<Scalar>::ONE,
             index: 0,
             count: 5,
         };
-        let list: Vec<_> = gen.collect();
+        let list: Vec<_> = generator.collect();
         assert_eq!(list.len(), 5);
         assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(1u64)));
         assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(2u64)));
@@ -397,13 +397,13 @@ mod tests {
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([1u8; 32]);
         let mut dst = [0u8; 32];
         rng.fill_bytes(&mut dst);
-        let gen = RandomParticipantNumberGenerator::<IdentifierPrimeField<Scalar>> {
+        let generator = RandomParticipantNumberGenerator::<IdentifierPrimeField<Scalar>> {
             dst,
             index: 0,
             count: 5,
             _markers: PhantomData,
         };
-        let list: Vec<_> = gen.collect();
+        let list: Vec<_> = generator.collect();
         assert_eq!(list.len(), 5);
         let mut repr = FieldBytes::default();
         for (i, s) in [
@@ -434,11 +434,11 @@ mod tests {
             IdentifierPrimeField::from(Scalar::from(40u64)),
             IdentifierPrimeField::from(Scalar::from(50u64)),
         ];
-        let gen = ListParticipantNumberGenerator {
+        let generator = ListParticipantNumberGenerator {
             list: &list,
             index: 0,
         };
-        let list: Vec<_> = gen.collect();
+        let list: Vec<_> = generator.collect();
         assert_eq!(list.len(), 5);
         assert_eq!(list[0], IdentifierPrimeField::from(Scalar::from(10u64)));
         assert_eq!(list[1], IdentifierPrimeField::from(Scalar::from(20u64)));

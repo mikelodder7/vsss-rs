@@ -24,7 +24,7 @@ use curve25519_dalek::{
 #[cfg(feature = "bigint")]
 use elliptic_curve::bigint::{Encoding, U256, U512};
 use elliptic_curve::{
-    ff::{helpers, Field, FieldBits, FromUniformBytes, PrimeField, PrimeFieldBits},
+    ff::{Field, FieldBits, FromUniformBytes, PrimeField, PrimeFieldBits, helpers},
     group::{Group, GroupEncoding},
     ops::Invert,
 };
@@ -33,7 +33,7 @@ use elliptic_curve::{ops::Reduce, scalar::FromUintUnchecked};
 
 use rand_core::RngCore;
 #[cfg(feature = "serde")]
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a ristretto25519 point
@@ -1129,7 +1129,7 @@ fn deserialize_arr<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error
 fn ristretto_to_edwards() {
     use rand::Rng;
 
-    let sk = Scalar::from_bytes_mod_order(rand_core::OsRng.gen::<[u8; 32]>());
+    let sk = Scalar::from_bytes_mod_order(rand_core::OsRng.r#gen::<[u8; 32]>());
     let pk = RISTRETTO_BASEPOINT_POINT * sk;
     let ek = WrappedEdwards::from(WrappedRistretto(pk));
     assert!(ek.0.is_torsion_free());

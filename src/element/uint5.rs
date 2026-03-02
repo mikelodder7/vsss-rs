@@ -123,7 +123,7 @@ where
     }
 
     fn serialize(&self) -> Self::Serialization {
-        <Uint<LIMBS> as Encoding>::to_be_bytes(&self.0 .0)
+        <Uint<LIMBS> as Encoding>::to_be_bytes(&self.0.0)
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
@@ -174,7 +174,7 @@ where
 
     /// Convert to a fixed-size byte array.
     pub fn to_fixed_array(self) -> <Uint<LIMBS> as Encoding>::Repr {
-        <Uint<LIMBS> as Encoding>::to_be_bytes(&self.0 .0)
+        <Uint<LIMBS> as Encoding>::to_be_bytes(&self.0.0)
     }
 
     /// Convert from a generic byte array.
@@ -186,6 +186,6 @@ where
 
     /// Convert to a generic byte array.
     pub fn to_generic_array(self) -> ByteArray<Uint<LIMBS>> {
-        <Uint<LIMBS> as ArrayEncoding>::to_be_byte_array(&self.0 .0)
+        <Uint<LIMBS> as ArrayEncoding>::to_be_byte_array(&self.0.0)
     }
 }

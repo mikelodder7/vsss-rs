@@ -11,7 +11,7 @@ use crate::feldman::GenericArrayFeldmanVsss;
 #[cfg(any(feature = "alloc", feature = "std"))]
 use crate::pedersen::PedersenOptions;
 use bls12_381_plus::{
-    multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
+    G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar, multi_miller_loop,
 };
 use elliptic_curve::{
     ff::Field,
@@ -98,10 +98,12 @@ fn simple_std() {
         .iter()
         .zip(ped_res.blinder_shares().iter())
     {
-        assert!(ped_res
-            .pedersen_verifier_set()
-            .verify_share_and_blinder(s, bs)
-            .is_ok());
+        assert!(
+            ped_res
+                .pedersen_verifier_set()
+                .verify_share_and_blinder(s, bs)
+                .is_ok()
+        );
     }
 }
 
@@ -158,9 +160,9 @@ fn group_combine() {
         let s2 = h2 * s.value().0;
 
         sig_shares1[i].0 = *s.identifier();
-        sig_shares1[i].1 .0 = s1;
+        sig_shares1[i].1.0 = s1;
         sig_shares2[i].0 = *s.identifier();
-        sig_shares2[i].1 .0 = s2;
+        sig_shares2[i].1.0 = s2;
     }
 
     let res2 = sig_shares2.combine();

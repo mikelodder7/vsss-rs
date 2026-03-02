@@ -7,7 +7,7 @@ use core::{
 };
 #[cfg(feature = "bigint")]
 use elliptic_curve::{
-    bigint::{self, modular::constant_mod::ResidueParams, ArrayEncoding},
+    bigint::{self, ArrayEncoding, modular::constant_mod::ResidueParams},
     ops::Reduce,
 };
 use rand_core::{CryptoRng, RngCore};
@@ -445,10 +445,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        G: Group + GroupEncoding + Default,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+    G: Group + GroupEncoding + Default,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
@@ -463,10 +463,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        G: Group + GroupEncoding + Default,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+    G: Group + GroupEncoding + Default,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
@@ -481,10 +481,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        G: Group + GroupEncoding + Default,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
+    G: Group + GroupEncoding + Default,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
@@ -499,10 +499,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        G: Group + GroupEncoding + Default,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
+    G: Group + GroupEncoding + Default,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
@@ -517,10 +517,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        G: Group + GroupEncoding + Default,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > MulAssign<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+    G: Group + GroupEncoding + Default,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> MulAssign<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
@@ -533,10 +533,10 @@ where
 
 #[cfg(feature = "bigint")]
 impl<
-        G: Group + GroupEncoding + Default,
-        MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-        const LIMBS: usize,
-    > MulAssign<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+    G: Group + GroupEncoding + Default,
+    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
+    const LIMBS: usize,
+> MulAssign<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
     crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,

@@ -138,7 +138,7 @@
 //! type Ed25519Share = DefaultShare<IdentifierPrimeField<WrappedScalar>, IdentifierPrimeField<WrappedScalar>>;
 //!
 //! let mut osrng = rand::rngs::OsRng::default();
-//! let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
+//! let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.r#gen::<[u8; 32]>());
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SigningKey::from_bytes(&sc.to_bytes());
 //! let secret = IdentifierPrimeField(WrappedScalar(sc));
@@ -243,8 +243,8 @@ pub mod curve25519;
 #[cfg(feature = "curve25519")]
 pub use curve25519_dalek;
 pub use elliptic_curve;
-use elliptic_curve::group::GroupEncoding;
 use elliptic_curve::Group;
+use elliptic_curve::group::GroupEncoding;
 
 pub use subtle;
 
