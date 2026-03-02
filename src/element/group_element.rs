@@ -1,6 +1,6 @@
-use crate::*;
 #[cfg(feature = "bigint")]
 use super::{uint, uint5};
+use crate::*;
 use core::{
     fmt::{self, Display, Formatter},
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
@@ -345,8 +345,8 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&uint5::IdentifierUint<LIMBS>>
-    for ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, const LIMBS: usize>
+    MulAssign<&uint5::IdentifierUint<LIMBS>> for ValueGroup<G>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,

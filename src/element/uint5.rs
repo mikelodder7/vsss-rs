@@ -1,6 +1,6 @@
 //! Share element and identifier implementations using `Uint<LIMBS>` from
 //! the `elliptic-curve` or `crypto-bigint` version 5 crate.
-//! 
+//!
 use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},

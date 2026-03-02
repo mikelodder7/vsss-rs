@@ -23,7 +23,7 @@ use core::{
 };
 use crypto_bigint::{
     modular::{ConstMontyForm, ConstMontyParams, MontyForm, MontyParams, SafeGcdInverter},
-    Odd, PrecomputeInverter, RandomMod, Encoding, Uint,
+    Encoding, Odd, PrecomputeInverter, RandomMod, Uint,
 };
 use rand_core::{CryptoRng, RngCore};
 use subtle::Choice;
@@ -63,7 +63,8 @@ where
     }
 }
 
-impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize> Hash for IdentifierConstMontyResidue<MOD, LIMBS>
+impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize> Hash
+    for IdentifierConstMontyResidue<MOD, LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
@@ -154,8 +155,8 @@ where
     }
 }
 
-impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize> From<&IdentifierConstMontyResidue<MOD, LIMBS>>
-    for IdentifierConstMontyResidue<MOD, LIMBS>
+impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    From<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierConstMontyResidue<MOD, LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
@@ -244,17 +245,17 @@ impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize, const UNSAT_LIMBS: usize>
     for IdentifierConstMontyResidue<MOD, LIMBS>
 where
     Uint<LIMBS>: Encoding,
-    Odd<Uint<LIMBS>>: PrecomputeInverter<
-        Inverter = SafeGcdInverter<LIMBS, UNSAT_LIMBS>,
-        Output = Uint<LIMBS>,
-    >,
+    Odd<Uint<LIMBS>>:
+        PrecomputeInverter<Inverter = SafeGcdInverter<LIMBS, UNSAT_LIMBS>, Output = Uint<LIMBS>>,
 {
     fn inc(&mut self, increment: &Self) {
         self.0 += increment.0;
     }
 
     fn invert(&self) -> VsssResult<Self> {
-        Option::from(self.0.inv()).map(Self).ok_or(Error::InvalidShareElement)
+        Option::from(self.0.inv())
+            .map(Self)
+            .ok_or(Error::InvalidShareElement)
     }
 }
 
@@ -308,7 +309,10 @@ where
     }
 
     /// Generate a random residue mod the modulus in `params`.
-    pub fn random_with_params(mut rng: impl RngCore + CryptoRng, params: MontyParams<LIMBS>) -> Self {
+    pub fn random_with_params(
+        mut rng: impl RngCore + CryptoRng,
+        params: MontyParams<LIMBS>,
+    ) -> Self {
         let raw = Uint::<LIMBS>::random_mod(&mut rng, params.modulus().as_nz_ref());
         Self(MontyForm::<LIMBS>::new(&raw, params))
     }

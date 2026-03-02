@@ -3,26 +3,26 @@
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod biguint;
 mod group_element;
+#[cfg(feature = "bigint")]
+mod monty_residue;
 mod prime_field;
 #[cfg(feature = "primitive")]
 mod primitive;
 #[cfg(feature = "bigint")]
-mod monty_residue;
-#[cfg(feature = "bigint")]
 mod residue;
 #[cfg(feature = "bigint")]
-pub mod uint5;
-#[cfg(feature = "bigint")]
 pub mod uint;
+#[cfg(feature = "bigint")]
+pub mod uint5;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use biguint::*;
 pub use group_element::*;
+#[cfg(feature = "bigint")]
+pub use monty_residue::*;
 pub use prime_field::*;
 #[cfg(feature = "primitive")]
 pub use primitive::*;
-#[cfg(feature = "bigint")]
-pub use monty_residue::*;
 #[cfg(feature = "bigint")]
 pub use residue::*;
 

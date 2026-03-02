@@ -120,8 +120,8 @@ impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> From<&IdentifierPri
 }
 
 #[cfg(feature = "bigint")]
-impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize> From<&uint5::IdentifierUint<LIMBS>>
-    for IdentifierPrimeField<F>
+impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize>
+    From<&uint5::IdentifierUint<LIMBS>> for IdentifierPrimeField<F>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
 {
@@ -134,8 +134,11 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+impl<
+        F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
+        MOD: ResidueParams<LIMBS>,
+        const LIMBS: usize,
+    > From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
 {
@@ -166,8 +169,8 @@ impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> Mul<&IdentifierPrim
 }
 
 #[cfg(feature = "bigint")]
-impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize> Mul<&uint5::IdentifierUint<LIMBS>>
-    for IdentifierPrimeField<F>
+impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize>
+    Mul<&uint5::IdentifierUint<LIMBS>> for IdentifierPrimeField<F>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
 {
@@ -180,8 +183,11 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
-    Mul<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+impl<
+        F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
+        MOD: ResidueParams<LIMBS>,
+        const LIMBS: usize,
+    > Mul<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
     bigint::Uint<LIMBS>: ArrayEncoding,
 {

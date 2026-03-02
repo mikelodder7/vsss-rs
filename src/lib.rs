@@ -195,6 +195,9 @@ pub mod feldman;
 mod fixed_array;
 #[allow(clippy::suspicious_arithmetic_impl)]
 #[allow(clippy::suspicious_op_assign_impl)]
+mod gf16;
+#[allow(clippy::suspicious_arithmetic_impl)]
+#[allow(clippy::suspicious_op_assign_impl)]
 mod gf256;
 mod numbering;
 pub mod pedersen;
@@ -215,6 +218,7 @@ pub use element::*;
 pub use error::*;
 pub use feldman::Feldman;
 pub use fixed_array::*;
+pub use gf16::*;
 pub use gf256::*;
 pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
