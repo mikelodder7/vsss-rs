@@ -7,7 +7,7 @@
 //! 2. Ensure code access patterns are independent of secret data
 //! 3. Ensure data access patterns are independent of secret data
 
-use crate::util::CtIsNotZero;
+use crate::util::{CtIsNotZero, field_bounded_add, uniform_nonzero_u8};
 use crate::*;
 use core::borrow::Borrow;
 use core::{
@@ -409,8 +409,11 @@ impl Field for Gf256 {
     const ONE: Self = Self(1);
 
     fn random(mut rng: impl RngCore) -> Self {
-        let b = rng.next_u32() as u8;
-        Self((b & 0xFE) + 1)
+        // Uniform over the full field {0, 1, ..., 255}. The prior
+        // `(b & 0xFE) + 1` forced the low bit, producing only odd bytes
+        // and leaking entropy out of polynomial coefficients used by
+        // Shamir secret sharing (audit finding #1).
+        Self(rng.next_u32() as u8)
     }
 
     fn square(&self) -> Self {
@@ -759,8 +762,10 @@ impl ShareElement for IdentifierGf256 {
 
     type Inner = Gf256;
 
-    fn random(rng: impl RngCore + CryptoRng) -> Self {
-        Self(Gf256::random(rng))
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        // x-coordinate of a Shamir evaluation point; zero is reserved
+        // for the secret (f(0)), so MUST be non-zero. Uniform over 1..=255.
+        Self(Gf256(uniform_nonzero_u8(rng.next_u32(), 255)))
     }
 
     fn zero() -> Self {
@@ -798,13 +803,23 @@ impl ShareElement for IdentifierGf256 {
 
 impl ShareIdentifier for IdentifierGf256 {
     fn inc(&mut self, increment: &Self) {
-        self.0.0 = self.0.0.saturating_add(increment.0.0);
+        // Zero-on-overflow (audit finding #3). Prior `saturating_add`
+        // pinned the cursor at 255, emitting duplicate x-values. The
+        // `is_zero()` halt in `ParticipantIdGeneratorCollection::iter`
+        // ends the sequential stream cleanly at field exhaustion.
+        self.0.0 = field_bounded_add(self.0.0, increment.0.0, 256);
     }
 
     fn invert(&self) -> VsssResult<Self> {
         Option::from(self.0.invert())
             .map(Self)
             .ok_or(Error::InvalidShareElement)
+    }
+
+    fn random_coefficient(rng: impl RngCore + CryptoRng) -> Self {
+        // Bypass the "+1" non-zero x-sampler in `ShareElement::random`
+        // and draw directly from `Gf256` — uniform over 0..=255.
+        Self(Gf256::random(rng))
     }
 }
 
@@ -821,8 +836,10 @@ mod tests {
     use super::gf256_cmp;
     use super::*;
     use crate::shamir;
+    use crate::{ParticipantIdGeneratorCollection, ParticipantIdGeneratorType};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
+    use std::collections::HashSet;
     use std::prelude::v1::Vec;
 
     #[test]
@@ -943,6 +960,218 @@ mod tests {
                 shares.push(share);
             }
             assert!(Gf256::combine_array(shares).is_err());
+        }
+    }
+
+    /// Audit finding #1 — regression test: `Gf256::random` must be
+    /// uniform over the entire field, including even values. The
+    /// prior `(b & 0xFE) + 1` only produced odd bytes.
+    #[test]
+    fn poc1_biased_gf256() {
+        // 512 draws comfortably exceeds the ~30 needed to see even/odd/zero
+        // each with overwhelming probability under a uniform distribution.
+        let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
+        let mut seen_even = false;
+        let mut seen_odd = false;
+        let mut seen_zero = false;
+        for _ in 0..512 {
+            let x = <Gf256 as Field>::random(&mut rng).0;
+            if x % 2 == 0 {
+                seen_even = true;
+            } else {
+                seen_odd = true;
+            }
+            if x == 0 {
+                seen_zero = true;
+            }
+        }
+        assert!(
+            seen_even,
+            "Gf256::random produced no even values — bias regression"
+        );
+        assert!(seen_odd, "Gf256::random produced no odd values");
+        assert!(
+            seen_zero,
+            "Gf256::random produced no zero values over 10k draws — field coverage regression"
+        );
+    }
+
+    /// Audit finding #1 — companion: the x-identifier sampler must
+    /// never yield zero (reserved for the secret), across a large
+    /// sample.
+    #[test]
+    fn poc1_identifier_gf256_nonzero() {
+        // 2048 draws — large enough that a biased sampler producing zero
+        // with any meaningful probability would be caught, small enough
+        // to keep the test cheap.
+        let mut rng = ChaCha8Rng::from_seed([0xA5u8; 32]);
+        for _ in 0..2048 {
+            let id = IdentifierGf256::random(&mut rng);
+            assert_ne!(id.0.0, 0, "IdentifierGf256::random yielded zero");
+        }
+    }
+
+    /// Audit finding #2 — regression test: polynomial coefficients
+    /// must be sampled uniformly over the entire field, including
+    /// zero. The prior fill loop rejected zeros, biasing the
+    /// distribution and enabling a re-sharing attack on small fields.
+    #[test]
+    fn poc2_reject_zero_bias_reshare_attack() {
+        let mut rng = ChaCha8Rng::from_seed([0x42u8; 32]);
+        let secret = IdentifierGf256(Gf256(7));
+        // 200 splits of a degree-10 polynomial over GF(256) with 15
+        // evaluation points yields ~1 - (255/256)^(200*15) ≈ 0.99998
+        // probability of observing at least one zero share value
+        // under uniform coefficients. With the ChaCha seed below the
+        // outcome is of course deterministic; the count is sized so
+        // that any seed has high safety margin.
+        let threshold = 11;
+        let limit = 15;
+        let runs = 200;
+        let mut seen_zero_share_value = false;
+        for _ in 0..runs {
+            let shares =
+                shamir::split_secret::<GfShare>(threshold, limit, &secret, &mut rng).unwrap();
+            let res = shares[0..threshold].to_vec().combine();
+            assert!(res.is_ok(), "combine failed — zero-coefficient path broken");
+            if shares.iter().any(|s| s.value.0.0 == 0) {
+                seen_zero_share_value = true;
+            }
+        }
+        assert!(
+            seen_zero_share_value,
+            "No zero share value over {runs} splits × {limit} shares — coefficient distribution still biased away from zero",
+        );
+    }
+
+    /// Audit finding #3 — regression test: sequential x-identifier
+    /// generation must not emit duplicates past field exhaustion.
+    /// The prior `saturating_add` pinned the cursor at u8::MAX so
+    /// every subsequent id was 255.
+    #[test]
+    fn poc3_gf256_inc_saturating_add() {
+        // Start very close to the field boundary so the fix can be
+        // observed: old code would emit [253, 254, 255, 255, 255];
+        // fixed code emits [253, 254, 255] then halts.
+        let start = IdentifierGf256(Gf256(253));
+        let inc = IdentifierGf256(Gf256(1));
+        let seq = ParticipantIdGeneratorType::Sequential {
+            start,
+            increment: inc,
+            count: 10,
+        };
+        let generators = [seq];
+        let collection = ParticipantIdGeneratorCollection::from(&generators[..]);
+        let ids: Vec<_> = collection.iter().collect();
+
+        // All emitted ids must be unique.
+        let mut seen = HashSet::new();
+        for id in &ids {
+            assert!(
+                seen.insert(id.0.0),
+                "duplicate identifier emitted: {}",
+                id.0.0
+            );
+        }
+        // And the stream must have halted rather than silently returning
+        // saturated duplicates.
+        assert!(
+            ids.len() <= 3,
+            "generator emitted {} ids past field boundary — saturating_add regression",
+            ids.len()
+        );
+    }
+
+    /// Direct observation of audit finding #2: `Polynomial::fill` must
+    /// produce zero coefficients across many runs. Probes the polynomial
+    /// state directly rather than inferring via share values.
+    #[test]
+    fn zero_coefficients_actually_occur() {
+        use crate::Polynomial;
+        let mut rng = ChaCha8Rng::from_seed([0x7Fu8; 32]);
+        let intercept = IdentifierGf256(Gf256(0xA5));
+        let threshold = 10usize;
+        let runs = 200;
+        let mut zero_coef_count = 0usize;
+        for _ in 0..runs {
+            let mut poly: Vec<GfShare> = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+            poly.fill(&intercept, &mut rng, threshold).unwrap();
+            // Slots 1..threshold are random coefficients; slot 0 is the intercept.
+            for coef in &poly[1..threshold] {
+                if coef.identifier.0.0 == 0 {
+                    zero_coef_count += 1;
+                }
+            }
+        }
+        // 200 runs × 9 coefficients = 1800 draws; under uniform sampling
+        // expected zeros ≈ 1800/256 ≈ 7. Prior biased fill would produce 0.
+        assert!(
+            zero_coef_count > 0,
+            "No zero coefficient across {runs} fills × {} slots — coefficient sampling still biased against zero",
+            threshold - 1,
+        );
+    }
+
+    /// A secret of zero must split and reconstruct correctly. The
+    /// existing `shamir` test only iterates secrets 1..=255, so this
+    /// covers the f(0) = 0 edge case.
+    #[test]
+    fn zero_secret_round_trip() {
+        let mut rng = ChaCha8Rng::from_seed([0xC3u8; 32]);
+        let zero_secret = IdentifierGf256(Gf256(0));
+        let shares = shamir::split_secret::<GfShare>(3, 5, &zero_secret, &mut rng).unwrap();
+        let recovered = shares[..3].to_vec().combine().unwrap();
+        assert_eq!(recovered, zero_secret, "zero-secret round-trip failed");
+        // Also combine from a different threshold subset.
+        let recovered2 = shares[2..].to_vec().combine().unwrap();
+        assert_eq!(recovered2, zero_secret);
+    }
+
+    /// Shares whose value byte is zero (the polynomial happened to
+    /// evaluate to zero at that x) must still round-trip. With a
+    /// multi-byte secret and many reps, zero-valued share bytes occur
+    /// frequently; combine must accept them.
+    #[test]
+    fn zero_valued_shares_round_trip() {
+        let mut rng = ChaCha8Rng::from_seed([0x5Au8; 32]);
+        let secret = b"The quick brown fox jumps over the lazy dog";
+        let runs = 50;
+        let mut saw_zero_share_byte = false;
+        for _ in 0..runs {
+            let shares = Gf256::split_array(5, 8, secret, &mut rng).unwrap();
+            // Inspect share bytes (index 0 is the identifier; 1.. are values).
+            for s in &shares {
+                if s[1..].iter().any(|&b| b == 0) {
+                    saw_zero_share_byte = true;
+                }
+            }
+            let recovered = Gf256::combine_array(&shares[..5]).unwrap();
+            assert_eq!(
+                &recovered[..],
+                secret,
+                "combine failed with zero-valued shares in set"
+            );
+        }
+        assert!(
+            saw_zero_share_byte,
+            "No zero byte appeared in any share value across {runs} runs — statistical regression",
+        );
+    }
+
+    /// Every share identifier emitted by `split_secret` must be
+    /// non-zero (the zero element is reserved for the secret f(0)).
+    #[test]
+    fn no_share_identifier_is_zero() {
+        let mut rng = ChaCha8Rng::from_seed([0xDEu8; 32]);
+        for _ in 0..100 {
+            let secret = IdentifierGf256(Gf256(rng.r#gen::<u8>()));
+            let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
+            for s in &shares {
+                assert_ne!(
+                    s.identifier.0.0, 0,
+                    "zero identifier produced by split_secret",
+                );
+            }
         }
     }
 }

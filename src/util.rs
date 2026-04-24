@@ -3,6 +3,36 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
+/// Uniform non-zero sample in `1..=modulus` from a 32-bit RNG word.
+///
+/// Used by small-field share-identifier samplers (GF(256) with
+/// `modulus = 255`, GF(16) with `modulus = 15`) where the zero element
+/// is reserved for the secret and must never be produced. Modulo bias
+/// is `(2^32 mod modulus) / 2^32` — at most ~2^-32, cryptographically
+/// negligible for public identifiers.
+#[inline]
+pub(crate) fn uniform_nonzero_u8(bits: u32, modulus: u32) -> u8 {
+    (bits % modulus + 1) as u8
+}
+
+/// Branch-free field-bounded add: returns `a + b` if the sum is in
+/// `0..field_size`, otherwise `0`.
+///
+/// The zero return is a halt marker: `ParticipantIdGeneratorCollection::iter`
+/// detects a zero identifier via `is_zero()` and ends the current
+/// generator. Used by small-field `ShareIdentifier::inc` implementations
+/// to terminate the sequential x-identifier stream at field exhaustion
+/// instead of silently emitting duplicates (audit finding #3).
+///
+/// `field_size` is `u16` to cover the full `1..=256` range needed for
+/// GF(256); the GF(16) caller passes `16`.
+#[inline]
+pub(crate) fn field_bounded_add(a: u8, b: u8, field_size: u16) -> u8 {
+    let sum = a as u16 + b as u16;
+    let in_range = ((sum < field_size) as u8).wrapping_neg();
+    (sum as u8) & in_range
+}
+
 /// A trait for constant time indicating if a value is zero.
 pub trait CtIsZero {
     /// Returns a `subtle::Choice` indicating if the value is zero.

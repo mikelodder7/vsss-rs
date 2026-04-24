@@ -26,13 +26,17 @@ pub trait Polynomial<S: Share> {
         // Ensure intercept is set
         *repr[0].value_mut() = intercept.clone();
 
-        // Assign random coefficients to polynomial
-        // Start at 1 since 0 is the intercept and not chosen at random
+        // Assign random coefficients. Slot 0 is the intercept (secret).
+        //
+        // Coefficients must be drawn uniformly over the entire field
+        // including zero (audit finding #2) — rejecting zeros biases
+        // the distribution and is exploitable in re-sharing scenarios.
+        // Small-field identifiers (GF(256), GF(16)) override
+        // `random_coefficient` because their `random` is the non-zero
+        // x-sampler; prime fields use the default impl which is already
+        // uniform.
         for i in repr.iter_mut().take(length).skip(1) {
-            *i.identifier_mut() = S::Identifier::random(&mut rng);
-            while i.identifier().is_zero().into() {
-                *i.identifier_mut() = S::Identifier::random(&mut rng);
-            }
+            *i.identifier_mut() = S::Identifier::random_coefficient(&mut rng);
         }
         Ok(())
     }

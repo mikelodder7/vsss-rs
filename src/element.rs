@@ -83,6 +83,23 @@ pub trait ShareIdentifier: ShareElement<Inner: ShareIdentifierInner> {
 
     /// Invert the share identifier.
     fn invert(&self) -> VsssResult<Self>;
+
+    /// Draw a polynomial coefficient uniformly at random over the
+    /// entire field, *including zero*.
+    ///
+    /// This exists because `ShareElement::random` is overloaded for
+    /// small-field identifiers (GF(256), GF(16)) to return only
+    /// non-zero values — non-zero is required for x-coordinates
+    /// (f(0) = secret) but biases polynomial coefficients away from
+    /// zero, which is exploitable in re-sharing scenarios.
+    ///
+    /// The default implementation delegates to `ShareElement::random`,
+    /// which for prime fields is already uniform over the whole field.
+    /// Small fields where `random` is constrained to non-zero must
+    /// override this to return a uniform sample over the full field.
+    fn random_coefficient(rng: impl RngCore + CryptoRng) -> Self {
+        <Self as ShareElement>::random(rng)
+    }
 }
 
 /// Objects that represent the ability to verify shamir shares

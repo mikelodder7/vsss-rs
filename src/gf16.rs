@@ -7,7 +7,7 @@
 //! 2. Ensure code access patterns are independent of secret data
 //! 3. Ensure data access patterns are independent of secret data
 
-use crate::util::CtIsNotZero;
+use crate::util::{CtIsNotZero, field_bounded_add, uniform_nonzero_u8};
 use crate::*;
 use core::borrow::Borrow;
 use core::{
@@ -411,10 +411,11 @@ impl Field for Gf16 {
     const ONE: Self = Self(1);
 
     fn random(mut rng: impl RngCore) -> Self {
-        let b = rng.next_u32() as u8;
-        // (b & 0x0E) clears bit 0 and the upper nibble, giving even values 0,2,4,...,14.
-        // Adding 1 gives odd values 1,3,5,...,15 — always non-zero.
-        Self((b & 0x0E) + 1)
+        // Uniform over the full field {0, 1, ..., 15}. The prior
+        // `(b & 0x0E) + 1` forced the low bit and yielded only odd
+        // nibbles {1,3,...,15}; that bias leaks into polynomial
+        // coefficients used by Shamir secret sharing (audit finding #1).
+        Self(rng.next_u32() as u8 & 0x0F)
     }
 
     fn square(&self) -> Self {
@@ -824,8 +825,10 @@ impl ShareElement for IdentifierGf16 {
 
     type Inner = Gf16;
 
-    fn random(rng: impl RngCore + CryptoRng) -> Self {
-        Self(Gf16::random(rng))
+    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+        // x-coordinate of a Shamir evaluation point; zero is reserved
+        // for the secret (f(0)), so MUST be non-zero. Uniform over 1..=15.
+        Self(Gf16(uniform_nonzero_u8(rng.next_u32(), 15)))
     }
 
     fn zero() -> Self {
@@ -863,13 +866,24 @@ impl ShareElement for IdentifierGf16 {
 
 impl ShareIdentifier for IdentifierGf16 {
     fn inc(&mut self, increment: &Self) {
-        self.0.0 = self.0.0.saturating_add(increment.0.0);
+        // Zero-on-overflow keyed to the GF(16) range (audit finding #3).
+        // Prior `saturating_add` pinned at 15 (duplicates) and on larger
+        // increments saturated to 255 — outside GF(16). See
+        // `field_bounded_add` for the branch-free mask + halt-marker
+        // contract shared with `IdentifierGf256::inc`.
+        self.0.0 = field_bounded_add(self.0.0, increment.0.0, 16);
     }
 
     fn invert(&self) -> VsssResult<Self> {
         Option::from(self.0.invert())
             .map(Self)
             .ok_or(Error::InvalidShareElement)
+    }
+
+    fn random_coefficient(rng: impl RngCore + CryptoRng) -> Self {
+        // Bypass the "+1" non-zero x-sampler in `ShareElement::random`
+        // and draw directly from `Gf16` — uniform over 0..=15.
+        Self(Gf16::random(rng))
     }
 }
 
@@ -886,8 +900,10 @@ mod tests {
     use super::gf16_cmp;
     use super::*;
     use crate::shamir;
+    use crate::{ParticipantIdGeneratorCollection, ParticipantIdGeneratorType};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
+    use std::collections::HashSet;
     use std::prelude::v1::Vec;
 
     #[test]
@@ -1042,6 +1058,184 @@ mod tests {
                 shares.push(share);
             }
             assert!(Gf16::combine_array(shares).is_err());
+        }
+    }
+
+    /// Audit finding #1 (GF(16) analogue): `Gf16::random` must be
+    /// uniform over the entire field, including even nibbles. The
+    /// prior `(b & 0x0E) + 1` only produced odd values 1, 3, ..., 15.
+    #[test]
+    fn poc1_biased_gf16() {
+        // 128 draws comfortably exceeds the ~10 needed to see even and
+        // zero under a uniform distribution over 16 values.
+        let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
+        let mut seen_even = false;
+        let mut seen_zero = false;
+        for _ in 0..128 {
+            let x = <Gf16 as Field>::random(&mut rng).0;
+            assert!(x < 16, "Gf16::random out of range: {x}");
+            if x % 2 == 0 {
+                seen_even = true;
+            }
+            if x == 0 {
+                seen_zero = true;
+            }
+        }
+        assert!(
+            seen_even,
+            "Gf16::random produced no even values — bias regression"
+        );
+        assert!(
+            seen_zero,
+            "Gf16::random produced no zero values over 10k draws"
+        );
+    }
+
+    /// Audit finding #1 (GF(16) analogue): x-identifier must be
+    /// non-zero and within the field range.
+    #[test]
+    fn poc1_identifier_gf16_nonzero() {
+        // 1024 draws is sufficient to catch any biased sampler that can
+        // produce zero or out-of-range values.
+        let mut rng = ChaCha8Rng::from_seed([0xA5u8; 32]);
+        for _ in 0..1024 {
+            let id = IdentifierGf16::random(&mut rng);
+            assert_ne!(id.0.0, 0, "IdentifierGf16::random yielded zero");
+            assert!(
+                id.0.0 < 16,
+                "IdentifierGf16::random out of range: {}",
+                id.0.0
+            );
+        }
+    }
+
+    /// Audit finding #3 (GF(16) analogue): sequential identifier
+    /// generation must halt cleanly at 15 instead of saturating to
+    /// an out-of-field value or pinning at 15.
+    #[test]
+    fn poc3_gf16_inc_bounds_check() {
+        // Start near the upper boundary. Old saturating code would
+        // pin at 15 (or leak values outside GF(16) with larger
+        // increments); new code halts the stream after 15.
+        let start = IdentifierGf16(Gf16(13));
+        let inc = IdentifierGf16(Gf16(1));
+        let seq = ParticipantIdGeneratorType::Sequential {
+            start,
+            increment: inc,
+            count: 10,
+        };
+        let generators = [seq];
+        let collection = ParticipantIdGeneratorCollection::from(&generators[..]);
+        let ids: Vec<_> = collection.iter().collect();
+
+        let mut seen = HashSet::new();
+        for id in &ids {
+            assert!(
+                seen.insert(id.0.0),
+                "duplicate identifier emitted: {}",
+                id.0.0
+            );
+            assert!(
+                id.0.0 > 0 && id.0.0 < 16,
+                "id out of GF(16) range: {}",
+                id.0.0
+            );
+        }
+        assert!(
+            ids.len() <= 3,
+            "generator emitted {} ids past GF(16) boundary — saturating_add regression",
+            ids.len()
+        );
+    }
+
+    /// Direct observation of audit finding #2 over GF(16): polynomial
+    /// `fill` must produce zero coefficients. With only 16 field
+    /// elements, P(zero)=1/16 per coefficient — zeros should appear
+    /// frequently across runs.
+    #[test]
+    fn zero_coefficients_actually_occur() {
+        use crate::Polynomial;
+        let mut rng = ChaCha8Rng::from_seed([0x7Fu8; 32]);
+        let intercept = IdentifierGf16(Gf16(0x05));
+        let threshold = 8usize;
+        let runs = 50;
+        let mut zero_coef_count = 0usize;
+        for _ in 0..runs {
+            let mut poly: Vec<GfShare> = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+            poly.fill(&intercept, &mut rng, threshold).unwrap();
+            for coef in &poly[1..threshold] {
+                if coef.identifier.0.0 == 0 {
+                    zero_coef_count += 1;
+                }
+            }
+        }
+        // 50 runs × 7 coefficients = 350 draws; under uniform GF(16)
+        // expected zeros ≈ 350/16 ≈ 21. Prior biased fill yields 0.
+        assert!(
+            zero_coef_count > 0,
+            "No zero coefficient across {runs} fills × {} slots — coefficient sampling still biased against zero",
+            threshold - 1,
+        );
+    }
+
+    /// A zero secret over GF(16) must split and reconstruct correctly.
+    /// The existing `shamir` test iterates secrets 1..=15 only.
+    #[test]
+    fn zero_secret_round_trip() {
+        let mut rng = ChaCha8Rng::from_seed([0xC3u8; 32]);
+        let zero_secret = IdentifierGf16(Gf16(0));
+        let shares = shamir::split_secret::<GfShare>(3, 5, &zero_secret, &mut rng).unwrap();
+        let recovered = shares[..3].to_vec().combine().unwrap();
+        assert_eq!(recovered, zero_secret, "zero-secret round-trip failed");
+        let recovered2 = shares[2..].to_vec().combine().unwrap();
+        assert_eq!(recovered2, zero_secret);
+    }
+
+    /// Shares whose nibble values are zero must still round-trip via
+    /// `split_array`/`combine_array`. Over GF(16) with many reps, zero
+    /// nibbles are extremely common.
+    #[test]
+    fn zero_valued_shares_round_trip() {
+        let mut rng = ChaCha8Rng::from_seed([0x5Au8; 32]);
+        let secret = b"The quick brown fox jumps over the lazy dog";
+        let runs = 20;
+        let mut saw_zero_nibble = false;
+        for _ in 0..runs {
+            let shares = Gf16::split_array(5, 8, secret, &mut rng).unwrap();
+            for s in &shares {
+                for &b in &s[1..] {
+                    if (b & 0x0F) == 0 || (b >> 4) == 0 {
+                        saw_zero_nibble = true;
+                    }
+                }
+            }
+            let recovered = Gf16::combine_array(&shares[..5]).unwrap();
+            assert_eq!(
+                &recovered[..],
+                secret,
+                "combine failed over GF(16) with zero-valued nibbles"
+            );
+        }
+        assert!(
+            saw_zero_nibble,
+            "No zero nibble observed — statistical regression"
+        );
+    }
+
+    /// Every share identifier emitted by GF(16) `split_secret` is
+    /// non-zero (zero reserved for f(0) = secret).
+    #[test]
+    fn no_share_identifier_is_zero() {
+        let mut rng = ChaCha8Rng::from_seed([0xDEu8; 32]);
+        for _ in 0..50 {
+            let secret = IdentifierGf16(Gf16(rng.r#gen::<u8>() & 0x0F));
+            let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
+            for s in &shares {
+                assert_ne!(
+                    s.identifier.0.0, 0,
+                    "zero identifier produced by GF(16) split_secret",
+                );
+            }
         }
     }
 }
