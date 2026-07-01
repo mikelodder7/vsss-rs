@@ -3,8 +3,8 @@ use core::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
 };
 use elliptic_curve::{
-    bigint::{ArrayEncoding, Random, Uint, Zero},
-    rand_core::CryptoRngCore,
+    bigint::{ArrayEncoding, Choice as BigintChoice, CtEq as BigintCtEq, Random, Uint, Zero},
+    rand_core::{Rng, TryRng},
 };
 use num::traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
@@ -25,7 +25,18 @@ impl<const LIMBS: usize> Zero for Saturating<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
-    const ZERO: Self = Self(Uint::<LIMBS>::ZERO);
+    fn zero() -> Self {
+        Self(Uint::<LIMBS>::ZERO)
+    }
+}
+
+impl<const LIMBS: usize> BigintCtEq for Saturating<LIMBS>
+where
+    Uint<LIMBS>: ArrayEncoding,
+{
+    fn ct_eq(&self, other: &Self) -> BigintChoice {
+        BigintCtEq::ct_eq(&self.0, &other.0)
+    }
 }
 
 impl<const LIMBS: usize> Display for Saturating<LIMBS>
@@ -87,7 +98,7 @@ where
     Uint<LIMBS>: ArrayEncoding,
 {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0.ct_eq(&other.0)
+        ConstantTimeEq::ct_eq(&self.0, &other.0)
     }
 }
 
@@ -95,8 +106,12 @@ impl<const LIMBS: usize> Random for Saturating<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
-    fn random(rng: &mut impl CryptoRngCore) -> Self {
-        Self(Uint::<LIMBS>::random(rng))
+    fn try_random_from_rng<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
+        Uint::<LIMBS>::try_random_from_rng(rng).map(Self)
+    }
+
+    fn random_from_rng<R: Rng + ?Sized>(rng: &mut R) -> Self {
+        Self(Uint::<LIMBS>::random_from_rng(rng))
     }
 }
 
@@ -189,11 +204,7 @@ where
     type Output = Self;
 
     fn div(self, other: Self) -> Self {
-        Self(
-            self.0
-                .checked_div(&other.0)
-                .unwrap_or_else(|| Uint::<LIMBS>::MAX),
-        )
+        Self(self.0.checked_div(&other.0).unwrap_or(Uint::<LIMBS>::MAX))
     }
 }
 
@@ -237,11 +248,7 @@ where
     type Output = Self;
 
     fn rem(self, other: Self) -> Self {
-        Self(
-            self.0
-                .checked_rem(&other.0)
-                .unwrap_or_else(|| Uint::<LIMBS>::ZERO),
-        )
+        Self(self.0.checked_rem(&other.0).unwrap_or(Uint::<LIMBS>::ZERO))
     }
 }
 

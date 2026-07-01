@@ -6,11 +6,13 @@ use core::{
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 #[cfg(feature = "bigint")]
+use crypto_bigint::{Encoding, modular::ConstMontyParams};
+#[cfg(feature = "bigint")]
 use elliptic_curve::{
-    bigint::{self, ArrayEncoding, modular::constant_mod::ResidueParams},
+    bigint::{self, ArrayEncoding, modular::ConstMontyParams as ResidueParams},
     ops::Reduce,
 };
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 #[cfg(feature = "zeroize")]
 use zeroize::DefaultIsZeroes;
 
@@ -107,8 +109,8 @@ impl<G: Group + GroupEncoding + Default> ShareElement for ValueGroup<G> {
 
     type Inner = G;
 
-    fn random(rng: impl RngCore + CryptoRng) -> Self {
-        Self(G::random(rng))
+    fn random(mut rng: impl CryptoRng) -> Self {
+        Self(G::random(&mut rng))
     }
     fn zero() -> Self {
         Self(<G as Group>::identity())
@@ -361,7 +363,7 @@ where
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
@@ -376,7 +378,7 @@ where
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
@@ -391,7 +393,7 @@ where
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint::IdentifierUint<LIMBS>>
     for &ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
@@ -406,7 +408,7 @@ where
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint::IdentifierUint<LIMBS>>
     for &ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
@@ -421,7 +423,7 @@ where
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<uint::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     fn mul_assign(&mut self, rhs: uint::IdentifierUint<LIMBS>) {
@@ -434,7 +436,7 @@ where
 impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<&uint::IdentifierUint<LIMBS>>
     for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     fn mul_assign(&mut self, rhs: &uint::IdentifierUint<LIMBS>) {
@@ -444,13 +446,10 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    G: Group + GroupEncoding + Default,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
@@ -462,13 +461,10 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    G: Group + GroupEncoding + Default,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = Self;
@@ -480,13 +476,10 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    G: Group + GroupEncoding + Default,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    Mul<IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
@@ -498,13 +491,10 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    G: Group + GroupEncoding + Default,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for &ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     type Output = ValueGroup<G>;
@@ -516,13 +506,10 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    G: Group + GroupEncoding + Default,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> MulAssign<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    MulAssign<IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     fn mul_assign(&mut self, rhs: IdentifierConstMontyResidue<MOD, LIMBS>) {
@@ -532,13 +519,10 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    G: Group + GroupEncoding + Default,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> MulAssign<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
+impl<G: Group + GroupEncoding + Default, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    MulAssign<&IdentifierConstMontyResidue<MOD, LIMBS>> for ValueGroup<G>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
     G::Scalar: Reduce<bigint::Uint<LIMBS>>,
 {
     fn mul_assign(&mut self, rhs: &IdentifierConstMontyResidue<MOD, LIMBS>) {

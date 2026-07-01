@@ -15,7 +15,7 @@ use generic_array::{
     typenum::{Add1, B1, Sub1},
 };
 use hybrid_array::{Array, ArraySize};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
 /// (see [FeldmanVSS](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf))
@@ -35,7 +35,7 @@ where
         limit: usize,
         secret: &S::Value,
         generator: Option<V>,
-        rng: impl RngCore + CryptoRng,
+        rng: impl CryptoRng,
     ) -> VsssResult<(Self::ShareSet, Self::VerifierSet)> {
         Self::split_secret_with_participant_generator_and_verifiers(
             threshold,
@@ -55,7 +55,7 @@ where
         limit: usize,
         secret: &S::Value,
         generator: Option<V>,
-        rng: impl RngCore + CryptoRng,
+        rng: impl CryptoRng,
         participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
     ) -> VsssResult<(Self::ShareSet, Self::VerifierSet)> {
         check_params(threshold, limit)?;
@@ -180,7 +180,7 @@ pub fn split_secret<S, V>(
     limit: usize,
     secret: &S::Value,
     generator: Option<V>,
-    rng: impl RngCore + CryptoRng,
+    rng: impl CryptoRng,
 ) -> VsssResult<(Vec<S>, Vec<V>)>
 where
     S: Share,
@@ -196,7 +196,7 @@ pub fn split_secret_with_participant_generator<S, V>(
     limit: usize,
     secret: &S::Value,
     generator: Option<V>,
-    rng: impl RngCore + CryptoRng,
+    rng: impl CryptoRng,
     participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
 ) -> VsssResult<(Vec<S>, Vec<V>)>
 where

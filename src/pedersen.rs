@@ -16,7 +16,7 @@ use generic_array::{
     typenum::{Add1, B1, Sub1, U2},
 };
 use hybrid_array::{Array, ArraySize};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
 /// Options for Pedersen secret sharing
 #[derive(Debug)]
@@ -66,7 +66,7 @@ where
         threshold: usize,
         limit: usize,
         options: &PedersenOptions<S, V>,
-        mut rng: impl RngCore + CryptoRng,
+        mut rng: impl CryptoRng,
     ) -> VsssResult<Self::PedersenResult> {
         check_params(threshold, limit)?;
         let g = options.secret_generator.unwrap_or_else(V::one);
@@ -499,7 +499,7 @@ pub fn split_secret<S, V>(
     blinding: Option<S::Value>,
     share_generator: Option<V>,
     blind_factor_generator: Option<V>,
-    rng: impl RngCore + CryptoRng,
+    rng: impl CryptoRng,
 ) -> VsssResult<StdPedersenResult<S, V>>
 where
     S: Share,

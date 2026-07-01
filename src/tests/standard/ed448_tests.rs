@@ -9,7 +9,7 @@ use crate::tests::standard::TestShare;
 use crate::*;
 use ed448_goldilocks_plus::{EdwardsPoint, Scalar};
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
-use elliptic_curve::hash2curve::ExpandMsgXmd;
+use hash2curve::ExpandMsgXmd;
 
 #[test]
 fn invalid_tests() {
@@ -30,11 +30,11 @@ fn valid_std_tests() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
-    use rand::Rng;
+    use rand::RngExt;
 
-    let mut osrng = rand::rngs::OsRng::default();
+    let mut osrng = rand::rngs::SysRng;
     let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
-        &osrng.r#gen::<[u8; 32]>(),
+        &osrng.random::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
     let sk = IdentifierPrimeField(sc);
@@ -50,11 +50,11 @@ fn key_tests() {
 #[cfg(all(feature = "serde", any(feature = "alloc", feature = "std")))]
 #[test]
 fn pedersen_verifier_serde_test() {
-    use rand::Rng;
+    use rand::RngExt;
 
-    let mut osrng = rand::rngs::OsRng::default();
+    let mut osrng = rand::rngs::SysRng;
     let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
-        &osrng.r#gen::<[u8; 32]>(),
+        &osrng.random::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
     );
     let sk = IdentifierPrimeField(sc);

@@ -3,7 +3,7 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
-use rand_core::SeedableRng;
+use rand_core::{Infallible, SeedableRng, TryCryptoRng, TryRng};
 
 pub struct MockRng(rand_xorshift::XorShiftRng);
 
@@ -21,22 +21,20 @@ impl SeedableRng for MockRng {
     }
 }
 
-impl rand_core::CryptoRng for MockRng {}
+impl TryCryptoRng for MockRng {}
 
-impl rand_core::RngCore for MockRng {
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
+impl TryRng for MockRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.0.try_next_u32()
     }
 
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        self.0.try_next_u64()
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         self.0.try_fill_bytes(dest)
     }
 }

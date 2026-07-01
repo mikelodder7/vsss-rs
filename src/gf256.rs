@@ -19,7 +19,7 @@ use core::{
     },
 };
 use elliptic_curve::ff::{Field, PrimeField};
-use rand_core::RngCore;
+use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -408,12 +408,12 @@ impl Field for Gf256 {
     const ZERO: Self = Self(0);
     const ONE: Self = Self(1);
 
-    fn random(mut rng: impl RngCore) -> Self {
+    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
         // Uniform over the full field {0, 1, ..., 255}. The prior
         // `(b & 0xFE) + 1` forced the low bit, producing only odd bytes
         // and leaking entropy out of polynomial coefficients used by
         // Shamir secret sharing (audit finding #1).
-        Self(rng.next_u32() as u8)
+        rng.try_next_u32().map(|v| Self(v as u8))
     }
 
     fn square(&self) -> Self {
@@ -569,7 +569,7 @@ impl Gf256 {
         threshold: usize,
         limit: usize,
         secret: B,
-        rng: impl RngCore + CryptoRng,
+        rng: impl CryptoRng,
     ) -> VsssResult<Vec<Vec<u8>>> {
         Self::split_array_with_participant_generators(
             threshold,
@@ -586,7 +586,7 @@ impl Gf256 {
         threshold: usize,
         limit: usize,
         secret: B,
-        mut rng: impl RngCore + CryptoRng,
+        mut rng: impl CryptoRng,
         participant_generators: &[ParticipantIdGeneratorType<IdentifierGf256>],
     ) -> VsssResult<Vec<Vec<u8>>> {
         if limit > 255 {
@@ -762,7 +762,7 @@ impl ShareElement for IdentifierGf256 {
 
     type Inner = Gf256;
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+    fn random(mut rng: impl CryptoRng) -> Self {
         // x-coordinate of a Shamir evaluation point; zero is reserved
         // for the secret (f(0)), so MUST be non-zero. Uniform over 1..=255.
         Self(Gf256(uniform_nonzero_u8(rng.next_u32(), 255)))
@@ -816,10 +816,10 @@ impl ShareIdentifier for IdentifierGf256 {
             .ok_or(Error::InvalidShareElement)
     }
 
-    fn random_coefficient(rng: impl RngCore + CryptoRng) -> Self {
+    fn random_coefficient(mut rng: impl CryptoRng) -> Self {
         // Bypass the "+1" non-zero x-sampler in `ShareElement::random`
         // and draw directly from `Gf256` — uniform over 0..=255.
-        Self(Gf256::random(rng))
+        Self(Gf256::random(&mut rng))
     }
 }
 
@@ -837,7 +837,7 @@ mod tests {
     use super::*;
     use crate::shamir;
     use crate::{ParticipantIdGeneratorCollection, ParticipantIdGeneratorType};
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
     use rand_chacha::ChaCha8Rng;
     use std::collections::HashSet;
     use std::prelude::v1::Vec;
@@ -846,17 +846,17 @@ mod tests {
     fn compatibility() {
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for _ in 0..1000 {
-            let a = rng.r#gen::<u8>();
-            let b = rng.r#gen::<u8>();
+            let a = rng.random::<u8>();
+            let b = rng.random::<u8>();
             let y = Gf256(a);
             let z = Gf256(b);
 
             assert_eq!((y * z).0, gf256_cmp::gf256_mul(a, b));
         }
-        rng = ChaCha8Rng::from_entropy();
+        rng = ChaCha8Rng::from_seed([99u8; 32]);
         for _ in 0..1000 {
-            let a = rng.r#gen::<u8>();
-            let b = rng.r#gen::<u8>();
+            let a = rng.random::<u8>();
+            let b = rng.random::<u8>();
             let y = Gf256(a);
             let z = Gf256(b);
 
@@ -865,9 +865,9 @@ mod tests {
 
         let mut rng = ChaCha8Rng::from_seed([57u8; 32]);
         for _ in 0..1000 {
-            let mut a = rng.r#gen::<u8>();
+            let mut a = rng.random::<u8>();
             while a == 0 {
-                a = rng.r#gen::<u8>();
+                a = rng.random::<u8>();
             }
             let y = Gf256(a);
 
@@ -901,7 +901,7 @@ mod tests {
                 secret.0.0
             );
         }
-        rng = ChaCha8Rng::from_entropy();
+        rng = ChaCha8Rng::from_seed([99u8; 32]);
         for i in 1..=255 {
             let secret = IdentifierGf256(Gf256(i));
             let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
@@ -950,13 +950,13 @@ mod tests {
         let res = Gf256::combine_array(&[vec![1u8, 8u8], vec![2u8]]);
         assert!(res.is_err());
 
-        let mut rng = ChaCha8Rng::from_entropy();
+        let mut rng = ChaCha8Rng::from_seed([99u8; 32]);
         for _ in 0..25 {
-            let threshold = rng.r#gen::<u8>().saturating_add(1);
+            let threshold = rng.random::<u8>().saturating_add(1);
 
             let mut shares = Vec::with_capacity(threshold as usize);
             for i in 0..threshold {
-                let share = vec![i; (rng.r#gen::<usize>() % 64) + 1];
+                let share = vec![i; (rng.random::<u8>() as usize % 64) + 1];
                 shares.push(share);
             }
             assert!(Gf256::combine_array(shares).is_err());
@@ -1141,7 +1141,7 @@ mod tests {
             let shares = Gf256::split_array(5, 8, secret, &mut rng).unwrap();
             // Inspect share bytes (index 0 is the identifier; 1.. are values).
             for s in &shares {
-                if s[1..].iter().any(|&b| b == 0) {
+                if s[1..].contains(&0) {
                     saw_zero_share_byte = true;
                 }
             }
@@ -1164,7 +1164,7 @@ mod tests {
     fn no_share_identifier_is_zero() {
         let mut rng = ChaCha8Rng::from_seed([0xDEu8; 32]);
         for _ in 0..100 {
-            let secret = IdentifierGf256(Gf256(rng.r#gen::<u8>()));
+            let secret = IdentifierGf256(Gf256(rng.random::<u8>()));
             let shares = shamir::split_secret::<GfShare>(3, 5, &secret, &mut rng).unwrap();
             for s in &shares {
                 assert_ne!(

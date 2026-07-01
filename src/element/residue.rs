@@ -3,8 +3,10 @@ use core::{
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut, Mul},
 };
-use elliptic_curve::bigint::modular::constant_mod::{Residue, ResidueParams};
-use elliptic_curve::bigint::{ArrayEncoding, Uint};
+use elliptic_curve::bigint::modular::{
+    ConstMontyForm as Residue, ConstMontyParams as ResidueParams,
+};
+use elliptic_curve::bigint::{ArrayEncoding, Encoding, Random, Uint, Zero};
 
 use super::*;
 use crate::*;
@@ -169,8 +171,8 @@ where
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
     type Inner = Residue<MOD, LIMBS>;
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let inner = Uint::<LIMBS>::random(&mut rng);
+    fn random(mut rng: impl CryptoRng) -> Self {
+        let inner = Uint::<LIMBS>::random_from_rng(&mut rng);
         Self(Residue::<MOD, LIMBS>::new(&inner))
     }
 
@@ -183,11 +185,11 @@ where
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.is_zero()
+        self.0.is_zero().into()
     }
 
     fn serialize(&self) -> Self::Serialization {
-        self.0.retrieve().to_be_bytes()
+        <Uint<LIMBS> as Encoding>::to_be_bytes(&self.0.retrieve())
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
@@ -216,11 +218,9 @@ where
     }
 
     fn invert(&self) -> VsssResult<Self> {
-        let (value, succeeded) = self.0.invert();
-        if !bool::from(succeeded) {
-            return Err(Error::InvalidShareElement);
-        }
-        Ok(Self(value))
+        Option::from(self.0.invert())
+            .map(Self)
+            .ok_or(Error::InvalidShareElement)
     }
 }
 

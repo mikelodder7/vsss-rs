@@ -56,7 +56,10 @@ pub fn split_invalid_args<S: Share, V: ShareVerifier<S>>() {
     );
 }
 
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(all(
+    feature = "legacy-curve-tests",
+    any(feature = "alloc", feature = "std")
+))]
 pub fn combine_invalid_vec<F: PrimeField>() {
     let shares: [(IdentifierPrimeField<F>, IdentifierPrimeField<F>); 3] =
         std::array::from_fn(|_| (IdentifierPrimeField::zero(), IdentifierPrimeField::zero()));

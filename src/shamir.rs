@@ -7,7 +7,7 @@
 use super::*;
 use generic_array::{ArrayLength, GenericArray};
 use hybrid_array::{Array, ArraySize};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
 /// A Polynomial that can create secret shares
 pub trait Shamir<S>
@@ -24,7 +24,7 @@ where
         threshold: usize,
         limit: usize,
         secret: &S::Value,
-        rng: impl RngCore + CryptoRng,
+        rng: impl CryptoRng,
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
         let generator = ParticipantIdGeneratorType::<S::Identifier>::default();
@@ -37,7 +37,7 @@ where
         threshold: usize,
         limit: usize,
         secret: &S::Value,
-        rng: impl RngCore + CryptoRng,
+        rng: impl CryptoRng,
         participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
@@ -121,7 +121,7 @@ pub fn split_secret<S: Share>(
     threshold: usize,
     limit: usize,
     secret: &S::Value,
-    rng: impl RngCore + CryptoRng,
+    rng: impl CryptoRng,
 ) -> VsssResult<Vec<S>> {
     StdVsssShamir::split_secret(threshold, limit, secret, rng)
 }
@@ -132,7 +132,7 @@ pub fn split_secret_with_participant_generator<S: Share>(
     threshold: usize,
     limit: usize,
     secret: &S::Value,
-    rng: impl RngCore + CryptoRng,
+    rng: impl CryptoRng,
     participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
 ) -> VsssResult<Vec<S>> {
     StdVsssShamir::split_secret_with_participant_generator(

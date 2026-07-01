@@ -75,7 +75,7 @@ pub fn combine_single<G: Group + GroupEncoding + Default>() {
         assert!(verifier.verify_share(s).is_ok());
     }
     // make sure no malicious share works
-    let mut bad_share = shares[0].clone();
+    let mut bad_share = shares[0];
     repr.as_mut().iter_mut().for_each(|b| *b = 1u8);
     *bad_share.value_mut() = IdentifierPrimeField(G::Scalar::from_repr(repr).unwrap());
     assert!(verifier.verify_share(&bad_share).is_err());
@@ -115,11 +115,11 @@ pub fn combine_single<G: Group + GroupEncoding + Default>() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub fn combine_all<G: Group + GroupEncoding + Default>() {
     use crate::*;
-    use rand::rngs::OsRng;
+    use rand::{SeedableRng, rngs::StdRng};
     const THRESHOLD: usize = 3;
     const LIMIT: usize = 5;
 
-    let mut rng = OsRng::default();
+    let mut rng = StdRng::from_seed([3u8; 32]);
     let secret = IdentifierPrimeField::from(G::Scalar::random(&mut rng));
 
     let res = shamir::split_secret::<TestShare<G::Scalar>>(THRESHOLD, LIMIT, &secret, &mut rng);
@@ -164,7 +164,14 @@ pub fn combine_all<G: Group + GroupEncoding + Default>() {
                     continue;
                 }
 
-                let parts = &[shares[i].clone(), shares[j].clone(), shares[k].clone()];
+                let parts = &[shares[i], shares[j], shares[k]];
+
+                let res = parts.combine();
+                assert!(res.is_ok());
+                let secret_1 = res.unwrap();
+                assert_eq!(secret, secret_1);
+
+                let parts = &[feldman_shares[i], feldman_shares[j], feldman_shares[k]];
 
                 let res = parts.combine();
                 assert!(res.is_ok());
@@ -172,20 +179,9 @@ pub fn combine_all<G: Group + GroupEncoding + Default>() {
                 assert_eq!(secret, secret_1);
 
                 let parts = &[
-                    feldman_shares[i].clone(),
-                    feldman_shares[j].clone(),
-                    feldman_shares[k].clone(),
-                ];
-
-                let res = parts.combine();
-                assert!(res.is_ok());
-                let secret_1 = res.unwrap();
-                assert_eq!(secret, secret_1);
-
-                let parts = &[
-                    ped_res.secret_shares()[i].clone(),
-                    ped_res.secret_shares()[j].clone(),
-                    ped_res.secret_shares()[k].clone(),
+                    ped_res.secret_shares()[i],
+                    ped_res.secret_shares()[j],
+                    ped_res.secret_shares()[k],
                 ];
 
                 let res = parts.combine();
@@ -209,15 +205,17 @@ fn shamir_split<G: Group + GroupEncoding + Default>(
     )
 }
 
+type FeldmanSplitResult<G> = VsssResult<(
+    FixedArrayVsss8Of15ShareSet<TestShare<<G as Group>::Scalar>, ValueGroup<G>>,
+    FixedArrayVsss8Of15FeldmanVerifierSet<TestShare<<G as Group>::Scalar>, ValueGroup<G>>,
+)>;
+
 fn feldman_split<G: Group + GroupEncoding + Default>(
     threshold: usize,
     limit: usize,
     secret: G::Scalar,
     rng: &mut MockRng,
-) -> VsssResult<(
-    FixedArrayVsss8Of15ShareSet<TestShare<G::Scalar>, ValueGroup<G>>,
-    FixedArrayVsss8Of15FeldmanVerifierSet<TestShare<G::Scalar>, ValueGroup<G>>,
-)> {
+) -> FeldmanSplitResult<G> {
     let secret = IdentifierPrimeField::from(secret);
     FixedArrayVsss8Of15::split_secret_with_verifier(threshold, limit, &secret, None, rng)
 }

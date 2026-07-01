@@ -7,7 +7,7 @@ use core::{
 use num::CheckedDiv;
 use num::bigint::BigUint;
 use num::traits::{One, Zero};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use subtle::Choice;
 
 /// A share identifier represented as a big unsigned number
@@ -101,7 +101,7 @@ impl ShareElement for IdentifierBigUint {
     type Serialization = Vec<u8>;
     type Inner = BigUint;
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+    fn random(mut rng: impl CryptoRng) -> Self {
         let mut buf = vec![0u8; 32];
         rng.fill_bytes(&mut buf);
         IdentifierBigUint(BigUint::from_bytes_be(&buf))

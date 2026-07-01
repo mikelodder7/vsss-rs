@@ -16,10 +16,10 @@ use bls12_381_plus::{
 use elliptic_curve::{
     ff::Field,
     group::{Curve, Group},
-    hash2curve::ExpandMsgXmd,
 };
 #[cfg(any(feature = "alloc", feature = "std"))]
 use generic_array::typenum;
+use hash2curve::ExpandMsgXmd;
 use rstest::*;
 
 #[test]

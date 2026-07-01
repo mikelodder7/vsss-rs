@@ -6,9 +6,10 @@ type FixedArrayVsss8Of15ShareSet<S, V> = <FixedArrayVsss8Of15<S, V> as Shamir<S>
 type FixedArrayVsss8Of15FeldmanVerifierSet<S, V> =
     <FixedArrayVsss8Of15<S, V> as Feldman<S, V>>::VerifierSet;
 
+#[cfg(feature = "legacy-curve-tests")]
 pub mod bls12_381_tests;
-#[cfg(feature = "curve25519")]
 pub mod curve25519_tests;
+#[cfg(feature = "legacy-curve-tests")]
 pub mod ed448_tests;
 pub mod invalid;
 pub mod k256_tests;

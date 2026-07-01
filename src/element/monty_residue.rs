@@ -1,5 +1,5 @@
 //! Share element and identifier implementations using [`ConstMontyForm`] and [`MontyForm`]
-//! from the `crypto-bigint` 0.6 crate (Montgomery form residue).
+//! from the `crypto-bigint` 0.7 crate (Montgomery form residue).
 //!
 //! For a **constant modulus** (compile-time), use [`IdentifierConstMontyResidue`] with
 //! [`crypto_bigint::impl_modulus!`]:
@@ -13,7 +13,7 @@
 //! type MyResidue = IdentifierConstMontyResidue<MyModulus, 4>;
 //! ```
 //!
-//! For a **runtime modulus**, use [`IdentifierMontyResidue`] with [`MontyParams`];
+//! For a **runtime modulus**, use [`IdentifierMontyResidue`] with [`FixedMontyParams`];
 //! create values via `zero_with_params`, `one_with_params`, `new`, and `random_with_params`.
 
 use core::{
@@ -22,10 +22,10 @@ use core::{
     ops::{Deref, DerefMut, Mul},
 };
 use crypto_bigint::{
-    Encoding, Odd, PrecomputeInverter, RandomMod, Uint,
-    modular::{ConstMontyForm, ConstMontyParams, MontyForm, MontyParams, SafeGcdInverter},
+    Encoding, RandomMod, Uint,
+    modular::{ConstMontyForm, ConstMontyParams, FixedMontyForm, FixedMontyParams},
 };
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use subtle::Choice;
 
 use super::*;
@@ -39,7 +39,7 @@ use crate::*;
 pub type ValueConstMontyResidue<MOD, const LIMBS: usize> = IdentifierConstMontyResidue<MOD, LIMBS>;
 
 /// A share identifier represented as a residue in Montgomery form modulo a constant modulus
-/// (crypto-bigint 0.6 [`ConstMontyForm`]).
+/// (crypto-bigint 0.7 [`ConstMontyForm`]).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
@@ -204,8 +204,8 @@ where
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
     type Inner = ConstMontyForm<MOD, LIMBS>;
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let raw = Uint::<LIMBS>::random_mod(&mut rng, MOD::MODULUS.as_nz_ref());
+    fn random(mut rng: impl CryptoRng) -> Self {
+        let raw = Uint::<LIMBS>::random_mod_vartime(&mut rng, MOD::PARAMS.modulus().as_nz_ref());
         Self(ConstMontyForm::<MOD, LIMBS>::new(&raw))
     }
 
@@ -241,19 +241,17 @@ where
     }
 }
 
-impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize, const UNSAT_LIMBS: usize> ShareIdentifier
+impl<MOD: ConstMontyParams<LIMBS>, const LIMBS: usize> ShareIdentifier
     for IdentifierConstMontyResidue<MOD, LIMBS>
 where
     Uint<LIMBS>: Encoding,
-    Odd<Uint<LIMBS>>:
-        PrecomputeInverter<Inverter = SafeGcdInverter<LIMBS, UNSAT_LIMBS>, Output = Uint<LIMBS>>,
 {
     fn inc(&mut self, increment: &Self) {
         self.0 += increment.0;
     }
 
     fn invert(&self) -> VsssResult<Self> {
-        Option::from(self.0.inv())
+        Option::from(self.0.invert())
             .map(Self)
             .ok_or(Error::InvalidShareElement)
     }
@@ -270,14 +268,14 @@ where
 }
 
 // =============================================================================
-// MontyForm (runtime modulus)
+// FixedMontyForm (runtime modulus)
 // =============================================================================
 
-/// A share value represented as a [`MontyForm<LIMBS>`] (runtime modulus).
+/// A share value represented as a [`FixedMontyForm<LIMBS>`] (runtime modulus).
 pub type ValueMontyResidue<const LIMBS: usize> = IdentifierMontyResidue<LIMBS>;
 
 /// A share identifier represented as a residue in Montgomery form modulo a modulus
-/// chosen at runtime (crypto-bigint 0.6 [`MontyForm`]).
+/// chosen at runtime (crypto-bigint 0.7 [`FixedMontyForm`]).
 ///
 /// Use [`IdentifierMontyResidue::zero_with_params`], [`IdentifierMontyResidue::one_with_params`],
 /// [`IdentifierMontyResidue::new`], and [`IdentifierMontyResidue::random_with_params`] to create
@@ -285,7 +283,7 @@ pub type ValueMontyResidue<const LIMBS: usize> = IdentifierMontyResidue<LIMBS>;
 /// [`ShareElement`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(transparent)]
-pub struct IdentifierMontyResidue<const LIMBS: usize>(pub MontyForm<LIMBS>)
+pub struct IdentifierMontyResidue<const LIMBS: usize>(pub FixedMontyForm<LIMBS>)
 where
     Uint<LIMBS>: Encoding;
 
@@ -294,31 +292,28 @@ where
     Uint<LIMBS>: Encoding,
 {
     /// Create the additive identity (zero) for the given params.
-    pub fn zero_with_params(params: MontyParams<LIMBS>) -> Self {
-        Self(MontyForm::<LIMBS>::zero(params))
+    pub fn zero_with_params(params: FixedMontyParams<LIMBS>) -> Self {
+        Self(FixedMontyForm::<LIMBS>::zero(&params))
     }
 
     /// Create the multiplicative identity (one) for the given params.
-    pub fn one_with_params(params: MontyParams<LIMBS>) -> Self {
-        Self(MontyForm::<LIMBS>::one(params))
+    pub fn one_with_params(params: FixedMontyParams<LIMBS>) -> Self {
+        Self(FixedMontyForm::<LIMBS>::one(&params))
     }
 
     /// Create a residue representing `integer` mod the modulus in `params`.
-    pub fn new(integer: &Uint<LIMBS>, params: MontyParams<LIMBS>) -> Self {
-        Self(MontyForm::<LIMBS>::new(integer, params))
+    pub fn new(integer: &Uint<LIMBS>, params: FixedMontyParams<LIMBS>) -> Self {
+        Self(FixedMontyForm::<LIMBS>::new(integer, &params))
     }
 
     /// Generate a random residue mod the modulus in `params`.
-    pub fn random_with_params(
-        mut rng: impl RngCore + CryptoRng,
-        params: MontyParams<LIMBS>,
-    ) -> Self {
-        let raw = Uint::<LIMBS>::random_mod(&mut rng, params.modulus().as_nz_ref());
-        Self(MontyForm::<LIMBS>::new(&raw, params))
+    pub fn random_with_params(mut rng: impl CryptoRng, params: FixedMontyParams<LIMBS>) -> Self {
+        let raw = Uint::<LIMBS>::random_mod_vartime(&mut rng, params.modulus().as_nz_ref());
+        Self(FixedMontyForm::<LIMBS>::new(&raw, &params))
     }
 
     /// Params (modulus etc.) for this residue.
-    pub fn params(&self) -> &MontyParams<LIMBS> {
+    pub fn params(&self) -> &FixedMontyParams<LIMBS> {
         self.0.params()
     }
 }
@@ -367,7 +362,7 @@ impl<const LIMBS: usize> Deref for IdentifierMontyResidue<LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
-    type Target = MontyForm<LIMBS>;
+    type Target = FixedMontyForm<LIMBS>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -383,43 +378,43 @@ where
     }
 }
 
-impl<const LIMBS: usize> AsRef<MontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
+impl<const LIMBS: usize> AsRef<FixedMontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
-    fn as_ref(&self) -> &MontyForm<LIMBS> {
+    fn as_ref(&self) -> &FixedMontyForm<LIMBS> {
         &self.0
     }
 }
 
-impl<const LIMBS: usize> AsMut<MontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
+impl<const LIMBS: usize> AsMut<FixedMontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
-    fn as_mut(&mut self) -> &mut MontyForm<LIMBS> {
+    fn as_mut(&mut self) -> &mut FixedMontyForm<LIMBS> {
         &mut self.0
     }
 }
 
-impl<const LIMBS: usize> From<MontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
+impl<const LIMBS: usize> From<FixedMontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
-    fn from(value: MontyForm<LIMBS>) -> Self {
+    fn from(value: FixedMontyForm<LIMBS>) -> Self {
         Self(value)
     }
 }
 
-impl<const LIMBS: usize> From<&MontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
+impl<const LIMBS: usize> From<&FixedMontyForm<LIMBS>> for IdentifierMontyResidue<LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
-    fn from(value: &MontyForm<LIMBS>) -> Self {
+    fn from(value: &FixedMontyForm<LIMBS>) -> Self {
         Self(*value)
     }
 }
 
-impl<const LIMBS: usize> From<IdentifierMontyResidue<LIMBS>> for MontyForm<LIMBS>
+impl<const LIMBS: usize> From<IdentifierMontyResidue<LIMBS>> for FixedMontyForm<LIMBS>
 where
     Uint<LIMBS>: Encoding,
 {
@@ -435,6 +430,6 @@ where
     type Output = IdentifierMontyResidue<LIMBS>;
 
     fn mul(self, rhs: &IdentifierMontyResidue<LIMBS>) -> Self {
-        Self(MontyForm::<LIMBS>::mul(&self.0, &rhs.0))
+        Self(FixedMontyForm::<LIMBS>::mul(&self.0, &rhs.0))
     }
 }

@@ -5,7 +5,7 @@
 use crate::*;
 use generic_array::{ArrayLength, GenericArray};
 use hybrid_array::{Array, ArraySize};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
 /// The polynomial used for generating the shares
 pub trait Polynomial<S: Share> {
@@ -16,7 +16,7 @@ pub trait Polynomial<S: Share> {
     fn fill(
         &mut self,
         intercept: &S::Value,
-        mut rng: impl RngCore + CryptoRng,
+        mut rng: impl CryptoRng,
         length: usize,
     ) -> VsssResult<()> {
         let repr = self.coefficients_mut();

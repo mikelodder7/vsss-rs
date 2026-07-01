@@ -7,12 +7,12 @@ use super::valid::*;
 use crate::tests::standard::TestShare;
 use crate::*;
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
-use elliptic_curve::ff::PrimeField;
+use elliptic_curve::{Generate, ff::PrimeField};
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
 use k256::{NonZeroScalar, SecretKey};
 use k256::{ProjectivePoint, Scalar};
 #[cfg(all(test, any(feature = "alloc", feature = "std")))]
-use rand::rngs::OsRng;
+use rand::{SeedableRng, rngs::StdRng};
 
 #[test]
 fn invalid_tests() {
@@ -34,8 +34,8 @@ fn valid_std_tests() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
-    let mut osrng = OsRng::default();
-    let sk = SecretKey::random(&mut osrng);
+    let mut osrng = StdRng::from_seed([1u8; 32]);
+    let sk = SecretKey::generate_from_rng(&mut osrng);
     let secret = IdentifierPrimeField::from(*sk.to_nonzero_scalar());
     let res = shamir::split_secret::<TestShare<Scalar>>(2, 3, &secret, &mut osrng);
     assert!(res.is_ok());

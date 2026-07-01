@@ -47,13 +47,14 @@
 //! #[cfg(any(feature = "alloc", feature = "std"))]
 //! {
 //! use vsss_rs::{*, shamir};
-//! use elliptic_curve::ff::PrimeField;
+//! use elliptic_curve::{Generate, ff::PrimeField};
 //! use p256::{NonZeroScalar, Scalar, SecretKey};
+//! use rand::{rngs::StdRng, SeedableRng};
 //!
 //! type P256Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
 //!
-//! let mut osrng = rand_core::OsRng::default();
-//! let sk = SecretKey::random(&mut osrng);
+//! let mut osrng = StdRng::from_seed([1u8; 32]);
+//! let sk = SecretKey::generate_from_rng(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
 //! let shared_secret = IdentifierPrimeField(*nzs.as_ref());
 //! let res = shamir::split_secret::<P256Share>(2, 3, &shared_secret, &mut osrng);
@@ -74,13 +75,14 @@
 //! #[cfg(any(feature = "alloc", feature = "std"))]
 //! {
 //! use vsss_rs::{*, shamir};
-//! use elliptic_curve::ff::PrimeField;
+//! use elliptic_curve::{Generate, ff::PrimeField};
 //! use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
+//! use rand::{rngs::StdRng, SeedableRng};
 //!
 //! type K256Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
 //!
-//! let mut osrng = rand_core::OsRng::default();
-//! let sk = SecretKey::random(&mut osrng);
+//! let mut osrng = StdRng::from_seed([2u8; 32]);
+//! let sk = SecretKey::generate_from_rng(&mut osrng);
 //! let secret = IdentifierPrimeField(*sk.to_nonzero_scalar());
 //! let res = shamir::split_secret::<K256Share>(2, 3, &secret, &mut osrng);
 //! assert!(res.is_ok());
@@ -100,15 +102,16 @@
 //! #[cfg(any(feature = "alloc", feature = "std"))]
 //! {
 //! use vsss_rs::{*, feldman};
-//! use bls12_381_plus::{Scalar, G1Projective};
+//! use k256::{ProjectivePoint, Scalar};
 //! use elliptic_curve::ff::Field;
+//! use rand::{rngs::StdRng, SeedableRng};
 //!
-//! type BlsShare = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
-//! type BlsShareVerifier = ShareVerifierGroup<G1Projective>;
+//! type K256Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
+//! type K256ShareVerifier = ShareVerifierGroup<ProjectivePoint>;
 //!
-//! let mut rng = rand_core::OsRng::default();
+//! let mut rng = StdRng::from_seed([3u8; 32]);
 //! let secret = IdentifierPrimeField(Scalar::random(&mut rng));
-//! let res = feldman::split_secret::<BlsShare, BlsShareVerifier>(2, 3, &secret, None, &mut rng);
+//! let res = feldman::split_secret::<K256Share, K256ShareVerifier>(2, 3, &secret, None, &mut rng);
 //! assert!(res.is_ok());
 //! let (shares, verifier) = res.unwrap();
 //! for s in &shares {
@@ -121,36 +124,36 @@
 //! }
 //! ```
 //!
-//! Curve25519 is not a prime field but this crate does support it using
-//! `features=["curve25519"]` which is enabled by default. This feature
-//! wraps curve25519-dalek libraries so they can be used with Shamir, Feldman, and Pedersen.
+//! Curve25519-dalek 5.0.0 implements the native `ff` and `group` traits, so its scalar
+//! and group types can be used with Shamir, Feldman, and Pedersen.
 //!
 //! Here's an example of using Ed25519 and x25519
 //!
 //! ```
-//! #[cfg(all(feature = "curve25519", any(feature = "alloc", feature = "std")))] {
+//! #[cfg(any(feature = "alloc", feature = "std"))]
+//! {
 //! use curve25519_dalek::scalar::Scalar;
-//! use rand::Rng;
+//! use rand::{RngExt, SeedableRng, rngs::StdRng};
 //! use ed25519_dalek::SigningKey;
-//! use vsss_rs::{curve25519::WrappedScalar, *};
+//! use vsss_rs::*;
 //! use x25519_dalek::StaticSecret;
 //!
-//! type Ed25519Share = DefaultShare<IdentifierPrimeField<WrappedScalar>, IdentifierPrimeField<WrappedScalar>>;
+//! type Ed25519Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
 //!
-//! let mut osrng = rand::rngs::OsRng::default();
-//! let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.r#gen::<[u8; 32]>());
+//! let mut osrng = StdRng::from_seed([4u8; 32]);
+//! let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.random::<[u8; 32]>());
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SigningKey::from_bytes(&sc.to_bytes());
-//! let secret = IdentifierPrimeField(WrappedScalar(sc));
+//! let secret = IdentifierPrimeField(sc);
 //! let res = shamir::split_secret::<Ed25519Share>(2, 3, &secret, &mut osrng);
 //! assert!(res.is_ok());
 //! let shares = res.unwrap();
 //! let res = shares.combine();
 //! assert!(res.is_ok());
 //! let scalar = res.unwrap();
-//! assert_eq!(scalar.0.0, sc);
-//! let sk2 = StaticSecret::from(scalar.0.0.to_bytes());
-//! let ske2 = SigningKey::from_bytes(&scalar.0.0.to_bytes());
+//! assert_eq!(scalar.0, sc);
+//! let sk2 = StaticSecret::from(scalar.0.to_bytes());
+//! let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
 //! assert_eq!(sk2.to_bytes(), sk1.to_bytes());
 //! assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 //! }
@@ -235,13 +238,6 @@ pub use util::*;
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use pedersen::StdPedersenResult;
 
-#[cfg(feature = "curve25519")]
-#[cfg_attr(docsrs, doc(cfg(feature = "curve25519")))]
-pub mod curve25519;
-
-//
-#[cfg(feature = "curve25519")]
-pub use curve25519_dalek;
 pub use elliptic_curve;
 use elliptic_curve::Group;
 use elliptic_curve::group::GroupEncoding;

@@ -2,7 +2,7 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use subtle::Choice;
 #[cfg(feature = "zeroize")]
 use zeroize::*;
@@ -116,7 +116,7 @@ impl<P: Primitive<BYTES>, const BYTES: usize> ShareElement for IdentifierPrimiti
     type Serialization = [u8; BYTES];
     type Inner = P;
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
+    fn random(mut rng: impl CryptoRng) -> Self {
         let mut repr = [0u8; BYTES];
         rng.fill_bytes(repr.as_mut());
         Self(P::from_fixed_array(&repr))

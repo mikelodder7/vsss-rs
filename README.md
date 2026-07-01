@@ -46,7 +46,7 @@ The `Share` trait has been modified as follows:
 Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all array sizes are supported. 
 
 In addition, GenericArray of any size is supported.
-`crypto-bigint` Uint types (0.5 and 0.6) and Montgomery-form residue types (ConstMontyForm and MontyForm) are supported; see *Share elements (bigint feature)* below.
+`crypto-bigint` Uint types (0.7) and Montgomery-form residue types (ConstMontyForm and FixedMontyForm) are supported; see *Share elements (bigint feature)* below.
 
 Now tuples with the identifier as `.0` and the share as `.1` are supported.
 
@@ -98,19 +98,19 @@ If the share identifier is `u8` then the additional implementations exist.
 
 With the `bigint` feature (enabled by default), the crate supports share identifiers and values based on **crypto-bigint** in two versions:
 
-- **crypto-bigint 0.5** (via `elliptic-curve`): used by curve types and by `IdentifierResidue` (constant-modulus residue) and `IdentifierUint` in `element::uint5` (with saturating arithmetic).
-- **crypto-bigint 0.6**: used by `IdentifierUint` in `element::uint`, and by Montgomery-form residue types.
+- **crypto-bigint 0.7** (via `elliptic-curve`): used by curve types and by `IdentifierResidue` (constant-modulus residue) and `IdentifierUint` in `element::uint5` (with saturating arithmetic).
+- **crypto-bigint 0.7**: used by `IdentifierUint` in `element::uint`, and by Montgomery-form residue types.
 
 **Uint-based identifiers**
 
-- **`element::uint5::IdentifierUint<LIMBS>`** — wraps `crypto-bigint` 0.5 `Uint` (from `elliptic-curve::bigint`) with saturating arithmetic; works with curve scalars and `IdentifierResidue`.
-- **`element::uint::IdentifierUint<LIMBS>`** — wraps `crypto-bigint` 0.6 `Uint`; interoperates with prime-field and group elements via word conversion.
+- **`element::uint5::IdentifierUint<LIMBS>`** — wraps the `crypto-bigint` 0.7 `Uint` re-exported by `elliptic-curve` with saturating arithmetic; works with curve scalars and `IdentifierResidue`.
+- **`element::uint::IdentifierUint<LIMBS>`** — wraps `crypto-bigint` 0.7 `Uint`; interoperates with prime-field and group elements via word conversion.
 
 **Residue-based identifiers (modular arithmetic)**
 
-- **`IdentifierResidue<MOD, LIMBS>`** / **`ValueResidue<MOD, LIMBS>`** — constant modulus via `elliptic_curve::bigint::Residue` and `ResidueParams` (crypto-bigint 0.5). `MOD` is a type implementing `ResidueParams<LIMBS>`.
-- **`IdentifierConstMontyResidue<MOD, LIMBS>`** / **`ValueConstMontyResidue<MOD, LIMBS>`** — constant modulus in Montgomery form (crypto-bigint 0.6 `ConstMontyForm`). Define the modulus with `crypto_bigint::impl_modulus!` and use the type as share identifier or value; implements `ShareElement` and `ShareIdentifier`.
-- **`IdentifierMontyResidue<LIMBS>`** / **`ValueMontyResidue<LIMBS>`** — runtime modulus in Montgomery form (crypto-bigint 0.6 `MontyForm`). The modulus is given by `MontyParams<LIMBS>`. Create values with `zero_with_params`, `one_with_params`, `new`, or `random_with_params`; this type does not implement `ShareElement` because zero/one require the runtime params.
+- **`IdentifierResidue<MOD, LIMBS>`** / **`ValueResidue<MOD, LIMBS>`** — constant modulus via `elliptic_curve::bigint::Residue` and `ResidueParams` (crypto-bigint 0.7). `MOD` is a type implementing `ResidueParams<LIMBS>`.
+- **`IdentifierConstMontyResidue<MOD, LIMBS>`** / **`ValueConstMontyResidue<MOD, LIMBS>`** — constant modulus in Montgomery form (crypto-bigint 0.7 `ConstMontyForm`). Define the modulus with `crypto_bigint::impl_modulus!` and use the type as share identifier or value; implements `ShareElement` and `ShareIdentifier`.
+- **`IdentifierMontyResidue<LIMBS>`** / **`ValueMontyResidue<LIMBS>`** — runtime modulus in Montgomery form (crypto-bigint 0.7 `FixedMontyForm`). The modulus is given by `FixedMontyParams<LIMBS>`. Create values with `zero_with_params`, `one_with_params`, `new`, or `random_with_params`; this type does not implement `ShareElement` because zero/one require the runtime params.
 
 Example with a **constant modulus** (ConstMontyForm):
 
@@ -123,14 +123,14 @@ impl_modulus!(MyModulus, U256, "73eda753299d7d483339d80809a1d80553bda402fffe5bfe
 type MyResidue = IdentifierConstMontyResidue<MyModulus, 4>;
 ```
 
-Example with a **runtime modulus** (MontyForm):
+Example with a **runtime modulus** (FixedMontyForm):
 
 ```rust
-use crypto_bigint::{modular::MontyParams, Odd, U256};
+use crypto_bigint::{modular::FixedMontyParams, Odd, U256};
 use vsss_rs::IdentifierMontyResidue;
 
 let modulus = Odd::new(U256::from(97u64)).expect("odd modulus");
-let params = MontyParams::<4>::new(modulus);
+let params = FixedMontyParams::<4>::new(modulus);
 let zero = IdentifierMontyResidue::<4>::zero_with_params(params);
 let one = IdentifierMontyResidue::<4>::one_with_params(params);
 ```
@@ -217,7 +217,7 @@ use vsss_rs::{*, shamir};
 use elliptic_curve::ff::PrimeField;
 use p256::{NonZeroScalar, Scalar, SecretKey};
 
-let mut osrng = rand_core::OsRng::default();
+let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
 let sk = SecretKey::random(&mut osrng);
 let nzs = sk.to_nonzero_scalar();
 let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
@@ -236,7 +236,7 @@ Or using the `DefaultStdVsss` struct
 ```rust
  use elliptic_curve::ff::Field;
 
-let mut osrng = rand_core::OsRng::default();
+let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
 let secret = p256::Scalar::random(&mut osrng);
 let res = DefaultStdVsss::<p256::ProjectivePoint>::split_secret(2, 3, secret, &mut osrng);
 assert!(res.is_ok());
@@ -256,7 +256,7 @@ use vsss_rs::{*, shamir};
 use elliptic_curve::ff::PrimeField;
 use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 
-let mut osrng = rand_core::OsRng::default();
+let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
 let sk = SecretKey::random(&mut osrng);
 let secret = *sk.to_nonzero_scalar();
 let res = shamir::split_secret::<Scalar, [u8; 1], u8, Vec<u8>>(2, 3, secret, &mut osrng);
@@ -275,7 +275,7 @@ use vsss_rs::{*, feldman};
 use bls12_381_plus::{Scalar, G1Projective};
 use elliptic_curve::ff::Field;
 
-let mut rng = rand_core::OsRng::default();
+let mut rng = rand::rngs::StdRng::from_seed([1u8; 32]);
 let secret = Scalar::random(&mut rng);
 let res = feldman::split_secret::<G1Projective, [u8; 1], u8, Vec<u8>>(2, 3, secret, None, &mut rng);
 assert!(res.is_ok());
@@ -291,37 +291,39 @@ assert_eq!(secret, secret_1);
 
 ### Curve25519
 
-Curve25519 is not a prime field but this crate does support it using
-`features=["curve25519"]` which is enabled by default. This feature
-wraps curve25519-dalek libraries so they can be used with Shamir, Feldman, and Pedersen.
+Curve25519-dalek 5.0.0 implements the native `ff` and `group` traits, so its scalar
+and group types can be used with Shamir, Feldman, and Pedersen.
 
 Here's an example of using Ed25519 and x25519
 
 ```rust
 use curve25519_dalek::scalar::Scalar;
-use rand::Rng;
-use ed25519_dalek::SecretKey;
-use vsss_rs::{curve25519::WrappedScalar, *};
+use rand::{RngExt, SeedableRng};
+use ed25519_dalek::SigningKey;
+use vsss_rs::*;
 use x25519_dalek::StaticSecret;
 
-let mut osrng = rand::rngs::OsRng::default();
-let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.gen::<[u8; 32]>());
+type Ed25519Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
+
+let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
+let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.random::<[u8; 32]>());
 let sk1 = StaticSecret::from(sc.to_bytes());
-let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-let res = shamir::split_secret::<WrappedScalar, [u8; 1], u8, Vec<u8>>(2, 3, sc.into(), &mut osrng);
+let ske1 = SigningKey::from_bytes(&sc.to_bytes());
+let secret = IdentifierPrimeField(sc);
+let res = shamir::split_secret::<Ed25519Share>(2, 3, &secret, &mut osrng);
 assert!(res.is_ok());
 let shares = res.unwrap();
-let res = combine_shares(&shares);
+let res = shares.combine();
 assert!(res.is_ok());
-let scalar: WrappedScalar = res.unwrap();
+let scalar = res.unwrap();
 assert_eq!(scalar.0, sc);
 let sk2 = StaticSecret::from(scalar.0.to_bytes());
-let ske2 = SecretKey::from_bytes(&scalar.0.to_bytes()).unwrap();
+let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
 assert_eq!(sk2.to_bytes(), sk1.to_bytes());
 assert_eq!(ske1.to_bytes(), ske2.to_bytes());
 ```
 
-Either `RistrettoPoint` or `EdwardsPoint` may be used when using Feldman and Pedersen VSSS.
+Either `RistrettoPoint` or `SubgroupPoint` may be used when using Feldman and Pedersen VSSS.
 
 # License
 

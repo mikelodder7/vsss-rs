@@ -7,8 +7,10 @@ use core::{
     ops::{Deref, DerefMut, Mul},
 };
 #[cfg(feature = "bigint")]
+use crypto_bigint::{Encoding, modular::ConstMontyParams};
+#[cfg(feature = "bigint")]
 use elliptic_curve::{
-    bigint::{self, ArrayEncoding, modular::constant_mod::ResidueParams},
+    bigint::{self, ArrayEncoding, modular::ConstMontyParams as ResidueParams},
     ops::Reduce,
 };
 
@@ -131,7 +133,7 @@ where
                 "cannot convert from IdentifierUint to IdentifierPrimeField with different limb size"
             );
         }
-        Self(F::reduce(value.0.0))
+        Self(F::reduce(&value.0.0))
     }
 }
 
@@ -143,7 +145,7 @@ where
 {
     fn from(value: &IdentifierResidue<MOD, LIMBS>) -> Self {
         let t = value.0.retrieve();
-        Self(F::reduce(t))
+        Self(F::reduce(&t))
     }
 }
 
@@ -199,7 +201,7 @@ where
 impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize>
     From<&uint::IdentifierUint<LIMBS>> for IdentifierPrimeField<F>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
 {
     fn from(value: &uint::IdentifierUint<LIMBS>) -> Self {
         if LIMBS * 8 != F::Repr::default().as_ref().len() {
@@ -207,7 +209,7 @@ where
                 "cannot convert from IdentifierUint to IdentifierPrimeField with different limb size"
             );
         }
-        Self(F::reduce(bigint::Uint::from_words(value.0.to_words())))
+        Self(F::reduce(&bigint::Uint::from_words(value.0.to_words())))
     }
 }
 
@@ -215,7 +217,7 @@ where
 impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize>
     Mul<&uint::IdentifierUint<LIMBS>> for IdentifierPrimeField<F>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
 {
     type Output = IdentifierPrimeField<F>;
 
@@ -226,28 +228,22 @@ where
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> From<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    From<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
 {
     fn from(value: &IdentifierConstMontyResidue<MOD, LIMBS>) -> Self {
         let t = value.0.retrieve();
-        Self(F::reduce(bigint::Uint::from_words(t.to_words())))
+        Self(F::reduce(&bigint::Uint::from_words(t.to_words())))
     }
 }
 
 #[cfg(feature = "bigint")]
-impl<
-    F: PrimeField + Reduce<bigint::Uint<LIMBS>>,
-    MOD: crypto_bigint::modular::ConstMontyParams<LIMBS>,
-    const LIMBS: usize,
-> Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
+impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ConstMontyParams<LIMBS>, const LIMBS: usize>
+    Mul<&IdentifierConstMontyResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
-    crypto_bigint::Uint<LIMBS>: crypto_bigint::Encoding,
+    crypto_bigint::Uint<LIMBS>: Encoding,
 {
     type Output = IdentifierPrimeField<F>;
 
@@ -267,8 +263,8 @@ impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     type Serialization = F::Repr;
     type Inner = F;
 
-    fn random(rng: impl RngCore + CryptoRng) -> Self {
-        Self(F::random(rng))
+    fn random(mut rng: impl CryptoRng) -> Self {
+        Self(F::random(&mut rng))
     }
 
     fn zero() -> Self {

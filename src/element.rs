@@ -32,9 +32,7 @@ use core::{
     fmt::Debug,
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-#[cfg(feature = "bigint")]
-use elliptic_curve::bigint::{Encoding, Random, Zero as CryptoZero};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use subtle::Choice;
 
 /// A value used to represent a share element for secret shares.
@@ -58,7 +56,7 @@ pub trait ShareElement:
     type Inner: ShareElementInner;
 
     /// Generate a random share element.
-    fn random(rng: impl RngCore + CryptoRng) -> Self;
+    fn random(rng: impl CryptoRng) -> Self;
     /// Defines an additive identity element for the share identifier.
     fn zero() -> Self;
     /// Defines a multiplicative identity element for the share identifier.
@@ -97,7 +95,7 @@ pub trait ShareIdentifier: ShareElement<Inner: ShareIdentifierInner> {
     /// which for prime fields is already uniform over the whole field.
     /// Small fields where `random` is constrained to non-zero must
     /// override this to return a uniform sample over the full field.
-    fn random_coefficient(rng: impl RngCore + CryptoRng) -> Self {
+    fn random_coefficient(rng: impl CryptoRng) -> Self {
         <Self as ShareElement>::random(rng)
     }
 }

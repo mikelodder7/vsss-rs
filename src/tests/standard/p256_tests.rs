@@ -30,12 +30,12 @@ fn valid_std_tests() {
 #[test]
 fn key_tests() {
     use crate::shamir;
-    use elliptic_curve::PrimeField;
+    use elliptic_curve::{Generate, PrimeField};
     use p256::{NonZeroScalar, SecretKey};
-    use rand::rngs::OsRng;
+    use rand::{SeedableRng, rngs::StdRng};
 
-    let mut osrng = OsRng::default();
-    let sk = SecretKey::random(&mut osrng);
+    let mut osrng = StdRng::from_seed([2u8; 32]);
+    let sk = SecretKey::generate_from_rng(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
     let secret = IdentifierPrimeField(*nzs.as_ref());
     let res = shamir::split_secret::<TestShare<Scalar>>(2, 3, &secret, &mut osrng);

@@ -4,12 +4,9 @@ use core::{
     marker::PhantomData,
     num::NonZeroUsize,
 };
-use rand_core::{CryptoRng, RngCore};
-use sha3::digest::ExtendableOutput;
-use sha3::{
-    Shake256,
-    digest::{Update, XofReader},
-};
+use rand_core::{Infallible, TryCryptoRng, TryRng};
+use sha3::digest::{ExtendableOutput, Update, XofReader};
+use shake::Shake256;
 
 use crate::{Error, ShareIdentifier, VsssResult};
 
@@ -334,30 +331,28 @@ impl<'a, I: ShareIdentifier> Iterator for ListParticipantNumberGenerator<'a, I> 
 #[repr(transparent)]
 struct XofRng(<Shake256 as ExtendableOutput>::Reader);
 
-impl RngCore for XofRng {
-    fn next_u32(&mut self) -> u32 {
+impl TryRng for XofRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         let mut buf = [0u8; 4];
         self.0.read(&mut buf);
-        u32::from_be_bytes(buf)
+        Ok(u32::from_be_bytes(buf))
     }
 
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
         let mut buf = [0u8; 8];
         self.0.read(&mut buf);
-        u64::from_be_bytes(buf)
+        Ok(u64::from_be_bytes(buf))
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.read(dest);
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         self.0.read(dest);
         Ok(())
     }
 }
 
-impl CryptoRng for XofRng {}
+impl TryCryptoRng for XofRng {}
 
 impl Debug for XofRng {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -371,7 +366,7 @@ mod tests {
     use crate::*;
     use elliptic_curve::PrimeField;
     use k256::{FieldBytes, Scalar};
-    use rand_core::SeedableRng;
+    use rand_core::{Rng, SeedableRng};
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
@@ -512,35 +507,35 @@ mod tests {
             hex::decode("134de46908fd0867a9c14ed96e90cd34be47e2b052ca266499687adae4cfe445")
                 .map(|b| {
                     IdentifierPrimeField::from(
-                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                        Scalar::from_repr(FieldBytes::try_from(&*b).unwrap()).unwrap(),
                     )
                 })
                 .unwrap(),
             hex::decode("5b182d31afa277bcfb5d6316c31e231004d29f2c99e4dec0c384d7a46439c8ca")
                 .map(|b| {
                     IdentifierPrimeField::from(
-                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                        Scalar::from_repr(FieldBytes::try_from(&*b).unwrap()).unwrap(),
                     )
                 })
                 .unwrap(),
             hex::decode("cb15c36dfe7b15c253e3f9fde1fd9ccfbd75839ff6dccca49700cb831dc5802e")
                 .map(|b| {
                     IdentifierPrimeField::from(
-                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                        Scalar::from_repr(FieldBytes::try_from(&*b).unwrap()).unwrap(),
                     )
                 })
                 .unwrap(),
             hex::decode("bb3a92d716f6a8d94d82295fd120b23d42ec8543a405ecd82e519ab0fe4ef965")
                 .map(|b| {
                     IdentifierPrimeField::from(
-                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                        Scalar::from_repr(FieldBytes::try_from(&*b).unwrap()).unwrap(),
                     )
                 })
                 .unwrap(),
             hex::decode("a0fff4c9e992f0d1acc8bc90fe6ae31dee280a0175a028a6333dde56de2121ec")
                 .map(|b| {
                     IdentifierPrimeField::from(
-                        Scalar::from_repr(FieldBytes::clone_from_slice(&b)).unwrap(),
+                        Scalar::from_repr(FieldBytes::try_from(&*b).unwrap()).unwrap(),
                     )
                 })
                 .unwrap(),

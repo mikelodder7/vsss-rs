@@ -6,7 +6,7 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use elliptic_curve::bigint::{ArrayEncoding, ByteArray, Encoding, Random, Uint, Zero};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use subtle::Choice;
 
 use super::*;
@@ -105,8 +105,8 @@ where
     type Serialization = <Uint<LIMBS> as Encoding>::Repr;
     type Inner = Saturating<LIMBS>;
 
-    fn random(mut rng: impl RngCore + CryptoRng) -> Self {
-        let inner = Saturating(Uint::<LIMBS>::random(&mut rng));
+    fn random(mut rng: impl CryptoRng) -> Self {
+        let inner = Saturating(Uint::<LIMBS>::random_from_rng(&mut rng));
         Self(inner)
     }
 
@@ -119,7 +119,7 @@ where
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.is_zero()
+        self.0.is_zero().into()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -127,7 +127,7 @@ where
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
-        let inner = Saturating(<Uint<LIMBS> as Encoding>::from_be_bytes(*serialized));
+        let inner = Saturating(<Uint<LIMBS> as Encoding>::from_be_bytes(serialized.clone()));
         Ok(Self(inner))
     }
 
@@ -169,7 +169,9 @@ where
 
     /// Convert from a fixed-size byte array.
     pub fn from_fixed_array(array: &<Uint<LIMBS> as Encoding>::Repr) -> Self {
-        Self(Saturating(<Uint<LIMBS> as Encoding>::from_be_bytes(*array)))
+        Self(Saturating(<Uint<LIMBS> as Encoding>::from_be_bytes(
+            array.clone(),
+        )))
     }
 
     /// Convert to a fixed-size byte array.
