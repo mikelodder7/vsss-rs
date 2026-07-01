@@ -22,6 +22,7 @@ on:
 env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
+  FEATURES: "bigint,primitive,serde,std,zeroize"
   RUST_LOG_STYLE: always
   RUSTFLAGS: "-Dwarnings"
   RUSTDOCFLAGS: "-Dwarnings"
@@ -47,7 +48,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - run: cargo test --all-features --release
+      - run: cargo test --features "$FEATURES" --release
 
   careful:
     runs-on: ubuntu-latest
@@ -68,7 +69,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      - run: cargo clippy --all --all-features -- -D warnings
+      - run: cargo clippy --all --features "$FEATURES" -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
@@ -87,7 +88,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - run: cargo doc --all-features
+      - run: cargo doc --features "$FEATURES"
 
   deps:
     runs-on: ubuntu-latest
@@ -98,7 +99,7 @@ jobs:
           toolchain: nightly
       - uses: cargo-bins/cargo-binstall@main
       - run: cargo binstall --no-confirm cargo-udeps
-      - run: cargo udeps --all-targets --all-features
+      - run: cargo udeps --all-targets --features "$FEATURES"
 
   outdated:
     runs-on: ubuntu-latest
