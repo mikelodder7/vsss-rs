@@ -10,47 +10,7 @@ This crate provides various cryptography verifiable secret sharing schemes when 
 * This implementation does not require the Rust standard library.
 * All operations are constant time unless explicitly noted.
 
-## NOTE if upgrading from Version 2
-
-The interfaces have been redesigned to be compatible with each other as well as serialization.
-
-Version 3 defines a set of traits for implementing secret sharing schemes. While the standard mode provides quick
-and easy methods to split and combine secrets, the traits allow for more flexibility and customization especially in
-no-std mode. Previous versions tried to keep the two modes aligned but in doing so resulted in a lot of code duplication
-and stack overflow issues. The new traits allow for a single implementation to be used in both modes and allow
-no-std consumers to use exactly what they need while minimizing code duplication and stack overflows.
-
-## NOte if upgrading from Version 3
-
-The `ShareIdentifier` trait has been modified as follows:
-
-- fn to_buffer which receives a byte buffer and fills the contents with the byte representation of the identifier
-- fn from_buffer which receives a byte buffer and creates the identifier from the byte representation
-- to_vec which returns the byte representation as a Vec<u8> if features=alloc or std is enabled.
-
-### Why this change?
-
-The previous method was not flexible enough to handle different types of identifiers such as u16, u32, u64, etc. 
-because as_bytes returned &[u8] and there was no safe method to convert the byte representation from the identifier
-when using u16, u32, etc. So the option was to either continue as is but use unsafe code with Statics (not good), 
-or implement a wrapper struct that would handle the conversion but needed to implement the same methods and traits
-as the primitives would (also not good and results in a lot of boilerplate).
-
-The `Share` trait has been modified as follows:
-
-- value and value_mut now mirror to_buffer and from_buffer in ShareIdentifier
-- value_vec mirrors to_vec in ShareIdentifier
-
-### Other changes
-
-Before the `Share` trait was implemented for fixed sizes of 33, 49, and 97. Now all array sizes are supported. 
-
-In addition, GenericArray of any size is supported.
-`crypto-bigint` Uint types (0.7) and Montgomery-form residue types (ConstMontyForm and FixedMontyForm) are supported; see *Share elements (bigint feature)* below.
-
-Now tuples with the identifier as `.0` and the share as `.1` are supported.
-
-Gf256 has been added as a field for secret sharing schemes with just byte sequences. All operations are constant time.
+Gf256 is provided as a field for secret sharing schemes with just byte sequences. All operations are constant time.
 Most implementations comparatively are not constant time due to: runtime is dependent on the value of the secret such as
 using if statements and looping with break statements, or using lookup tables that allow an attacker to monitor code or
 data access patterns. While great for performance, they are not constant time which is desirable for cryptographic operations.
@@ -59,8 +19,7 @@ traits to function with this library.
 
 ### Numbering
 
-Share numbering methods have been added. The default method has been to use incrementing numbers starting at 1. While
-simple enough, again it's not flexible enough for all use cases. The following numbering methods are available:
+The default share numbering method uses incrementing numbers starting at 1. The following numbering methods are available:
 
 - SequentialParticipantNumberGenerator: index for the share identifiers starts at a specified number and incrementing by a specified value until a limit is reached. The default is starting at 1 and incrementing by 1 until 255 is reached
 - RandomParticipantNumberGenerator: index for the share identifiers is random. The random number generator is based on the desired index, a domain separator which are hashed using [Shake256](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-208.pdf).
@@ -68,13 +27,12 @@ simple enough, again it's not flexible enough for all use cases. The following n
 - ListAndRandomParticipantNumberGenerator: a combination of the above two methods. The list is used first and then random numbers are used after the list is exhausted.
 - ListAndSequentialParticipantNumberGenerator: a combination of the above two methods. The list is used first and then sequential numbers are used after the list is exhausted.
 
-The new method `split_secret_with_participant_generator` enables the use of the above methods. If you don't need
-the new flexible methods, the old method `split_secret` is still available which uses SequentialParticipantNumberGenerator starting at 1 and incrementing by 1.
+Use `split_secret_with_participant_generator` to choose one of these numbering methods. The `split_secret` method
+uses SequentialParticipantNumberGenerator starting at 1 and incrementing by 1.
 
 ### Shares and Identifiers
 
-There was lots of requests to enable share identifiers to be more than just integer values. This is now possible
-by implementing the `ShareIdentifier` trait. The `ShareIdentifier` trait is a simple trait that provides the necessary
+Share identifiers can be more than just integer values by implementing the `ShareIdentifier` trait. The `ShareIdentifier` trait is a simple trait that provides the necessary
 methods for splitting and combining shares. The `ShareIdentifier` trait is implemented for 
 primitive integer values by default. Other values can be used by implementing the trait for the desired type 
 but keep in might endianness. By default, primitive types represented as big-endian byte sequences. As explained
