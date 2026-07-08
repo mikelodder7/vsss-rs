@@ -10,15 +10,15 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "6.0.0-rc1"
+version = "6.0.0-rc2"
 
 [features]
 default = ["bigint", "primitive", "serde", "std", "zeroize"]
-alloc = ["rand/alloc", "serde?/alloc", "crypto-bigint?/alloc", "num?/std", "num?/rand", "hex?/alloc", "elliptic-curve-tools?/alloc"]
+alloc = ["rand/alloc", "serde?/alloc", "crypto-bigint?/alloc", "num?/std", "hex?/alloc", "elliptic-curve-tools?/alloc"]
 bigint = ["dep:crypto-bigint", "dep:num"]
 primitive = ["dep:num"]
 serde = ["dep:serde", "elliptic-curve/serde", "crypto-bigint?/serde", "num/serde", "generic-array/serde", "hybrid-array/serde", "elliptic-curve-tools/serde"]
-std = ["alloc", "num/std", "num/rand", "rand/std", "hex/std", "serde?/std", "elliptic-curve-tools?/std"]
+std = ["alloc", "num/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve-tools?/std"]
 zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 legacy-curve-tests = []
 
@@ -38,15 +38,15 @@ shake = { version = "0.1", default-features = false }
 zeroize = { version = "1", features = ["zeroize_derive"], optional = true }
 
 [dev-dependencies]
-bls12_381_plus = "0.8"
+bls12_381_plus = { version = "0.9.0-rc1", features = ["expose-fields"] }
 ciborium = "0.2.2"
 curve25519-dalek = { version = "5.0.0-rc.1", features = ["digest", "group"] }
 ed25519-dalek = "3.0.0-rc.1"
-ed448-goldilocks-plus = "0.16"
+ed448-goldilocks-plus = "0.18.0-rc0"
 hex = "0.4"
 hash2curve = "0.14"
-k256 = { version = "0.14.0-rc.14", features = ["arithmetic"] }
-p256 = { version = "0.14.0-rc.14", features = ["arithmetic"] }
+k256 = { version = "0.14.0", features = ["arithmetic"] }
+p256 = { version = "0.14.0", features = ["arithmetic"] }
 postcard = { version = "1.0", features = ["use-std"] }
 rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "sys_rng"] }
 rand_chacha = "0.10"
