@@ -1,5 +1,5 @@
 #[cfg(feature = "bigint")]
-use super::{uint, uint5};
+use super::uint;
 use crate::*;
 use core::{
     fmt::{self, Display, Formatter},
@@ -268,92 +268,6 @@ impl<G: Group + GroupEncoding + Default, P: Primitive<BYTES>, const BYTES: usize
     MulAssign<&IdentifierPrimitive<P, BYTES>> for ValueGroup<G>
 {
     fn mul_assign(&mut self, rhs: &IdentifierPrimitive<P, BYTES>) {
-        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
-        self.0 *= id.0;
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint5::IdentifierUint<LIMBS>>
-    for ValueGroup<G>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
-{
-    type Output = Self;
-
-    fn mul(self, rhs: uint5::IdentifierUint<LIMBS>) -> Self::Output {
-        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
-        Self(self.0 * id.0)
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint5::IdentifierUint<LIMBS>>
-    for ValueGroup<G>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
-{
-    type Output = Self;
-
-    fn mul(self, rhs: &uint5::IdentifierUint<LIMBS>) -> Self::Output {
-        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
-        Self(self.0 * id.0)
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<uint5::IdentifierUint<LIMBS>>
-    for &ValueGroup<G>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
-{
-    type Output = ValueGroup<G>;
-
-    fn mul(self, rhs: uint5::IdentifierUint<LIMBS>) -> Self::Output {
-        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
-        ValueGroup(self.0 * id.0)
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> Mul<&uint5::IdentifierUint<LIMBS>>
-    for &ValueGroup<G>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
-{
-    type Output = ValueGroup<G>;
-
-    fn mul(self, rhs: &uint5::IdentifierUint<LIMBS>) -> Self::Output {
-        let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
-        ValueGroup(self.0 * id.0)
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize> MulAssign<uint5::IdentifierUint<LIMBS>>
-    for ValueGroup<G>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
-{
-    fn mul_assign(&mut self, rhs: uint5::IdentifierUint<LIMBS>) {
-        let id = IdentifierPrimeField::<G::Scalar>::from(&rhs);
-        self.0 *= id.0;
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<G: Group + GroupEncoding + Default, const LIMBS: usize>
-    MulAssign<&uint5::IdentifierUint<LIMBS>> for ValueGroup<G>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-    G::Scalar: Reduce<bigint::Uint<LIMBS>>,
-{
-    fn mul_assign(&mut self, rhs: &uint5::IdentifierUint<LIMBS>) {
         let id = IdentifierPrimeField::<G::Scalar>::from(rhs);
         self.0 *= id.0;
     }
@@ -750,14 +664,9 @@ mod tests {
         let generator = generator();
         let primitive = IdentifierPrimitive::<u16, 2>(4);
         let expected4 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(4u64));
-        let expected5 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(5u64));
         let expected6 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(6u64));
         let expected7 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(7u64));
         let expected8 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(8u64));
-        let ec_uint = crate::element::uint5::IdentifierUint::<4>::from_slice(
-            EcU256::from(5u64).to_be_bytes().as_ref(),
-        )
-        .unwrap();
         let crypto_uint = crate::element::uint::IdentifierUint::<4>::from_slice(
             CryptoU256::from(6u64).to_be_bytes().as_ref(),
         )
@@ -801,36 +710,6 @@ mod tests {
         assert_eq!(
             assigned,
             ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(16u64))
-        );
-
-        assert_eq!(generator * ec_uint, expected5);
-        assert_eq!(
-            <ValueGroup<ProjectivePoint> as Mul<&crate::element::uint5::IdentifierUint<4>>>::mul(
-                generator, &ec_uint
-            ),
-            expected5
-        );
-        assert_eq!(
-            <&ValueGroup<ProjectivePoint> as Mul<crate::element::uint5::IdentifierUint<4>>>::mul(
-                &generator, ec_uint
-            ),
-            expected5
-        );
-        assert_eq!(
-            <&ValueGroup<ProjectivePoint> as Mul<&crate::element::uint5::IdentifierUint<4>>>::mul(
-                &generator, &ec_uint
-            ),
-            expected5
-        );
-        let mut assigned = generator;
-        assigned *= ec_uint;
-        assert_eq!(assigned, expected5);
-        <ValueGroup<ProjectivePoint> as MulAssign<
-            &crate::element::uint5::IdentifierUint<4>,
-        >>::mul_assign(&mut assigned, &ec_uint);
-        assert_eq!(
-            assigned,
-            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(25u64))
         );
 
         assert_eq!(generator * crypto_uint, expected6);

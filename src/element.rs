@@ -2,6 +2,8 @@
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod biguint;
+#[cfg(all(feature = "bigint", any(feature = "alloc", feature = "std")))]
+pub mod boxed_uint;
 mod group_element;
 #[cfg(feature = "bigint")]
 mod monty_residue;
@@ -12,11 +14,11 @@ mod primitive;
 mod residue;
 #[cfg(feature = "bigint")]
 pub mod uint;
-#[cfg(feature = "bigint")]
-pub mod uint5;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use biguint::*;
+#[cfg(all(feature = "bigint", any(feature = "alloc", feature = "std")))]
+pub use boxed_uint::*;
 pub use group_element::*;
 #[cfg(feature = "bigint")]
 pub use monty_residue::*;

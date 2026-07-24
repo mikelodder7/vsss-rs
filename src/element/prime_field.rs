@@ -122,22 +122,6 @@ impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> From<&IdentifierPri
 }
 
 #[cfg(feature = "bigint")]
-impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize>
-    From<&uint5::IdentifierUint<LIMBS>> for IdentifierPrimeField<F>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-{
-    fn from(value: &uint5::IdentifierUint<LIMBS>) -> Self {
-        if LIMBS * 8 != F::Repr::default().as_ref().len() {
-            panic!(
-                "cannot convert from IdentifierUint to IdentifierPrimeField with different limb size"
-            );
-        }
-        Self(F::reduce(&value.0.0))
-    }
-}
-
-#[cfg(feature = "bigint")]
 impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, MOD: ResidueParams<LIMBS>, const LIMBS: usize>
     From<&IdentifierResidue<MOD, LIMBS>> for IdentifierPrimeField<F>
 where
@@ -164,20 +148,6 @@ impl<F: PrimeField, P: Primitive<BYTES>, const BYTES: usize> Mul<&IdentifierPrim
     type Output = IdentifierPrimeField<F>;
 
     fn mul(self, rhs: &IdentifierPrimitive<P, BYTES>) -> Self::Output {
-        let rhs = IdentifierPrimeField::<F>::from(rhs);
-        Self(self.0 * rhs.0)
-    }
-}
-
-#[cfg(feature = "bigint")]
-impl<F: PrimeField + Reduce<bigint::Uint<LIMBS>>, const LIMBS: usize>
-    Mul<&uint5::IdentifierUint<LIMBS>> for IdentifierPrimeField<F>
-where
-    bigint::Uint<LIMBS>: ArrayEncoding,
-{
-    type Output = IdentifierPrimeField<F>;
-
-    fn mul(self, rhs: &uint5::IdentifierUint<LIMBS>) -> Self::Output {
         let rhs = IdentifierPrimeField::<F>::from(rhs);
         Self(self.0 * rhs.0)
     }
@@ -427,12 +397,6 @@ mod tests {
             IdentifierPrimeField(Scalar::from(4u64))
         );
         assert_eq!(base * &primitive, IdentifierPrimeField(Scalar::from(12u64)));
-
-        let ec_uint = crate::element::uint5::IdentifierUint::<4>::from_slice(
-            EcU256::from(5u64).to_be_bytes().as_ref(),
-        )
-        .unwrap();
-        assert_eq!(base * &ec_uint, IdentifierPrimeField(Scalar::from(15u64)));
 
         let crypto_uint = crate::element::uint::IdentifierUint::<4>::from_slice(
             CryptoU256::from(6u64).to_be_bytes().as_ref(),

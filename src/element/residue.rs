@@ -193,13 +193,18 @@ where
     }
 
     fn deserialize(serialized: &Self::Serialization) -> VsssResult<Self> {
-        uint5::IdentifierUint::<LIMBS>::deserialize(serialized)
-            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0.0)))
+        Ok(Self(Residue::<MOD, LIMBS>::new(
+            &<Uint<LIMBS> as Encoding>::from_be_bytes(serialized.clone()),
+        )))
     }
 
     fn from_slice(vec: &[u8]) -> VsssResult<Self> {
-        uint5::IdentifierUint::<LIMBS>::from_slice(vec)
-            .map(|inner| Self(Residue::<MOD, LIMBS>::new(&inner.0.0)))
+        if vec.len() != Uint::<LIMBS>::BYTES {
+            return Err(Error::InvalidShareElement);
+        }
+        Ok(Self(Residue::<MOD, LIMBS>::new(
+            &Uint::<LIMBS>::from_be_slice(vec),
+        )))
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]

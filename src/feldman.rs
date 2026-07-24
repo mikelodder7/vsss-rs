@@ -4,9 +4,10 @@
 */
 //! Feldman's Verifiable secret sharing scheme.
 //! see <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
+#[cfg(any(feature = "alloc", feature = "std"))]
+use crate::shamir::create_shares_with_participant_generators_iter;
 use crate::shamir::{
-    create_shares_with_participant_generators, create_shares_with_participant_generators_iter,
-    create_shares_with_participant_ids_iter,
+    create_shares_with_participant_generators, create_shares_with_participant_ids_iter,
 };
 use crate::*;
 use core::{

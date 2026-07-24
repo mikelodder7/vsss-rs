@@ -61,8 +61,8 @@ With the `bigint` feature (enabled by default), the crate supports share identif
 
 **Uint-based identifiers**
 
-- **`element::uint5::IdentifierUint<LIMBS>`** — wraps the `crypto-bigint` 0.7 `Uint` re-exported by `elliptic-curve` with saturating arithmetic; works with curve scalars and `IdentifierResidue`.
 - **`element::uint::IdentifierUint<LIMBS>`** — wraps the direct `crypto-bigint` 0.7 `Uint`; interoperates with prime-field and group elements via word conversion.
+- **`IdentifierBoxedUint<BITS>`** / **`ValueBoxedUint<BITS>`** — wraps `crypto-bigint` 0.7 `BoxedUint` when `bigint` and `alloc`/`std` are enabled; useful when the bit precision should be carried by the type without stack-allocating a const-generic `Uint`.
 
 **Residue-based identifiers (modular arithmetic)**
 
