@@ -7,8 +7,8 @@
 
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
 
-* **This implementation is currently under audit and results will be published when completed. Until then use at your own risk.**
 * This implementation does not require the Rust standard library.
+* This library has received a few audits and is in production use.
 * All operations are constant time unless explicitly noted.
 
 Gf256 is provided as a field for secret sharing schemes with just byte sequences. All operations are constant time.
@@ -57,15 +57,12 @@ If the share identifier is `u8` then the additional implementations exist.
 
 ### Share elements (bigint feature)
 
-With the `bigint` feature (enabled by default), the crate supports share identifiers and values based on **crypto-bigint** in two versions:
-
-- **crypto-bigint 0.7** (via `elliptic-curve`): used by curve types and by `IdentifierResidue` (constant-modulus residue) and `IdentifierUint` in `element::uint5` (with saturating arithmetic).
-- **crypto-bigint 0.7**: used by `IdentifierUint` in `element::uint`, and by Montgomery-form residue types.
+With the `bigint` feature (enabled by default), the crate supports share identifiers and values based on **crypto-bigint 0.7**. Some types use `crypto-bigint` directly, while curve-compatible types use the matching `crypto-bigint` API re-exported by `elliptic-curve`.
 
 **Uint-based identifiers**
 
 - **`element::uint5::IdentifierUint<LIMBS>`** — wraps the `crypto-bigint` 0.7 `Uint` re-exported by `elliptic-curve` with saturating arithmetic; works with curve scalars and `IdentifierResidue`.
-- **`element::uint::IdentifierUint<LIMBS>`** — wraps `crypto-bigint` 0.7 `Uint`; interoperates with prime-field and group elements via word conversion.
+- **`element::uint::IdentifierUint<LIMBS>`** — wraps the direct `crypto-bigint` 0.7 `Uint`; interoperates with prime-field and group elements via word conversion.
 
 **Residue-based identifiers (modular arithmetic)**
 

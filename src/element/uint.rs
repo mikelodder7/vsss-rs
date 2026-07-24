@@ -1,5 +1,5 @@
 //! Share element and identifier implementations using `Uint<LIMBS>` from
-//! the `crypto-bigint` version 6 crate.
+//! `crypto-bigint`.
 //!
 use core::{
     fmt::{self, Display, Formatter},
