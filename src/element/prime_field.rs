@@ -322,3 +322,140 @@ impl<F: PrimeField> IdentifierPrimeField<F> {
     /// Returns multiplicative identity.
     pub const ONE: Self = Self(F::ONE);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::IdentifierPrimeField;
+    use crate::{
+        Error, IdentifierConstMontyResidue, IdentifierPrimitive, IdentifierResidue, ShareElement,
+        ShareIdentifier,
+    };
+    use core::hash::{Hash, Hasher};
+    use crypto_bigint::{U256 as CryptoU256, const_monty_params};
+    use elliptic_curve::bigint::{U256 as EcU256, const_monty_params as ec_const_monty_params};
+    use k256::Scalar;
+    use std::{collections::hash_map::DefaultHasher, string::ToString};
+
+    ec_const_monty_params!(
+        EcResidueMod,
+        EcU256,
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+    );
+    const_monty_params!(
+        CryptoResidueMod,
+        CryptoU256,
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+    );
+
+    #[test]
+    fn prime_field_share_element_methods_round_trip() {
+        let identifier = IdentifierPrimeField(Scalar::from(11u64));
+        let serialized = identifier.serialize();
+        let serialized_bytes: &[u8] = serialized.as_ref();
+
+        assert_eq!(identifier.to_string(), hex::encode(serialized_bytes));
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::deserialize(&serialized),
+            Ok(identifier)
+        );
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::from_slice(serialized_bytes),
+            Ok(identifier)
+        );
+        assert_eq!(identifier.to_vec(), serialized_bytes);
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::ZERO,
+            IdentifierPrimeField::zero()
+        );
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::ONE,
+            IdentifierPrimeField::one()
+        );
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::zero().is_zero().unwrap_u8(),
+            1
+        );
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::one().is_zero().unwrap_u8(),
+            0
+        );
+    }
+
+    #[test]
+    fn prime_field_reference_access_hash_order_and_arithmetic_work() {
+        let mut identifier = IdentifierPrimeField(Scalar::from(2u64));
+        assert_eq!(*identifier, Scalar::from(2u64));
+        assert_eq!(*identifier.as_ref(), Scalar::from(2u64));
+        *identifier.as_mut() = Scalar::from(3u64);
+        assert_eq!(identifier.0, Scalar::from(3u64));
+
+        let from_ref = IdentifierPrimeField::from(&identifier);
+        assert_eq!(from_ref, identifier);
+        assert_eq!(
+            identifier * &IdentifierPrimeField(Scalar::from(4u64)),
+            IdentifierPrimeField(Scalar::from(12u64))
+        );
+        identifier.inc(&IdentifierPrimeField(Scalar::from(2u64)));
+        assert_eq!(identifier.0, Scalar::from(5u64));
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::one().invert(),
+            Ok(IdentifierPrimeField::one())
+        );
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::zero().invert(),
+            Err(Error::InvalidShareElement)
+        );
+        assert!(
+            IdentifierPrimeField(Scalar::from(1u64)) < IdentifierPrimeField(Scalar::from(2u64))
+        );
+
+        let mut hasher = DefaultHasher::new();
+        identifier.hash(&mut hasher);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn prime_field_converts_and_multiplies_with_supported_identifier_wrappers() {
+        let base = IdentifierPrimeField(Scalar::from(3u64));
+        let primitive = IdentifierPrimitive::<u16, 2>(4);
+        assert_eq!(
+            IdentifierPrimeField::<Scalar>::from(&primitive),
+            IdentifierPrimeField(Scalar::from(4u64))
+        );
+        assert_eq!(base * &primitive, IdentifierPrimeField(Scalar::from(12u64)));
+
+        let ec_uint = crate::element::uint5::IdentifierUint::<4>::from_slice(
+            EcU256::from(5u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        assert_eq!(base * &ec_uint, IdentifierPrimeField(Scalar::from(15u64)));
+
+        let crypto_uint = crate::element::uint::IdentifierUint::<4>::from_slice(
+            CryptoU256::from(6u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        assert_eq!(
+            base * &crypto_uint,
+            IdentifierPrimeField(Scalar::from(18u64))
+        );
+
+        let residue = IdentifierResidue::<EcResidueMod, 4>::from_slice(
+            EcU256::from(7u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        assert_eq!(base * &residue, IdentifierPrimeField(Scalar::from(21u64)));
+
+        let const_monty = IdentifierConstMontyResidue::<CryptoResidueMod, 4>::from_slice(
+            CryptoU256::from(8u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        assert_eq!(
+            base * &const_monty,
+            IdentifierPrimeField(Scalar::from(24u64))
+        );
+    }
+}

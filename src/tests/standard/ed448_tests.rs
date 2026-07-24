@@ -30,9 +30,9 @@ fn valid_std_tests() {
 #[cfg(any(feature = "alloc", feature = "std"))]
 #[test]
 fn key_tests() {
-    use rand::RngExt;
+    use rand::{RngExt, SeedableRng, rngs::StdRng};
 
-    let mut osrng = rand::rngs::SysRng;
+    let mut osrng = StdRng::from_seed([1u8; 32]);
     let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
         &osrng.random::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
@@ -50,9 +50,9 @@ fn key_tests() {
 #[cfg(all(feature = "serde", any(feature = "alloc", feature = "std")))]
 #[test]
 fn pedersen_verifier_serde_test() {
-    use rand::RngExt;
+    use rand::{RngExt, SeedableRng, rngs::StdRng};
 
-    let mut osrng = rand::rngs::SysRng;
+    let mut osrng = StdRng::from_seed([2u8; 32]);
     let sc = Scalar::hash::<ExpandMsgXmd<sha2::Sha512>>(
         &osrng.random::<[u8; 32]>(),
         b"edwards_XMD:SHA-512_ELL2_RO_",
@@ -75,13 +75,13 @@ fn pedersen_verifier_serde_test() {
         assert!(pedersen_verifier_set.verify_share_and_blinder(s, b).is_ok());
     }
 
-    let res = serde_json::to_string(&pedersen_verifier_set);
-    if res.is_err() {
-        eprintln!("{:?}", res.unwrap_err());
-        return;
-    }
-    assert!(res.is_ok());
-    let v_str = res.unwrap();
+    let v_str = match serde_json::to_string(&pedersen_verifier_set) {
+        Ok(v_str) => v_str,
+        Err(err) => {
+            eprintln!("{err:?}");
+            return;
+        }
+    };
     let res = serde_json::from_str::<Vec<ValueGroup<EdwardsPoint>>>(&v_str);
     assert!(res.is_ok());
     let verifier2 = res.unwrap();

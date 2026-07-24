@@ -19,7 +19,6 @@ use elliptic_curve::{
 };
 #[cfg(any(feature = "alloc", feature = "std"))]
 use generic_array::typenum;
-use hash2curve::ExpandMsgXmd;
 use rstest::*;
 
 #[test]
@@ -73,13 +72,11 @@ fn simple_std() {
         assert!(verifiers.verify_share(s).is_ok());
     }
 
-    let numbering = ParticipantIdGeneratorType::default();
     let options = PedersenOptions {
-        secret,
+        secret: &secret,
         blinder: None,
         secret_generator: None,
         blinder_generator: None,
-        participant_generators: &[numbering],
     };
     let ped_res =
         StdPedersenResult::<TestShare<Scalar>, ValueGroup<G1Projective>>::split_secret_with_blind_verifiers(
@@ -141,9 +138,9 @@ fn group_combine() {
     assert!(res.is_ok());
     let shares = res.unwrap();
 
-    // Compute partial bls signatures
-    let dst = b"group_combine";
-    let msg = b"1234567890";
+    // Compute partial BLS-style signatures from fixed group bases.
+    let h1 = G1Projective::GENERATOR;
+    let h2 = G2Projective::GENERATOR;
     let mut sig_shares1 = [(
         IdentifierPrimeField::<Scalar>::ZERO,
         ValueGroup::<G1Projective>::identity(),
@@ -153,9 +150,6 @@ fn group_combine() {
         ValueGroup::<G2Projective>::identity(),
     ); 5];
     for (i, s) in shares.iter().enumerate() {
-        let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
-        let h2 = G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst);
-
         let s1 = h1 * s.value().0;
         let s2 = h2 * s.value().0;
 
@@ -173,9 +167,8 @@ fn group_combine() {
     let sig1 = res1.unwrap().to_affine();
     let sig2 = G2Prepared::from(res2.unwrap().to_affine());
 
-    let h1 = G1Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst).to_affine();
-    let h2 =
-        G2Prepared::from(G2Projective::hash::<ExpandMsgXmd<sha2::Sha256>>(msg, dst).to_affine());
+    let h1 = h1.to_affine();
+    let h2 = G2Prepared::from(h2.to_affine());
 
     let pk1 = (G1Projective::GENERATOR * *secret).to_affine();
     let pk2 = G2Prepared::from((G2Projective::GENERATOR * *secret).to_affine());
@@ -238,7 +231,7 @@ fn point_combine() {
         .map(|s| {
             let pt = G1Projective::GENERATOR * s.value().0;
             <(IdentifierPrimeField<Scalar>, ValueGroup<G1Projective>)>::with_identifier_and_value(
-                s.identifier().clone(),
+                *s.identifier(),
                 ValueGroup(pt),
             )
         })

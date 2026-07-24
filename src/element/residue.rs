@@ -233,3 +233,70 @@ where
     /// Identifier with the value 1.
     pub const ONE: Self = Self(Residue::<MOD, LIMBS>::ONE);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{IdentifierResidue, Residue};
+    use crate::{Error, ShareElement, ShareIdentifier};
+    use elliptic_curve::bigint::{U64, const_monty_params};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+        string::ToString,
+    };
+
+    const_monty_params!(TestResidueMod, U64, "000000000000000d");
+
+    type TestResidue = IdentifierResidue<TestResidueMod, 1>;
+
+    fn residue(value: u64) -> TestResidue {
+        IdentifierResidue(Residue::<TestResidueMod, 1>::new(&U64::from(value)))
+    }
+
+    #[test]
+    fn residue_identifier_share_element_methods_round_trip() {
+        let identifier = residue(3);
+        let serialized = identifier.serialize();
+
+        assert_eq!(identifier.to_string(), "0000000000000003");
+        assert_eq!(serialized.as_ref(), [0, 0, 0, 0, 0, 0, 0, 3]);
+        assert_eq!(TestResidue::deserialize(&serialized), Ok(identifier));
+        assert_eq!(TestResidue::from_slice(serialized.as_ref()), Ok(identifier));
+        assert_eq!(identifier.to_vec(), serialized.as_ref());
+        assert_eq!(
+            TestResidue::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(TestResidue::ZERO, TestResidue::zero());
+        assert_eq!(TestResidue::ONE, TestResidue::one());
+        assert_eq!(TestResidue::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(TestResidue::one().is_zero().unwrap_u8(), 0);
+    }
+
+    #[test]
+    fn residue_identifier_ordering_hashing_conversion_and_arithmetic_work() {
+        let two = residue(2);
+        let three = residue(3);
+        let six = residue(6);
+
+        assert!(two < three);
+        let mut hasher = DefaultHasher::new();
+        two.hash(&mut hasher);
+        assert_ne!(hasher.finish(), 0);
+        assert_eq!(TestResidue::from(&two), two);
+        assert_eq!(TestResidue::from(two.0), two);
+        assert_eq!(TestResidue::from(&two.0), two);
+        let inner: Residue<TestResidueMod, 1> = two.into();
+        assert_eq!(TestResidue::from(inner), residue(2));
+        assert_eq!(residue(2) * &three, six);
+
+        let mut incremented = residue(12);
+        incremented.inc(&residue(1));
+        assert_eq!(incremented, TestResidue::zero());
+        assert_eq!(TestResidue::one().invert(), Ok(TestResidue::one()));
+        assert_eq!(
+            TestResidue::zero().invert(),
+            Err(Error::InvalidShareElement)
+        );
+    }
+}

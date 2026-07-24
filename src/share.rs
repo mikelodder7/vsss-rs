@@ -203,3 +203,71 @@ where
         &mut self.value
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DefaultShare, Share};
+    use crate::{GroupShare, IdentifierPrimeField, PrimeFieldShare, ValueGroup};
+    use core::hash::{Hash, Hasher};
+    use k256::{ProjectivePoint, Scalar};
+    use std::collections::hash_map::DefaultHasher;
+
+    #[test]
+    fn tuple_share_accessors_read_and_mutate_identifier_and_value() {
+        let mut share = (
+            IdentifierPrimeField(Scalar::from(1u64)),
+            IdentifierPrimeField(Scalar::from(2u64)),
+        );
+
+        assert_eq!(share.identifier().0, Scalar::from(1u64));
+        assert_eq!(share.value().0, Scalar::from(2u64));
+        share.identifier_mut().0 = Scalar::from(3u64);
+        share.value_mut().0 = Scalar::from(4u64);
+
+        assert_eq!(share.identifier().0, Scalar::from(3u64));
+        assert_eq!(share.value().0, Scalar::from(4u64));
+    }
+
+    #[test]
+    fn default_share_accessors_ordering_and_hash_use_identifier() {
+        let mut share = PrimeFieldShare::<Scalar>::with_identifier_and_value(
+            IdentifierPrimeField(Scalar::from(1u64)),
+            IdentifierPrimeField(Scalar::from(2u64)),
+        );
+        let larger = PrimeFieldShare::<Scalar>::with_identifier_and_value(
+            IdentifierPrimeField(Scalar::from(2u64)),
+            IdentifierPrimeField(Scalar::from(2u64)),
+        );
+
+        assert!(share < larger);
+        share.identifier_mut().0 = Scalar::from(3u64);
+        share.value_mut().0 = Scalar::from(4u64);
+        assert_eq!(share.identifier().0, Scalar::from(3u64));
+        assert_eq!(share.value().0, Scalar::from(4u64));
+
+        let mut left = DefaultHasher::new();
+        let mut right = DefaultHasher::new();
+        share.hash(&mut left);
+        share.identifier.hash(&mut right);
+        assert_eq!(left.finish(), right.finish());
+    }
+
+    #[test]
+    fn default_share_converts_to_and_from_field_and_group_tuples() {
+        let field_share: PrimeFieldShare<Scalar> = (Scalar::from(5u64), Scalar::from(8u64)).into();
+        let field_tuple: (Scalar, Scalar) = field_share.into();
+        assert_eq!(field_tuple, (Scalar::from(5u64), Scalar::from(8u64)));
+
+        let point = ProjectivePoint::GENERATOR * Scalar::from(3u64);
+        let group_share: GroupShare<ProjectivePoint> = (Scalar::from(7u64), point).into();
+        let group_tuple: (Scalar, ProjectivePoint) = group_share.into();
+        assert_eq!(group_tuple, (Scalar::from(7u64), point));
+
+        let named = DefaultShare {
+            identifier: IdentifierPrimeField(Scalar::from(9u64)),
+            value: ValueGroup(point),
+        };
+        assert_eq!(named.identifier().0, Scalar::from(9u64));
+        assert_eq!(named.value().0, point);
+    }
+}

@@ -433,3 +433,135 @@ where
         Self(FixedMontyForm::<LIMBS>::mul(&self.0, &rhs.0))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ConstMontyForm, FixedMontyForm, FixedMontyParams, IdentifierConstMontyResidue,
+        IdentifierMontyResidue,
+    };
+    use crate::{Error, ShareElement, ShareIdentifier};
+    use crypto_bigint::{Odd, U64, const_monty_params};
+    use rand_core::SeedableRng;
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+        string::ToString,
+    };
+
+    const_monty_params!(TestMontyMod, U64, "000000000000000d");
+
+    type ConstId = IdentifierConstMontyResidue<TestMontyMod, 1>;
+
+    fn const_id(value: u64) -> ConstId {
+        IdentifierConstMontyResidue(ConstMontyForm::<TestMontyMod, 1>::new(&U64::from(value)))
+    }
+
+    fn params() -> FixedMontyParams<1> {
+        FixedMontyParams::<1>::new(Odd::new(U64::from(13u64)).unwrap())
+    }
+
+    fn runtime_id(value: u64) -> IdentifierMontyResidue<1> {
+        IdentifierMontyResidue::new(&U64::from(value), params())
+    }
+
+    #[test]
+    fn const_monty_identifier_share_element_methods_round_trip() {
+        let identifier = const_id(3);
+        let serialized = identifier.serialize();
+
+        assert_eq!(identifier.to_string(), "0000000000000003");
+        assert_eq!(serialized.as_ref(), [0, 0, 0, 0, 0, 0, 0, 3]);
+        assert_eq!(ConstId::deserialize(&serialized), Ok(identifier));
+        assert_eq!(ConstId::from_slice(serialized.as_ref()), Ok(identifier));
+        assert_eq!(identifier.to_vec(), serialized.as_ref());
+        assert_eq!(
+            ConstId::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(ConstId::ZERO, ConstId::zero());
+        assert_eq!(ConstId::ONE, ConstId::one());
+        assert_eq!(ConstId::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(ConstId::one().is_zero().unwrap_u8(), 0);
+    }
+
+    #[test]
+    fn const_monty_identifier_ordering_hashing_conversion_and_arithmetic_work() {
+        let two = const_id(2);
+        let three = const_id(3);
+        let six = const_id(6);
+
+        assert!(two < three);
+        let mut hasher = DefaultHasher::new();
+        two.hash(&mut hasher);
+        assert_ne!(hasher.finish(), 0);
+        assert_eq!(ConstId::from(&two), two);
+        assert_eq!(ConstId::from(two.0), two);
+        assert_eq!(ConstId::from(&two.0), two);
+        let inner: ConstMontyForm<TestMontyMod, 1> = two.into();
+        assert_eq!(ConstId::from(inner), const_id(2));
+        assert_eq!(const_id(2) * &three, six);
+
+        let mut incremented = const_id(12);
+        incremented.inc(&const_id(1));
+        assert_eq!(incremented, ConstId::zero());
+        assert_eq!(ConstId::one().invert(), Ok(ConstId::one()));
+        assert_eq!(ConstId::zero().invert(), Err(Error::InvalidShareElement));
+    }
+
+    #[test]
+    fn const_monty_reference_access_works() {
+        let mut identifier = const_id(2);
+
+        assert_eq!(identifier.as_ref().retrieve(), U64::from(2u64));
+        assert_eq!((*identifier).retrieve(), U64::from(2u64));
+        *identifier.as_mut() = ConstMontyForm::<TestMontyMod, 1>::ONE;
+        assert_eq!(identifier, ConstId::one());
+        *identifier = ConstMontyForm::<TestMontyMod, 1>::new(&U64::from(4u64));
+        assert_eq!(identifier, const_id(4));
+    }
+
+    #[test]
+    fn runtime_monty_identifier_methods_use_supplied_params() {
+        let two = runtime_id(2);
+        let three = runtime_id(3);
+        let six = runtime_id(6);
+        let zero = IdentifierMontyResidue::zero_with_params(params());
+        let one = IdentifierMontyResidue::one_with_params(params());
+
+        assert_eq!(two.to_string(), "0000000000000002");
+        assert!(two < three);
+        assert_eq!(two * &three, six);
+        assert_eq!(zero.0.retrieve(), U64::ZERO);
+        assert_eq!(one.0.retrieve(), U64::ONE);
+        assert_eq!(two.params().modulus(), params().modulus());
+        assert_eq!(IdentifierMontyResidue::from(&two.0), two);
+        let inner = two.0;
+        assert_eq!(IdentifierMontyResidue::from(inner), two);
+
+        let mut hasher = DefaultHasher::new();
+        two.hash(&mut hasher);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn runtime_monty_reference_access_random_and_conversion_work() {
+        let mut identifier = runtime_id(2);
+        let params = params();
+
+        assert_eq!(identifier.as_ref().retrieve(), U64::from(2u64));
+        assert_eq!((*identifier).retrieve(), U64::from(2u64));
+        *identifier.as_mut() = FixedMontyForm::<1>::one(&params);
+        assert_eq!(identifier.0.retrieve(), U64::ONE);
+        *identifier = FixedMontyForm::<1>::new(&U64::from(4u64), &params);
+        assert_eq!(identifier.0.retrieve(), U64::from(4u64));
+
+        let inner: FixedMontyForm<1> = identifier.into();
+        assert_eq!(inner.retrieve(), U64::from(4u64));
+
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed([3u8; 32]);
+        let random = IdentifierMontyResidue::random_with_params(&mut rng, params);
+        assert!(random.0.retrieve() < U64::from(13u64));
+        assert_eq!(random.params().modulus(), params.modulus());
+    }
+}

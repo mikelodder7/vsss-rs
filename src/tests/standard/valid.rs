@@ -126,17 +126,138 @@ pub fn combine_all<G: Group + GroupEncoding + Default>() {
     assert!(res.is_ok());
     let shares = res.unwrap();
 
+    let participant_generator = ParticipantIdGenerator::default();
+    let participant_generators = [participant_generator];
+    let participant_ids: Vec<_> = ParticipantIdGeneratorCollection::from(&participant_generators)
+        .iter()
+        .take(LIMIT)
+        .collect();
+
+    let res = shamir::split_secret_with_participant_ids_iter::<TestShare<G::Scalar>>(
+        THRESHOLD,
+        LIMIT,
+        &secret,
+        &mut rng,
+        participant_ids.clone(),
+    );
+    assert!(res.is_ok());
+    let shares_from_ids = res.unwrap();
+    assert_eq!(secret, (&shares_from_ids[..THRESHOLD]).combine().unwrap());
+
+    let res = shamir::split_secret_with_participant_generators_iter::<TestShare<G::Scalar>>(
+        THRESHOLD,
+        LIMIT,
+        &secret,
+        &mut rng,
+        participant_generators,
+    );
+    assert!(res.is_ok());
+    let shares_from_generators = res.unwrap();
+    assert_eq!(
+        secret,
+        (&shares_from_generators[..THRESHOLD]).combine().unwrap()
+    );
+
     let res = feldman::split_secret::<TestShare<G::Scalar>, ValueGroup<G>>(
         THRESHOLD, LIMIT, &secret, None, &mut rng,
     );
     assert!(res.is_ok());
     let (feldman_shares, verifier) = res.unwrap();
 
+    let res = feldman::split_secret_with_participant_ids_iter::<TestShare<G::Scalar>, ValueGroup<G>>(
+        THRESHOLD,
+        LIMIT,
+        &secret,
+        None,
+        &mut rng,
+        participant_ids.clone(),
+    );
+    assert!(res.is_ok());
+    let (shares_from_ids, verifier_from_ids) = res.unwrap();
+    for share in &shares_from_ids {
+        assert!(verifier_from_ids.verify_share(share).is_ok());
+    }
+    assert_eq!(secret, (&shares_from_ids[..THRESHOLD]).combine().unwrap());
+
+    let res = feldman::split_secret_with_participant_generators_iter::<
+        TestShare<G::Scalar>,
+        ValueGroup<G>,
+    >(
+        THRESHOLD,
+        LIMIT,
+        &secret,
+        None,
+        &mut rng,
+        [participant_generator],
+    );
+    assert!(res.is_ok());
+    let (shares_from_generators, verifier_from_generators) = res.unwrap();
+    for share in &shares_from_generators {
+        assert!(verifier_from_generators.verify_share(share).is_ok());
+    }
+    assert_eq!(
+        secret,
+        (&shares_from_generators[..THRESHOLD]).combine().unwrap()
+    );
+
     let res = pedersen::split_secret::<TestShare<G::Scalar>, ValueGroup<G>>(
         THRESHOLD, LIMIT, &secret, None, None, None, &mut rng,
     );
     assert!(res.is_ok());
     let ped_res = res.unwrap();
+
+    let pedersen_options = PedersenOptions {
+        secret: &secret,
+        blinder: None,
+        secret_generator: None,
+        blinder_generator: None,
+    };
+    let res = pedersen::split_secret_with_participant_ids_iter::<TestShare<G::Scalar>, ValueGroup<G>>(
+        THRESHOLD,
+        LIMIT,
+        &pedersen_options,
+        &mut rng,
+        participant_ids,
+    );
+    assert!(res.is_ok());
+    let ped_from_ids = res.unwrap();
+    for (share, blinder) in ped_from_ids
+        .secret_shares()
+        .iter()
+        .zip(ped_from_ids.blinder_shares().iter())
+    {
+        assert!(
+            ped_from_ids
+                .pedersen_verifier_set()
+                .verify_share_and_blinder(share, blinder)
+                .is_ok()
+        );
+    }
+
+    let res = pedersen::split_secret_with_participant_generators_iter::<
+        TestShare<G::Scalar>,
+        ValueGroup<G>,
+    >(
+        THRESHOLD,
+        LIMIT,
+        &pedersen_options,
+        &mut rng,
+        [participant_generator],
+    );
+    assert!(res.is_ok());
+    let ped_from_generators = res.unwrap();
+    for (share, blinder) in ped_from_generators
+        .secret_shares()
+        .iter()
+        .zip(ped_from_generators.blinder_shares().iter())
+    {
+        assert!(
+            ped_from_generators
+                .pedersen_verifier_set()
+                .verify_share_and_blinder(share, blinder)
+                .is_ok()
+        );
+    }
 
     for (i, s) in shares.iter().enumerate() {
         assert!(verifier.verify_share(s).is_err());
@@ -226,13 +347,12 @@ fn pedersen_split<G: Group + GroupEncoding + Default>(
     secret: G::Scalar,
     rng: &mut MockRng,
 ) -> VsssResult<FixedArrayPedersenResult8Of15<TestShare<G::Scalar>, ValueGroup<G>>> {
-    let numbering = ParticipantIdGeneratorType::default();
+    let secret = IdentifierPrimeField::from(secret);
     let options = PedersenOptions {
-        secret: IdentifierPrimeField::from(secret),
+        secret: &secret,
         blinder: None,
         secret_generator: None,
         blinder_generator: None,
-        participant_generators: &[numbering],
     };
     FixedArrayVsss8Of15::split_secret_with_blind_verifiers(threshold, limit, &options, rng)
 }

@@ -8,7 +8,6 @@
 //! Pedersen returns both Pedersen verifiers and Feldman verifiers for the purpose
 //! that both may be needed for other protocols like Gennaro's DKG. Otherwise,
 //! the Feldman verifiers may be discarded.
-use crate::shamir::create_shares_with_participant_generator;
 use crate::*;
 use core::ops::{Add, Sub};
 use generic_array::{
@@ -22,15 +21,13 @@ use rand_core::CryptoRng;
 #[derive(Debug)]
 pub struct PedersenOptions<'a, S: Share, V: ShareVerifier<S>> {
     /// The secret to split
-    pub secret: S::Value,
+    pub secret: &'a S::Value,
     /// The blinding factor
     pub blinder: Option<S::Value>,
     /// The generator to use for share verifiers
     pub secret_generator: Option<V>,
     /// The generator to use for blinder verifiers
     pub blinder_generator: Option<V>,
-    /// The participant id generators to use for shares
-    pub participant_generators: &'a [ParticipantIdGeneratorType<'a, S::Identifier>],
 }
 
 /// A secret sharing scheme that uses pedersen commitments as verifiers
@@ -66,7 +63,43 @@ where
         threshold: usize,
         limit: usize,
         options: &PedersenOptions<S, V>,
+        rng: impl CryptoRng,
+    ) -> VsssResult<Self::PedersenResult> {
+        Self::split_secret_with_participant_generators_and_blind_verifiers(
+            threshold,
+            limit,
+            options,
+            rng,
+            &[ParticipantIdGenerator::<S::Identifier>::default()],
+        )
+    }
+
+    /// Create shares from a secret, participant number generators, and options.
+    fn split_secret_with_participant_generators_and_blind_verifiers(
+        threshold: usize,
+        limit: usize,
+        options: &PedersenOptions<S, V>,
         mut rng: impl CryptoRng,
+        participant_generators: &[ParticipantIdGenerator<S::Identifier>],
+    ) -> VsssResult<Self::PedersenResult> {
+        let participant_id_collection =
+            ParticipantIdGeneratorCollection::from(participant_generators);
+        Self::split_secret_with_participant_ids_iter_and_blind_verifiers(
+            threshold,
+            limit,
+            options,
+            &mut rng,
+            participant_id_collection.iter(),
+        )
+    }
+
+    /// Create shares from a secret, participant identifier iterator, and options.
+    fn split_secret_with_participant_ids_iter_and_blind_verifiers(
+        threshold: usize,
+        limit: usize,
+        options: &PedersenOptions<S, V>,
+        mut rng: impl CryptoRng,
+        participant_ids: impl IntoIterator<Item = S::Identifier>,
     ) -> VsssResult<Self::PedersenResult> {
         check_params(threshold, limit)?;
         let g = options.secret_generator.unwrap_or_else(V::one);
@@ -90,7 +123,7 @@ where
 
         let mut secret_polynomial = Self::InnerPolynomial::create(threshold);
         let mut blinder_polynomial = Self::InnerPolynomial::create(threshold);
-        secret_polynomial.fill(&options.secret, &mut rng, threshold)?;
+        secret_polynomial.fill(options.secret, &mut rng, threshold)?;
         blinder_polynomial.fill(&blinder, &mut rng, threshold)?;
 
         let mut feldman_verifier_set =
@@ -112,18 +145,25 @@ where
             feldman_verifiers[i] = g * secret_coefficients[i].identifier();
             pedersen_verifiers[i] = feldman_verifiers[i] + h * blinder_coefficients[i].identifier();
         }
-        let secret_shares = create_shares_with_participant_generator(
-            &secret_polynomial,
-            threshold,
-            limit,
-            options.participant_generators,
-        )?;
-        let blinder_shares = create_shares_with_participant_generator(
-            &blinder_polynomial,
-            threshold,
-            limit,
-            options.participant_generators,
-        )?;
+        let mut secret_shares = Self::ShareSet::create(limit);
+        let mut blinder_shares = Self::ShareSet::create(limit);
+
+        let mut participant_id_iter = participant_ids.into_iter();
+
+        for (secret_share, blinder_share) in secret_shares
+            .as_mut()
+            .iter_mut()
+            .zip(blinder_shares.as_mut().iter_mut())
+            .take(limit)
+        {
+            let id = participant_id_iter
+                .next()
+                .ok_or(Error::NotEnoughShareIdentifiers)?;
+            let secret_value = secret_polynomial.evaluate(&id, threshold);
+            let blinder_value = blinder_polynomial.evaluate(&id, threshold);
+            *secret_share = S::with_identifier_and_value(id.clone(), secret_value);
+            *blinder_share = S::with_identifier_and_value(id, blinder_value);
+        }
         Ok(Self::PedersenResult::new(
             blinder,
             secret_shares,
@@ -509,12 +549,336 @@ where
         threshold,
         limit,
         &PedersenOptions {
-            secret: secret.clone(),
+            secret,
             blinder: blinding,
             secret_generator: share_generator,
             blinder_generator: blind_factor_generator,
-            participant_generators: &[ParticipantIdGeneratorType::default()],
         },
         rng,
     )
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret with participant number generators.
+pub fn split_secret_with_participant_generators<S, V>(
+    threshold: usize,
+    limit: usize,
+    options: &PedersenOptions<S, V>,
+    rng: impl CryptoRng,
+    participant_generators: &[ParticipantIdGenerator<S::Identifier>],
+) -> VsssResult<StdPedersenResult<S, V>>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    StdVsss::split_secret_with_participant_generators_and_blind_verifiers(
+        threshold,
+        limit,
+        options,
+        rng,
+        participant_generators,
+    )
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret with an iterator of participant number generators.
+pub fn split_secret_with_participant_generators_iter<'a, S, V>(
+    threshold: usize,
+    limit: usize,
+    options: &PedersenOptions<S, V>,
+    rng: impl CryptoRng,
+    participant_generators: impl IntoIterator<Item = ParticipantIdGenerator<'a, S::Identifier>>,
+) -> VsssResult<StdPedersenResult<S, V>>
+where
+    S: Share,
+    S::Identifier: 'a,
+    V: ShareVerifier<S>,
+{
+    let participant_generators: Vec<_> = participant_generators.into_iter().collect();
+    split_secret_with_participant_generators(
+        threshold,
+        limit,
+        options,
+        rng,
+        participant_generators.as_slice(),
+    )
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret with an iterator of participant identifiers.
+pub fn split_secret_with_participant_ids_iter<S, V>(
+    threshold: usize,
+    limit: usize,
+    options: &PedersenOptions<S, V>,
+    rng: impl CryptoRng,
+    participant_ids: impl IntoIterator<Item = S::Identifier>,
+) -> VsssResult<StdPedersenResult<S, V>>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    StdVsss::split_secret_with_participant_ids_iter_and_blind_verifiers(
+        threshold,
+        limit,
+        options,
+        rng,
+        participant_ids,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        GenericArrayPedersenResult, HybridArrayPedersenResult, Pedersen, PedersenOptions,
+        PedersenResult, split_secret, split_secret_with_participant_generators_iter,
+        split_secret_with_participant_ids_iter,
+    };
+    use crate::{
+        Error, FeldmanVerifierSet, IdentifierPrimeField, ParticipantIdGenerator,
+        PedersenVerifierSet, PrimeFieldShare, ReadableShareSet, Share, StdVsss, ValueGroup,
+    };
+    use generic_array::{
+        GenericArray,
+        typenum::{U2 as GenericU2, U3 as GenericU3, U4 as GenericU4},
+    };
+    use hybrid_array::{
+        Array,
+        typenum::{U2 as HybridU2, U3 as HybridU3, U4 as HybridU4},
+    };
+    use k256::{ProjectivePoint, Scalar};
+    use rand::{SeedableRng, rngs::StdRng};
+
+    type TestShare = PrimeFieldShare<Scalar>;
+    type TestVerifier = ValueGroup<ProjectivePoint>;
+
+    fn share(identifier: u64, value: u64) -> TestShare {
+        TestShare::with_identifier_and_value(
+            IdentifierPrimeField(Scalar::from(identifier)),
+            IdentifierPrimeField(Scalar::from(value)),
+        )
+    }
+
+    fn verifier(value: u64) -> TestVerifier {
+        ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(value))
+    }
+
+    fn test_options<'a>(
+        secret: &'a IdentifierPrimeField<Scalar>,
+    ) -> PedersenOptions<'a, TestShare, TestVerifier> {
+        PedersenOptions {
+            secret,
+            blinder: Some(IdentifierPrimeField(Scalar::from(9u64))),
+            secret_generator: Some(TestVerifier::generator()),
+            blinder_generator: Some(ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(2u64))),
+        }
+    }
+
+    #[test]
+    fn pedersen_free_functions_verify_combine_and_expose_result_fields() {
+        let mut rng = StdRng::from_seed([0x41u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(55u64));
+        let result = split_secret::<TestShare, TestVerifier>(
+            2,
+            3,
+            &secret,
+            Some(IdentifierPrimeField(Scalar::from(9u64))),
+            Some(TestVerifier::generator()),
+            Some(ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(2u64))),
+            &mut rng,
+        )
+        .unwrap();
+
+        assert_eq!(result.blinder(), &IdentifierPrimeField(Scalar::from(9u64)));
+        assert_eq!(result.secret_shares().combine(), Ok(secret));
+        assert_eq!(
+            result.blinder_shares().combine(),
+            Ok(IdentifierPrimeField(Scalar::from(9u64)))
+        );
+        for (share, blinder) in result
+            .secret_shares()
+            .iter()
+            .zip(result.blinder_shares().iter())
+        {
+            result.feldman_verifier_set().verify_share(share).unwrap();
+            result
+                .pedersen_verifier_set()
+                .verify_share_and_blinder(share, blinder)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn pedersen_iterator_wrappers_accept_ids_and_generators() {
+        let mut rng = StdRng::from_seed([0x42u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(55u64));
+        let options = test_options(&secret);
+
+        let by_ids = split_secret_with_participant_ids_iter::<TestShare, TestVerifier>(
+            2,
+            3,
+            &options,
+            &mut rng,
+            [1u64, 2, 3].map(|id| IdentifierPrimeField(Scalar::from(id))),
+        )
+        .unwrap();
+        assert_eq!(by_ids.secret_shares().combine(), Ok(secret));
+
+        let participant_generator = ParticipantIdGenerator::Sequential {
+            start: IdentifierPrimeField(Scalar::from(20u64)),
+            increment: IdentifierPrimeField(Scalar::from(1u64)),
+            count: 3,
+        };
+        let by_generators =
+            split_secret_with_participant_generators_iter::<TestShare, TestVerifier>(
+                2,
+                3,
+                &options,
+                &mut rng,
+                [participant_generator],
+            )
+            .unwrap();
+        assert_eq!(
+            by_generators.secret_shares()[0].identifier.0,
+            Scalar::from(20u64)
+        );
+        assert_eq!(by_generators.secret_shares().combine(), Ok(secret));
+    }
+
+    #[test]
+    fn pedersen_generic_and_hybrid_results_expose_all_fields() {
+        let secret = IdentifierPrimeField(Scalar::from(55u64));
+        let blinder = IdentifierPrimeField(Scalar::from(9u64));
+        let secret_shares = GenericArray::<TestShare, GenericU3>::from_array([
+            share(1, 55),
+            share(2, 55),
+            share(3, 55),
+        ]);
+        let blinder_shares = GenericArray::<TestShare, GenericU3>::from_array([
+            share(1, 9),
+            share(2, 9),
+            share(3, 9),
+        ]);
+        let feldman_verifier_set = GenericArray::<TestVerifier, GenericU3>::from_array([
+            TestVerifier::generator(),
+            verifier(55),
+            verifier(1),
+        ]);
+        let pedersen_verifier_set = GenericArray::<TestVerifier, GenericU4>::from_array([
+            TestVerifier::generator(),
+            verifier(2),
+            verifier(73),
+            verifier(1),
+        ]);
+        let generic =
+            GenericArrayPedersenResult::<TestShare, TestVerifier, GenericU2, GenericU3>::new(
+                blinder,
+                secret_shares,
+                blinder_shares,
+                feldman_verifier_set,
+                pedersen_verifier_set,
+            );
+
+        assert_eq!(generic.blinder(), &blinder);
+        assert_eq!(generic.secret_shares().combine(), Ok(secret));
+        assert_eq!(generic.blinder_shares().combine(), Ok(blinder));
+        assert_eq!(
+            <GenericArray<TestVerifier, GenericU3> as FeldmanVerifierSet<
+                TestShare,
+                TestVerifier,
+            >>::generator(generic.feldman_verifier_set()),
+            TestVerifier::generator()
+        );
+        assert_eq!(
+            <GenericArray<TestVerifier, GenericU4> as PedersenVerifierSet<
+                TestShare,
+                TestVerifier,
+            >>::blinder_generator(generic.pedersen_verifier_set()),
+            verifier(2)
+        );
+
+        let secret_shares = Array::<TestShare, HybridU3>::from_fn(|i| share(i as u64 + 1, 55));
+        let blinder_shares = Array::<TestShare, HybridU3>::from_fn(|i| share(i as u64 + 1, 9));
+        let feldman_verifier_set = Array::<TestVerifier, HybridU3>::from_fn(|i| match i {
+            0 => TestVerifier::generator(),
+            1 => verifier(55),
+            _ => verifier(1),
+        });
+        let pedersen_verifier_set = Array::<TestVerifier, HybridU4>::from_fn(|i| match i {
+            0 => TestVerifier::generator(),
+            1 => verifier(2),
+            2 => verifier(73),
+            _ => verifier(1),
+        });
+        let hybrid = HybridArrayPedersenResult::<TestShare, TestVerifier, HybridU2, HybridU3>::new(
+            blinder,
+            secret_shares,
+            blinder_shares,
+            feldman_verifier_set,
+            pedersen_verifier_set,
+        );
+
+        assert_eq!(hybrid.blinder(), &blinder);
+        assert_eq!(hybrid.secret_shares().combine(), Ok(secret));
+        assert_eq!(hybrid.blinder_shares().combine(), Ok(blinder));
+        assert_eq!(
+            <Array<TestVerifier, HybridU3> as FeldmanVerifierSet<
+                TestShare,
+                TestVerifier,
+            >>::generator(hybrid.feldman_verifier_set()),
+            TestVerifier::generator()
+        );
+        assert_eq!(
+            <Array<TestVerifier, HybridU4> as PedersenVerifierSet<
+                TestShare,
+                TestVerifier,
+            >>::blinder_generator(hybrid.pedersen_verifier_set()),
+            verifier(2)
+        );
+    }
+
+    #[test]
+    fn pedersen_returns_errors_for_invalid_generators_and_missing_ids() {
+        let mut rng = StdRng::from_seed([0x43u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(55u64));
+        let err = split_secret::<TestShare, TestVerifier>(
+            2,
+            3,
+            &secret,
+            Some(IdentifierPrimeField(Scalar::from(9u64))),
+            Some(TestVerifier::identity()),
+            Some(ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(2u64))),
+            &mut rng,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            Error::InvalidGenerator("Pedersen generators cannot be zero")
+        );
+
+        let mut options = test_options(&secret);
+        options.blinder_generator = Some(TestVerifier::generator());
+        let err = split_secret_with_participant_ids_iter::<TestShare, TestVerifier>(
+            2,
+            3,
+            &options,
+            &mut rng,
+            [IdentifierPrimeField(Scalar::from(1u64))],
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            Error::InvalidGenerator("Pedersen generators cannot be the same")
+        );
+
+        let options = test_options(&secret);
+        let err = <StdVsss<TestShare, TestVerifier> as Pedersen<TestShare, TestVerifier>>::split_secret_with_participant_ids_iter_and_blind_verifiers(
+                2,
+                3,
+                &options,
+                &mut rng,
+                [IdentifierPrimeField(Scalar::from(1u64))]
+            )
+            .unwrap_err();
+        assert_eq!(err, Error::NotEnoughShareIdentifiers);
+    }
 }

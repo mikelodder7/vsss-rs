@@ -122,3 +122,81 @@ impl<S: Share> Polynomial<S> for Vec<S> {
         self.as_mut()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Polynomial;
+    use crate::{Error, IdentifierPrimeField, PrimeFieldShare, Share, ShareElement};
+    use generic_array::{GenericArray, typenum::U3 as GenericU3};
+    use hybrid_array::{Array, typenum::U3 as HybridU3};
+    use k256::Scalar;
+    use rand_core::SeedableRng;
+    use std::vec::Vec;
+
+    type TestShare = PrimeFieldShare<Scalar>;
+
+    fn share(identifier: u64, value: u64) -> TestShare {
+        TestShare::with_identifier_and_value(
+            IdentifierPrimeField(Scalar::from(identifier)),
+            IdentifierPrimeField(Scalar::from(value)),
+        )
+    }
+
+    #[test]
+    fn polynomial_create_works_for_all_storage_backends() {
+        let array = <[TestShare; 3] as Polynomial<TestShare>>::create(99);
+        assert_eq!(array.coefficients().len(), 3);
+
+        let generic = <GenericArray<TestShare, GenericU3> as Polynomial<TestShare>>::create(99);
+        assert_eq!(generic.coefficients().len(), 3);
+
+        let hybrid = <Array<TestShare, HybridU3> as Polynomial<TestShare>>::create(99);
+        assert_eq!(hybrid.coefficients().len(), 3);
+
+        let vec = <Vec<TestShare> as Polynomial<TestShare>>::create(4);
+        assert_eq!(vec.coefficients().len(), 4);
+    }
+
+    #[test]
+    fn polynomial_fill_sets_intercept_and_rejects_oversized_request() {
+        let mut polynomial = <[TestShare; 2] as Polynomial<TestShare>>::create(0);
+        let secret = IdentifierPrimeField(Scalar::from(42u64));
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed([7u8; 32]);
+
+        assert_eq!(polynomial.fill(&secret, &mut rng, 2), Ok(()));
+        assert_eq!(polynomial.coefficients()[0].value(), &secret);
+        assert_ne!(
+            polynomial.coefficients()[1].identifier(),
+            &IdentifierPrimeField::zero()
+        );
+
+        assert_eq!(
+            polynomial.fill(&secret, &mut rng, 3),
+            Err(Error::InvalidSizeRequest)
+        );
+    }
+
+    #[test]
+    fn polynomial_evaluate_uses_horner_method_with_intercept() {
+        let polynomial = [share(0, 5), share(2, 0), share(3, 0)];
+        let x = IdentifierPrimeField(Scalar::from(4u64));
+
+        assert_eq!(
+            polynomial.evaluate(&x, 3),
+            IdentifierPrimeField(Scalar::from(61u64))
+        );
+        assert_eq!(
+            polynomial.evaluate(&x, 2),
+            IdentifierPrimeField(Scalar::from(13u64))
+        );
+    }
+
+    #[test]
+    fn polynomial_coefficients_mut_updates_backing_storage() {
+        let mut polynomial = <Vec<TestShare> as Polynomial<TestShare>>::create(2);
+        polynomial.coefficients_mut()[0] = share(9, 10);
+        polynomial.coefficients_mut()[1] = share(11, 12);
+
+        assert_eq!(polynomial.coefficients(), &[share(9, 10), share(11, 12)]);
+    }
+}

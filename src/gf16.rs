@@ -23,7 +23,7 @@ use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-use crate::ParticipantIdGeneratorType;
+use crate::ParticipantIdGenerator;
 use rand_core::CryptoRng;
 #[cfg(feature = "zeroize")]
 use zeroize::DefaultIsZeroes;
@@ -593,8 +593,19 @@ impl Gf16 {
             limit,
             secret,
             rng,
-            &[ParticipantIdGeneratorType::default()],
+            &[ParticipantIdGenerator::default()],
         )
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Split bytes into shares using GF(2^4) arithmetic.
+    pub fn split_bytes<B: AsRef<[u8]>>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        rng: impl CryptoRng,
+    ) -> VsssResult<Vec<Vec<u8>>> {
+        Self::split_array(threshold, limit, secret, rng)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -604,7 +615,7 @@ impl Gf16 {
         limit: usize,
         secret: B,
         mut rng: impl CryptoRng,
-        participant_generators: &[ParticipantIdGeneratorType<IdentifierGf16>],
+        participant_generators: &[ParticipantIdGenerator<IdentifierGf16>],
     ) -> VsssResult<Vec<Vec<u8>>> {
         if limit > 15 {
             return Err(Error::InvalidSizeRequest);
@@ -614,6 +625,7 @@ impl Gf16 {
             return Err(Error::InvalidSecret);
         }
         let mut shares = Vec::with_capacity(limit);
+        let mut ids = Vec::with_capacity(limit);
 
         let collection = ParticipantIdGeneratorCollection::from(participant_generators);
         let mut participant_id_iter = collection.iter();
@@ -622,36 +634,101 @@ impl Gf16 {
             let id = participant_id_iter
                 .next()
                 .ok_or(Error::NotEnoughShareIdentifiers)?;
-            let mut inner = Vec::with_capacity(limit + 1);
+            let mut inner = Vec::with_capacity(secret.len() + 1);
             inner.push(id.0.0);
+            ids.push(id);
             shares.push(inner);
         }
+        check_params(threshold, limit)?;
+        let mut lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let mut hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
         for b in secret {
             // Each byte is split into two nibbles and shared independently.
             // The low nibble and high nibble are each a GF(16) element (0..=15).
             let lo = IdentifierGf16(Gf16(*b & 0x0f));
             let hi = IdentifierGf16(Gf16((*b >> 4) & 0x0f));
 
-            let lo_shares = shamir::split_secret_with_participant_generator::<GfShare>(
-                threshold,
-                limit,
-                &lo,
-                &mut rng,
-                participant_generators,
-            )?;
-            let hi_shares = shamir::split_secret_with_participant_generator::<GfShare>(
-                threshold,
-                limit,
-                &hi,
-                &mut rng,
-                participant_generators,
-            )?;
+            lo_polynomial.fill(&lo, &mut rng, threshold)?;
+            hi_polynomial.fill(&hi, &mut rng, threshold)?;
             // Pack both nibble-shares into a single byte per participant.
-            for (share, (lo_s, hi_s)) in shares
-                .iter_mut()
-                .zip(lo_shares.iter().zip(hi_shares.iter()))
-            {
-                share.push((hi_s.value.0.0 << 4) | lo_s.value.0.0);
+            for (share, id) in shares.iter_mut().zip(ids.iter()) {
+                let lo_s = lo_polynomial.evaluate(id, threshold).0.0;
+                let hi_s = hi_polynomial.evaluate(id, threshold).0.0;
+                share.push((hi_s << 4) | lo_s);
+            }
+        }
+        Ok(shares)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Split bytes into shares using participant number generators.
+    pub fn split_bytes_with_participant_generators<B: AsRef<[u8]>>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        rng: impl CryptoRng,
+        participant_generators: &[ParticipantIdGenerator<IdentifierGf16>],
+    ) -> VsssResult<Vec<Vec<u8>>> {
+        Self::split_array_with_participant_generators(
+            threshold,
+            limit,
+            secret,
+            rng,
+            participant_generators,
+        )
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Split bytes into shares using an iterator of participant identifiers.
+    pub fn split_bytes_with_participant_ids_iter<B, I>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        mut rng: impl CryptoRng,
+        participant_ids: I,
+    ) -> VsssResult<Vec<Vec<u8>>>
+    where
+        B: AsRef<[u8]>,
+        I: IntoIterator<Item = IdentifierGf16>,
+    {
+        if limit > 15 {
+            return Err(Error::InvalidSizeRequest);
+        }
+        let secret = secret.as_ref();
+        if secret.is_empty() {
+            return Err(Error::InvalidSecret);
+        }
+        check_params(threshold, limit)?;
+
+        let mut shares = Vec::with_capacity(limit);
+        let mut ids = Vec::with_capacity(limit);
+        let mut participant_id_iter = participant_ids.into_iter();
+
+        for _ in 0..limit {
+            let id = participant_id_iter
+                .next()
+                .ok_or(Error::NotEnoughShareIdentifiers)?;
+            if id.is_zero().into() {
+                return Err(Error::SharingInvalidIdentifier);
+            }
+            let mut inner = Vec::with_capacity(secret.len() + 1);
+            inner.push(id.0.0);
+            ids.push(id);
+            shares.push(inner);
+        }
+
+        let mut lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let mut hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        for b in secret {
+            let lo = IdentifierGf16(Gf16(*b & 0x0f));
+            let hi = IdentifierGf16(Gf16((*b >> 4) & 0x0f));
+
+            lo_polynomial.fill(&lo, &mut rng, threshold)?;
+            hi_polynomial.fill(&hi, &mut rng, threshold)?;
+            for (share, id) in shares.iter_mut().zip(ids.iter()) {
+                let lo_s = lo_polynomial.evaluate(id, threshold).0.0;
+                let hi_s = hi_polynomial.evaluate(id, threshold).0.0;
+                share.push((hi_s << 4) | lo_s);
             }
         }
         Ok(shares)
@@ -665,33 +742,25 @@ impl Gf16 {
         Self::are_shares_valid(shares)?;
 
         let mut secret = Vec::with_capacity(shares[0].len() - 1);
-        let mut lo_inner = Vec::<GfShare>::with_capacity(shares.len());
-        let mut hi_inner = Vec::<GfShare>::with_capacity(shares.len());
-
-        for share in shares {
-            lo_inner.push(DefaultShare {
-                identifier: IdentifierGf16(Gf16(share[0])),
-                value: IdentifierGf16(Gf16(0u8)),
-            });
-            hi_inner.push(DefaultShare {
-                identifier: IdentifierGf16(Gf16(share[0])),
-                value: IdentifierGf16(Gf16(0u8)),
-            });
-        }
+        let coefficients = lagrange_coefficients(shares)?;
         for i in 1..shares[0].len() {
-            for ((lo_s, hi_s), share) in lo_inner
-                .iter_mut()
-                .zip(hi_inner.iter_mut())
-                .zip(shares.iter())
-            {
-                lo_s.value = IdentifierGf16(Gf16(share[i] & 0x0f));
-                hi_s.value = IdentifierGf16(Gf16((share[i] >> 4) & 0x0f));
+            let mut lo = IdentifierGf16(Gf16(0u8));
+            let mut hi = IdentifierGf16(Gf16(0u8));
+            for (share, coefficient) in shares.iter().zip(coefficients.iter()) {
+                let lo_term = IdentifierGf16(Gf16(share[i] & 0x0f)) * coefficient;
+                let hi_term = IdentifierGf16(Gf16((share[i] >> 4) & 0x0f)) * coefficient;
+                *lo.as_mut() += lo_term.as_ref();
+                *hi.as_mut() += hi_term.as_ref();
             }
-            let lo = lo_inner.combine()?.0.0 & 0x0f;
-            let hi = hi_inner.combine()?.0.0 & 0x0f;
-            secret.push((hi << 4) | lo);
+            secret.push(((hi.0.0 & 0x0f) << 4) | (lo.0.0 & 0x0f));
         }
         Ok(secret)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Combine shares into bytes.
+    pub fn combine_bytes<B: AsRef<[Vec<u8>]>>(shares: B) -> VsssResult<Vec<u8>> {
+        Self::combine_array(shares)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -707,6 +776,49 @@ impl Gf16 {
         }
         Ok(())
     }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+fn lagrange_coefficients(shares: &[Vec<u8>]) -> VsssResult<Vec<IdentifierGf16>> {
+    let identifiers: Vec<_> = shares
+        .iter()
+        .map(|share| IdentifierGf16(Gf16(share[0])))
+        .collect();
+
+    for identifier in &identifiers {
+        if identifier.is_zero().into() {
+            return Err(Error::SharingInvalidIdentifier);
+        }
+    }
+    for (i, x_i) in identifiers.iter().enumerate() {
+        for x_j in identifiers.iter().skip(i + 1) {
+            if x_i == x_j {
+                return Err(Error::SharingDuplicateIdentifier);
+            }
+        }
+    }
+
+    let mut coefficients = Vec::with_capacity(identifiers.len());
+    for (i, x_i) in identifiers.iter().enumerate() {
+        let mut num = IdentifierGf16::one();
+        let mut den = IdentifierGf16::one();
+        for (j, x_j) in identifiers.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+
+            let d = *x_j.as_ref() - *x_i.as_ref();
+            *den.as_mut() *= d;
+            *num.as_mut() *= x_j.as_ref();
+        }
+
+        let den = den
+            .invert()
+            .map_err(|_| Error::SharingDuplicateIdentifier)?;
+        coefficients.push((*num.as_ref() * den.as_ref()).into());
+    }
+
+    Ok(coefficients)
 }
 
 /// Constant-time multiplication in GF(2^4) modulo x^4 + x + 1.
@@ -900,7 +1012,7 @@ mod tests {
     use super::gf16_cmp;
     use super::*;
     use crate::shamir;
-    use crate::{ParticipantIdGeneratorCollection, ParticipantIdGeneratorType};
+    use crate::{ParticipantIdGenerator, ParticipantIdGeneratorCollection};
     use rand::{RngExt, SeedableRng};
     use rand_chacha::ChaCha8Rng;
     use std::collections::HashSet;
@@ -1023,7 +1135,13 @@ mod tests {
         let res = Gf16::combine_array(&shares[..3]);
         assert_eq!(res.unwrap(), secret);
 
-        let p = ParticipantIdGeneratorType::Sequential {
+        let shares = Gf16::split_bytes(3, 5, secret, &mut rng).unwrap();
+        assert_eq!(shares.len(), 5);
+
+        let res = Gf16::combine_bytes(&shares[..3]);
+        assert_eq!(res.unwrap(), secret);
+
+        let p = ParticipantIdGenerator::Sequential {
             start: IdentifierGf16(Gf16(1)),
             increment: IdentifierGf16(Gf16(1)),
             count: 5,
@@ -1033,6 +1151,15 @@ mod tests {
         assert_eq!(shares.len(), 5);
 
         let res = Gf16::combine_array(&shares[..3]);
+        let secret2 = res.unwrap();
+        assert_eq!(secret2, secret);
+
+        let ids = (1u8..=5).map(|id| IdentifierGf16(Gf16(id)));
+        let shares =
+            Gf16::split_bytes_with_participant_ids_iter(3, 5, secret, &mut rng, ids).unwrap();
+        assert_eq!(shares.len(), 5);
+
+        let res = Gf16::combine_bytes(&shares[..3]);
         let secret2 = res.unwrap();
         assert_eq!(secret2, secret);
 
@@ -1119,7 +1246,7 @@ mod tests {
         // increments); new code halts the stream after 15.
         let start = IdentifierGf16(Gf16(13));
         let inc = IdentifierGf16(Gf16(1));
-        let seq = ParticipantIdGeneratorType::Sequential {
+        let seq = ParticipantIdGenerator::Sequential {
             start,
             increment: inc,
             count: 10,
@@ -1237,6 +1364,166 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn gf16_formatting_conversions_and_field_methods_work() {
+        use elliptic_curve::ff::{Field, PrimeField};
+        use std::{format, string::ToString};
+        use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
+
+        let value = Gf16(0x0a);
+        assert_eq!(value.to_string(), "10");
+        assert_eq!(format!("{value:x}"), "a");
+        assert_eq!(format!("{value:X}"), "A");
+        assert_eq!(format!("{value:b}"), "1010");
+        assert_eq!(
+            Gf16::conditional_select(&Gf16(1), &Gf16(2), Choice::from(1)),
+            Gf16(2)
+        );
+        assert_eq!(Gf16(7).ct_eq(&Gf16(7)).unwrap_u8(), 1);
+
+        assert_eq!(u8::from(Gf16::from(0x12u8)), 0x12);
+        assert_eq!(u16::from(Gf16::from(0x12u16)), 0x12);
+        assert_eq!(u32::from(Gf16::from(0x12u32)), 0x12);
+        assert_eq!(u64::from(Gf16::from(0x12u64)), 0x12);
+        assert_eq!(u128::from(Gf16::from(0x12u128)), 0x12);
+
+        assert_eq!(Gf16::from_repr([0x0b]).unwrap(), Gf16(0x0b));
+        assert_eq!(Gf16(0x0b).to_repr(), [0x0b]);
+        assert_eq!(Gf16(3).is_odd().unwrap_u8(), 1);
+        assert_eq!(Gf16(2).is_odd().unwrap_u8(), 0);
+        assert_eq!(Gf16(3).square(), Gf16(3) * Gf16(3));
+        assert_eq!(Gf16(3).double(), Gf16(0));
+        assert_eq!(Gf16(3).invert().unwrap() * Gf16(3), Gf16(1));
+        assert!(bool::from(Gf16(0).invert().is_none()));
+        assert_eq!(Gf16(2).pow(3), Gf16(8));
+        let (_, sqrt) = Gf16::sqrt_ratio(&Gf16(1), &Gf16(1));
+        assert_eq!(sqrt.square(), sqrt);
+    }
+
+    #[test]
+    fn gf16_operator_reference_forms_assignments_sum_and_product_work() {
+        use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Sub};
+
+        let a = Gf16(0x03);
+        let b = Gf16(0x05);
+        assert_eq!(a + b, Gf16(0x06));
+        assert_eq!(<Gf16 as Add<&Gf16>>::add(a, &b), Gf16(0x06));
+        assert_eq!(<&Gf16 as Add<Gf16>>::add(&a, b), Gf16(0x06));
+        assert_eq!(<&Gf16 as Add<&Gf16>>::add(&a, &b), Gf16(0x06));
+        assert_eq!(a - b, Gf16(0x06));
+        assert_eq!(<Gf16 as Sub<&Gf16>>::sub(a, &b), Gf16(0x06));
+        assert_eq!(<&Gf16 as Sub<Gf16>>::sub(&a, b), Gf16(0x06));
+        assert_eq!(<&Gf16 as Sub<&Gf16>>::sub(&a, &b), Gf16(0x06));
+        assert_eq!(a * b, Gf16(gf16_mul(3, 5)));
+        assert_eq!(<Gf16 as Mul<&Gf16>>::mul(a, &b), a * b);
+        assert_eq!(<&Gf16 as Mul<Gf16>>::mul(&a, b), a * b);
+        assert_eq!(<&Gf16 as Mul<&Gf16>>::mul(&a, &b), a * b);
+        assert_eq!(a / b, a * b.invert().unwrap());
+        assert_eq!(<Gf16 as Div<&Gf16>>::div(a, &b), a / b);
+        assert_eq!(<&Gf16 as Div<Gf16>>::div(&a, b), a / b);
+        assert_eq!(<&Gf16 as Div<&Gf16>>::div(&a, &b), a / b);
+        assert_eq!(Neg::neg(a), a);
+        assert_eq!(a & b, Gf16(0x01));
+        assert_eq!(<Gf16 as BitAnd<&Gf16>>::bitand(a, &b), Gf16(0x01));
+        assert_eq!(<&Gf16 as BitAnd<Gf16>>::bitand(&a, b), Gf16(0x01));
+        assert_eq!(<&Gf16 as BitAnd<&Gf16>>::bitand(&a, &b), Gf16(0x01));
+        assert_eq!(a | b, Gf16(0x07));
+        assert_eq!(<Gf16 as BitOr<&Gf16>>::bitor(a, &b), Gf16(0x07));
+        assert_eq!(<&Gf16 as BitOr<Gf16>>::bitor(&a, b), Gf16(0x07));
+        assert_eq!(<&Gf16 as BitOr<&Gf16>>::bitor(&a, &b), Gf16(0x07));
+        assert_eq!(a ^ b, Gf16(0x06));
+        assert_eq!(<Gf16 as BitXor<&Gf16>>::bitxor(a, &b), Gf16(0x06));
+        assert_eq!(<&Gf16 as BitXor<Gf16>>::bitxor(&a, b), Gf16(0x06));
+        assert_eq!(<&Gf16 as BitXor<&Gf16>>::bitxor(&a, &b), Gf16(0x06));
+
+        let mut assigned = a;
+        assigned += b;
+        assert_eq!(assigned, Gf16(0x06));
+        assigned -= &b;
+        assert_eq!(assigned, a);
+        assigned *= b;
+        assert_eq!(assigned, a * b);
+        assigned /= &b;
+        assert_eq!(assigned, a);
+        assigned &= b;
+        assert_eq!(assigned, Gf16(0x01));
+        assigned |= &Gf16(0x08);
+        assert_eq!(assigned, Gf16(0x09));
+        assigned ^= b;
+        assert_eq!(assigned, Gf16(0x0c));
+
+        assert_eq!([Gf16(1), Gf16(2), Gf16(3)].iter().sum::<Gf16>(), Gf16(0));
+        assert_eq!([Gf16(2), Gf16(3)].iter().product::<Gf16>(), Gf16(6));
+    }
+
+    #[test]
+    fn gf16_identifier_share_element_and_error_paths_work() {
+        let identifier = IdentifierGf16(Gf16(7));
+        assert_eq!(IdentifierGf16::from(Gf16(7)), identifier);
+        assert_eq!(IdentifierGf16::from(&identifier), identifier);
+        assert_eq!(identifier.serialize(), [7]);
+        assert_eq!(IdentifierGf16::deserialize(&[7]), Ok(identifier));
+        assert_eq!(IdentifierGf16::from_slice(&[7]), Ok(identifier));
+        assert_eq!(
+            IdentifierGf16::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(identifier.to_vec(), vec![7]);
+        assert_eq!(IdentifierGf16::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(IdentifierGf16::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierGf16::one().invert(), Ok(IdentifierGf16::one()));
+        assert_eq!(
+            IdentifierGf16::zero().invert(),
+            Err(Error::InvalidShareElement)
+        );
+
+        let mut incremented = IdentifierGf16(Gf16(14));
+        incremented.inc(&IdentifierGf16(Gf16(1)));
+        assert_eq!(incremented, IdentifierGf16(Gf16(15)));
+        incremented.inc(&IdentifierGf16(Gf16(1)));
+        assert_eq!(incremented, IdentifierGf16(Gf16(0)));
+
+        assert_eq!(
+            Gf16::combine_array(Vec::<Vec<u8>>::new()),
+            Err(Error::SharingMinThreshold)
+        );
+        assert_eq!(
+            Gf16::combine_array(vec![vec![1]]),
+            Err(Error::SharingMinThreshold)
+        );
+        assert_eq!(
+            Gf16::combine_array(vec![vec![1], vec![2, 3]]),
+            Err(Error::InvalidShare)
+        );
+        assert_eq!(
+            Gf16::combine_array(vec![vec![0, 1], vec![2, 3]]),
+            Err(Error::SharingInvalidIdentifier)
+        );
+        assert_eq!(
+            Gf16::combine_array(vec![vec![1, 1], vec![1, 3]]),
+            Err(Error::SharingDuplicateIdentifier)
+        );
+        let mut rng = ChaCha8Rng::from_seed([0x22u8; 32]);
+        assert_eq!(
+            Gf16::split_array(2, 16, b"x", &mut rng),
+            Err(Error::InvalidSizeRequest)
+        );
+        assert_eq!(
+            Gf16::split_array(2, 2, b"", &mut rng),
+            Err(Error::InvalidSecret)
+        );
+        assert_eq!(
+            Gf16::split_bytes_with_participant_ids_iter(
+                2,
+                2,
+                b"x",
+                &mut rng,
+                [IdentifierGf16(Gf16(0)), IdentifierGf16(Gf16(1))]
+            ),
+            Err(Error::SharingInvalidIdentifier)
+        );
     }
 }
 

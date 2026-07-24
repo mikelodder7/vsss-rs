@@ -274,3 +274,184 @@ mod serde_32 {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        IdentifierI8, IdentifierI16, IdentifierI32, IdentifierI64, IdentifierIsize, IdentifierU8,
+        IdentifierU16, IdentifierU32, IdentifierU64, IdentifierUsize,
+    };
+    #[cfg(target_pointer_width = "64")]
+    use super::{IdentifierI128, IdentifierU128};
+    use crate::{Error, ShareElement, ShareIdentifier};
+    use std::{string::ToString, vec};
+
+    #[test]
+    fn primitive_identifier_share_element_methods_round_trip() {
+        let identifier = IdentifierU16::from(0x1234);
+        let serialized = identifier.serialize();
+
+        assert_eq!(identifier.to_string(), "1234");
+        assert_eq!(serialized, [0x12, 0x34]);
+        assert_eq!(IdentifierU16::deserialize(&serialized), Ok(identifier));
+        assert_eq!(IdentifierU16::from_slice(&serialized), Ok(identifier));
+        assert_eq!(identifier.to_vec(), vec![0x12, 0x34]);
+        assert_eq!(
+            IdentifierU16::from_slice(&[0x12]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(IdentifierU16::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(IdentifierU16::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierU16::ZERO, IdentifierU16::zero());
+        assert_eq!(IdentifierU16::ONE, IdentifierU16::one());
+    }
+
+    #[test]
+    fn primitive_identifier_reference_access_and_arithmetic_work() {
+        let mut identifier = IdentifierU16::from(1);
+        assert_eq!(*identifier, 1);
+        assert_eq!(*identifier.as_ref(), 1);
+        *identifier.as_mut() = 2;
+        assert_eq!(*identifier, 2);
+
+        identifier.inc(&IdentifierU16::from(u16::MAX));
+        assert_eq!(*identifier, u16::MAX);
+        assert_eq!(IdentifierU16::one().invert(), Ok(IdentifierU16::one()));
+        assert_eq!(
+            IdentifierU16::zero().invert(),
+            Err(Error::InvalidShareElement)
+        );
+    }
+
+    #[test]
+    fn signed_primitive_identifiers_use_big_endian_display_and_saturating_increment() {
+        let mut identifier = IdentifierI16::from(i16::MIN + 1);
+        assert_eq!(IdentifierI16::from(-2).to_string(), "fffe");
+        identifier.inc(&IdentifierI16::from(-10));
+        assert_eq!(*identifier, i16::MIN);
+    }
+
+    #[test]
+    fn one_byte_identifiers_round_trip() {
+        let identifier = IdentifierU8::from(0xab);
+        assert_eq!(identifier.to_string(), "ab");
+        assert_eq!(identifier.serialize(), [0xab]);
+        assert_eq!(IdentifierU8::from_slice(&[0xab]), Ok(identifier));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn primitive_identifier_serde_round_trips_common_formats() {
+        let identifier = IdentifierU16::from(0x1234);
+
+        let json = serde_json::to_string(&identifier).unwrap();
+        assert_eq!(
+            serde_json::from_str::<IdentifierU16>(&json).unwrap(),
+            identifier
+        );
+
+        let postcard = postcard::to_stdvec(&identifier).unwrap();
+        assert_eq!(
+            postcard::from_bytes::<IdentifierU16>(&postcard).unwrap(),
+            identifier
+        );
+
+        let cbor = serde_cbor_2::to_vec(&identifier).unwrap();
+        assert_eq!(
+            serde_cbor_2::from_slice::<IdentifierU16>(&cbor).unwrap(),
+            identifier
+        );
+
+        let bare = serde_bare::to_vec(&identifier).unwrap();
+        assert_eq!(
+            serde_bare::from_slice::<IdentifierU16>(&bare).unwrap(),
+            identifier
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn primitive_identifier_serde_round_trips_aliases() {
+        assert_eq!(
+            serde_json::from_str::<IdentifierU8>(
+                &serde_json::to_string(&IdentifierU8::from(1)).unwrap()
+            )
+            .unwrap(),
+            IdentifierU8::from(1)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierU32>(
+                &serde_json::to_string(&IdentifierU32::from(2)).unwrap()
+            )
+            .unwrap(),
+            IdentifierU32::from(2)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierU64>(
+                &serde_json::to_string(&IdentifierU64::from(3)).unwrap()
+            )
+            .unwrap(),
+            IdentifierU64::from(3)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierUsize>(
+                &serde_json::to_string(&IdentifierUsize::from(4)).unwrap()
+            )
+            .unwrap(),
+            IdentifierUsize::from(4)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierI8>(
+                &serde_json::to_string(&IdentifierI8::from(-1)).unwrap()
+            )
+            .unwrap(),
+            IdentifierI8::from(-1)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierI16>(
+                &serde_json::to_string(&IdentifierI16::from(-2)).unwrap()
+            )
+            .unwrap(),
+            IdentifierI16::from(-2)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierI32>(
+                &serde_json::to_string(&IdentifierI32::from(-3)).unwrap()
+            )
+            .unwrap(),
+            IdentifierI32::from(-3)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierI64>(
+                &serde_json::to_string(&IdentifierI64::from(-4)).unwrap()
+            )
+            .unwrap(),
+            IdentifierI64::from(-4)
+        );
+        assert_eq!(
+            serde_json::from_str::<IdentifierIsize>(
+                &serde_json::to_string(&IdentifierIsize::from(-5)).unwrap()
+            )
+            .unwrap(),
+            IdentifierIsize::from(-5)
+        );
+
+        #[cfg(target_pointer_width = "64")]
+        {
+            assert_eq!(
+                serde_json::from_str::<IdentifierU128>(
+                    &serde_json::to_string(&IdentifierU128::from(6)).unwrap()
+                )
+                .unwrap(),
+                IdentifierU128::from(6)
+            );
+            assert_eq!(
+                serde_json::from_str::<IdentifierI128>(
+                    &serde_json::to_string(&IdentifierI128::from(-6)).unwrap()
+                )
+                .unwrap(),
+                IdentifierI128::from(-6)
+            );
+        }
+    }
+}

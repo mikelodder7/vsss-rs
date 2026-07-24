@@ -74,3 +74,48 @@ macro_rules! vsss_fixed_array_impl {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::pedersen::PedersenOptions;
+    use crate::{
+        Feldman, IdentifierPrimeField, Pedersen, PedersenResult, PrimeFieldShare, ReadableShareSet,
+        Shamir, Share, ShareVerifier, ValueGroup,
+    };
+    use k256::{ProjectivePoint, Scalar};
+    use rand::{SeedableRng, rngs::StdRng};
+
+    type TestShare = PrimeFieldShare<Scalar>;
+    type TestVerifier = ValueGroup<ProjectivePoint>;
+
+    vsss_fixed_array_impl!(FixedVsssForTest, FixedPedersenResultForTest, 2, 3);
+
+    #[test]
+    fn fixed_array_macro_generates_shamir_and_pedersen_result_impls() {
+        let mut rng = StdRng::from_seed([0x61u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(77u64));
+        let shares =
+            FixedVsssForTest::<TestShare, TestVerifier>::split_secret(2, 3, &secret, &mut rng)
+                .unwrap();
+        assert_eq!(shares.combine(), Ok(secret));
+
+        let blinder = IdentifierPrimeField(Scalar::from(12u64));
+        let options = PedersenOptions {
+            secret: &secret,
+            blinder: Some(blinder),
+            secret_generator: Some(TestVerifier::generator()),
+            blinder_generator: Some(ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(2u64))),
+        };
+        let result =
+            FixedVsssForTest::<TestShare, TestVerifier>::split_secret_with_blind_verifiers(
+                2, 3, &options, &mut rng,
+            )
+            .unwrap();
+
+        assert_eq!(result.blinder(), &blinder);
+        assert_eq!(result.secret_shares().combine(), Ok(secret));
+        assert_eq!(result.blinder_shares().combine(), Ok(blinder));
+        assert_eq!(result.feldman_verifier_set().len(), 3);
+        assert_eq!(result.pedersen_verifier_set().len(), 4);
+    }
+}

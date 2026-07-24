@@ -266,3 +266,70 @@ impl CtIsNotZero for usize {
         subtle::Choice::from(a as u8)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CtIsNotZero, CtIsZero, field_bounded_add, uniform_nonzero_u8};
+
+    #[test]
+    fn uniform_nonzero_u8_maps_into_one_through_modulus() {
+        assert_eq!(uniform_nonzero_u8(0, 15), 1);
+        assert_eq!(uniform_nonzero_u8(14, 15), 15);
+        assert_eq!(uniform_nonzero_u8(15, 15), 1);
+        assert_eq!(uniform_nonzero_u8(u32::MAX, 255), 1);
+    }
+
+    #[test]
+    fn field_bounded_add_returns_zero_on_exhaustion() {
+        assert_eq!(field_bounded_add(1, 2, 16), 3);
+        assert_eq!(field_bounded_add(14, 1, 16), 15);
+        assert_eq!(field_bounded_add(15, 1, 16), 0);
+        assert_eq!(field_bounded_add(255, 1, 256), 0);
+    }
+
+    #[test]
+    fn byte_slices_report_zero_and_nonzero_in_constant_time_form() {
+        let zeros = [0u8; 4];
+        let nonzeros = [0u8, 0, 7, 0];
+        assert_eq!(zeros.as_slice().ct_is_zero().unwrap_u8(), 1);
+        assert_eq!(zeros.as_slice().ct_is_not_zero().unwrap_u8(), 0);
+        assert_eq!(nonzeros.as_slice().ct_is_zero().unwrap_u8(), 0);
+        assert_eq!(nonzeros.as_slice().ct_is_not_zero().unwrap_u8(), 1);
+        assert_eq!(zeros[..].ct_is_zero().unwrap_u8(), 1);
+        assert_eq!(nonzeros[..].ct_is_not_zero().unwrap_u8(), 1);
+    }
+
+    #[test]
+    fn integers_report_zero_and_nonzero_in_constant_time_form() {
+        macro_rules! assert_integer_zero_checks {
+            ($($ty:ty => $nonzero:expr),+$(,)*) => {
+                $(
+                    let zero: $ty = 0;
+                    let nonzero: $ty = $nonzero;
+                    assert_eq!(zero.ct_is_zero().unwrap_u8(), 1);
+                    assert_eq!(zero.ct_is_not_zero().unwrap_u8(), 0);
+                    assert_eq!(nonzero.ct_is_zero().unwrap_u8(), 0);
+                    assert_eq!(nonzero.ct_is_not_zero().unwrap_u8(), 1);
+                )+
+            };
+        }
+
+        assert_integer_zero_checks!(
+            u8 => 7,
+            i8 => -7,
+            u16 => 7,
+            i16 => -7,
+            u32 => 7,
+            i32 => -7,
+            u64 => 7,
+            i64 => -7,
+            usize => 7,
+        );
+
+        #[cfg(target_pointer_width = "64")]
+        assert_integer_zero_checks!(
+            u128 => 7,
+            i128 => -7,
+        );
+    }
+}

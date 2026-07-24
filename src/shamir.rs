@@ -27,23 +27,23 @@ where
         rng: impl CryptoRng,
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
-        let generator = ParticipantIdGeneratorType::<S::Identifier>::default();
-        Self::split_secret_with_participant_generator(threshold, limit, secret, rng, &[generator])
+        let generator = ParticipantIdGenerator::<S::Identifier>::default();
+        Self::split_secret_with_participant_generators(threshold, limit, secret, rng, &[generator])
     }
 
-    /// Create shares from a secret and a participant number generator.
+    /// Create shares from a secret and participant number generators.
     /// `F` is the prime field
-    fn split_secret_with_participant_generator(
+    fn split_secret_with_participant_generators(
         threshold: usize,
         limit: usize,
         secret: &S::Value,
         rng: impl CryptoRng,
-        participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
+        participant_generators: &[ParticipantIdGenerator<S::Identifier>],
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
-        let ss = create_shares_with_participant_generator(
+        let ss = create_shares_with_participant_generators(
             &polynomial,
             threshold,
             limit,
@@ -51,13 +51,45 @@ where
         )?;
         Ok(ss)
     }
+
+    /// Create shares from a secret and participant number generators.
+    #[deprecated(note = "renamed to split_secret_with_participant_generators")]
+    fn split_secret_with_participant_generator(
+        threshold: usize,
+        limit: usize,
+        secret: &S::Value,
+        rng: impl CryptoRng,
+        participant_generators: &[ParticipantIdGenerator<S::Identifier>],
+    ) -> VsssResult<Self::ShareSet> {
+        Self::split_secret_with_participant_generators(
+            threshold,
+            limit,
+            secret,
+            rng,
+            participant_generators,
+        )
+    }
+
+    /// Create shares from a secret and an iterator of participant identifiers.
+    fn split_secret_with_participant_ids_iter(
+        threshold: usize,
+        limit: usize,
+        secret: &S::Value,
+        rng: impl CryptoRng,
+        participant_ids: impl IntoIterator<Item = S::Identifier>,
+    ) -> VsssResult<Self::ShareSet> {
+        check_params(threshold, limit)?;
+        let mut polynomial = Self::InnerPolynomial::create(threshold);
+        polynomial.fill(secret, rng, threshold)?;
+        create_shares_with_participant_ids_iter(&polynomial, threshold, limit, participant_ids)
+    }
 }
 
-pub(crate) fn create_shares_with_participant_generator<P, S, SS>(
+pub(crate) fn create_shares_with_participant_generators<P, S, SS>(
     polynomial: &P,
     threshold: usize,
     limit: usize,
-    participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
+    participant_generators: &[ParticipantIdGenerator<S::Identifier>],
 ) -> VsssResult<SS>
 where
     P: Polynomial<S>,
@@ -82,6 +114,52 @@ where
         *s = share;
     }
     Ok(shares)
+}
+
+pub(crate) fn create_shares_with_participant_ids_iter<P, S, SS>(
+    polynomial: &P,
+    threshold: usize,
+    limit: usize,
+    participant_ids: impl IntoIterator<Item = S::Identifier>,
+) -> VsssResult<SS>
+where
+    P: Polynomial<S>,
+    S: Share,
+    SS: WriteableShareSet<S>,
+{
+    let mut shares = SS::create(limit);
+    let mut participant_id_iter = participant_ids.into_iter();
+
+    for s in shares.as_mut().iter_mut().take(limit) {
+        let id = participant_id_iter
+            .next()
+            .ok_or(Error::NotEnoughShareIdentifiers)?;
+        let value = polynomial.evaluate(&id, threshold);
+        *s = S::with_identifier_and_value(id, value);
+    }
+    Ok(shares)
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub(crate) fn create_shares_with_participant_generators_iter<'a, P, S, SS>(
+    polynomial: &P,
+    threshold: usize,
+    limit: usize,
+    participant_generators: impl IntoIterator<Item = ParticipantIdGenerator<'a, S::Identifier>>,
+) -> VsssResult<SS>
+where
+    P: Polynomial<S>,
+    S: Share,
+    S::Identifier: 'a,
+    SS: WriteableShareSet<S>,
+{
+    let participant_generators: Vec<_> = participant_generators.into_iter().collect();
+    create_shares_with_participant_generators(
+        polynomial,
+        threshold,
+        limit,
+        participant_generators.as_slice(),
+    )
 }
 
 pub(crate) fn check_params(threshold: usize, limit: usize) -> VsssResult<()> {
@@ -127,19 +205,74 @@ pub fn split_secret<S: Share>(
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-/// Create shares from a secret and a participant number generator.
+/// Create shares from a secret and participant number generators.
+pub fn split_secret_with_participant_generators<S: Share>(
+    threshold: usize,
+    limit: usize,
+    secret: &S::Value,
+    rng: impl CryptoRng,
+    participant_generators: &[ParticipantIdGenerator<S::Identifier>],
+) -> VsssResult<Vec<S>> {
+    StdVsssShamir::split_secret_with_participant_generators(
+        threshold,
+        limit,
+        secret,
+        rng,
+        participant_generators,
+    )
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret and participant number generators.
+#[deprecated(note = "renamed to split_secret_with_participant_generators")]
 pub fn split_secret_with_participant_generator<S: Share>(
     threshold: usize,
     limit: usize,
     secret: &S::Value,
     rng: impl CryptoRng,
-    participant_generators: &[ParticipantIdGeneratorType<S::Identifier>],
+    participant_generators: &[ParticipantIdGenerator<S::Identifier>],
 ) -> VsssResult<Vec<S>> {
-    StdVsssShamir::split_secret_with_participant_generator(
+    split_secret_with_participant_generators(threshold, limit, secret, rng, participant_generators)
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret and an iterator of participant identifiers.
+pub fn split_secret_with_participant_ids_iter<S: Share>(
+    threshold: usize,
+    limit: usize,
+    secret: &S::Value,
+    rng: impl CryptoRng,
+    participant_ids: impl IntoIterator<Item = S::Identifier>,
+) -> VsssResult<Vec<S>> {
+    StdVsssShamir::split_secret_with_participant_ids_iter(
         threshold,
         limit,
         secret,
         rng,
+        participant_ids,
+    )
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret and an iterator of participant number generators.
+pub fn split_secret_with_participant_generators_iter<'a, S>(
+    threshold: usize,
+    limit: usize,
+    secret: &S::Value,
+    rng: impl CryptoRng,
+    participant_generators: impl IntoIterator<Item = ParticipantIdGenerator<'a, S::Identifier>>,
+) -> VsssResult<Vec<S>>
+where
+    S: Share,
+    S::Identifier: 'a,
+{
+    check_params(threshold, limit)?;
+    let mut polynomial = <Vec<S> as Polynomial<S>>::create(threshold);
+    polynomial.fill(secret, rng, threshold)?;
+    create_shares_with_participant_generators_iter(
+        &polynomial,
+        threshold,
+        limit,
         participant_generators,
     )
 }
@@ -153,4 +286,97 @@ struct StdVsssShamir<S: Share> {
 impl<S: Share> Shamir<S> for StdVsssShamir<S> {
     type InnerPolynomial = Vec<S>;
     type ShareSet = Vec<S>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        Shamir, StdVsssShamir, check_params, split_secret,
+        split_secret_with_participant_generators, split_secret_with_participant_generators_iter,
+        split_secret_with_participant_ids_iter,
+    };
+    use crate::{
+        Error, IdentifierPrimeField, ParticipantIdGenerator, PrimeFieldShare, ReadableShareSet,
+    };
+    use k256::Scalar;
+    use rand::{SeedableRng, rngs::StdRng};
+
+    type TestShare = PrimeFieldShare<Scalar>;
+
+    #[test]
+    fn check_params_reports_threshold_and_limit_errors() {
+        assert_eq!(check_params(1, 3), Err(Error::SharingMinThreshold));
+        assert_eq!(
+            check_params(3, 2),
+            Err(Error::SharingLimitLessThanThreshold)
+        );
+        assert_eq!(check_params(2, 2), Ok(()));
+    }
+
+    #[test]
+    fn shamir_free_functions_split_and_combine() {
+        let mut rng = StdRng::from_seed([0x51u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(33u64));
+        let shares = split_secret::<TestShare>(2, 3, &secret, &mut rng).unwrap();
+        assert_eq!(shares.combine(), Ok(secret));
+
+        let ids = [10u64, 11, 12].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let shares =
+            split_secret_with_participant_ids_iter::<TestShare>(2, 3, &secret, &mut rng, ids)
+                .unwrap();
+        assert_eq!(shares[0].identifier.0, Scalar::from(10u64));
+        assert_eq!(shares.combine(), Ok(secret));
+
+        let generator = ParticipantIdGenerator::Sequential {
+            start: IdentifierPrimeField(Scalar::from(20u64)),
+            increment: IdentifierPrimeField(Scalar::from(1u64)),
+            count: 3,
+        };
+        let shares = split_secret_with_participant_generators::<TestShare>(
+            2,
+            3,
+            &secret,
+            &mut rng,
+            &[generator],
+        )
+        .unwrap();
+        assert_eq!(shares[0].identifier.0, Scalar::from(20u64));
+        assert_eq!(shares.combine(), Ok(secret));
+    }
+
+    #[test]
+    fn shamir_iterator_generator_wrapper_and_errors_work() {
+        let mut rng = StdRng::from_seed([0x52u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(33u64));
+        let generator = ParticipantIdGenerator::Sequential {
+            start: IdentifierPrimeField(Scalar::from(30u64)),
+            increment: IdentifierPrimeField(Scalar::from(1u64)),
+            count: 3,
+        };
+        let shares = split_secret_with_participant_generators_iter::<TestShare>(
+            2,
+            3,
+            &secret,
+            &mut rng,
+            [generator],
+        )
+        .unwrap();
+        assert_eq!(shares[0].identifier.0, Scalar::from(30u64));
+        assert_eq!(shares.combine(), Ok(secret));
+
+        assert_eq!(
+            split_secret_with_participant_ids_iter::<TestShare>(
+                2,
+                3,
+                &secret,
+                &mut rng,
+                [IdentifierPrimeField(Scalar::from(1u64))]
+            ),
+            Err(Error::NotEnoughShareIdentifiers)
+        );
+        assert_eq!(
+            <StdVsssShamir<TestShare> as Shamir<TestShare>>::split_secret(1, 3, &secret, &mut rng),
+            Err(Error::SharingMinThreshold)
+        );
+    }
 }

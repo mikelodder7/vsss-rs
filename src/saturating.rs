@@ -311,3 +311,125 @@ where
         Self(self.0.saturating_mul(&v.0))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Saturating;
+    use core::ops::{Add, Div, Mul, Rem, Sub};
+    use elliptic_curve::bigint::{Uint, Zero};
+    use num::traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
+    use std::{format, string::ToString};
+    use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
+
+    fn n(value: u8) -> Saturating<1> {
+        Saturating(Uint::<1>::from_be_slice(&[0, 0, 0, 0, 0, 0, 0, value]))
+    }
+
+    #[test]
+    fn formatting_and_constant_time_traits_delegate_to_inner_uint() {
+        let zero = Saturating::<1>::zero();
+        let one = n(1);
+
+        assert_eq!(zero.to_string(), "0000000000000000");
+        assert_eq!(format!("{one:b}"), format!("{:b}", one.0));
+        assert_eq!(format!("{one:x}"), format!("{:x}", one.0));
+        assert_eq!(format!("{one:X}"), format!("{:X}", one.0));
+        assert_eq!(ConstantTimeEq::ct_eq(&one, &one).unwrap_u8(), 1);
+        assert_eq!(ConstantTimeEq::ct_eq(&one, &zero).unwrap_u8(), 0);
+        assert_eq!(
+            Saturating::conditional_select(&zero, &one, Choice::from(1u8)),
+            one
+        );
+    }
+
+    #[test]
+    fn arithmetic_operators_and_assignments_saturate() {
+        let one = n(1);
+        let two = n(2);
+        let three = n(3);
+
+        assert_eq!(one + two, three);
+        assert_eq!(
+            <Saturating<1> as Add<&Saturating<1>>>::add(one, &two),
+            three
+        );
+        assert_eq!(
+            <&Saturating<1> as Add<Saturating<1>>>::add(&one, two),
+            three
+        );
+        assert_eq!(
+            <&Saturating<1> as Add<&Saturating<1>>>::add(&one, &two),
+            three
+        );
+        assert_eq!(three - two, one);
+        assert_eq!(
+            <Saturating<1> as Sub<&Saturating<1>>>::sub(three, &two),
+            one
+        );
+        assert_eq!(
+            <&Saturating<1> as Sub<Saturating<1>>>::sub(&three, two),
+            one
+        );
+        assert_eq!(
+            <&Saturating<1> as Sub<&Saturating<1>>>::sub(&three, &two),
+            one
+        );
+        assert_eq!(two * three, n(6));
+        assert_eq!(
+            <Saturating<1> as Mul<&Saturating<1>>>::mul(two, &three),
+            n(6)
+        );
+        assert_eq!(
+            <&Saturating<1> as Mul<Saturating<1>>>::mul(&two, three),
+            n(6)
+        );
+        assert_eq!(
+            <&Saturating<1> as Mul<&Saturating<1>>>::mul(&two, &three),
+            n(6)
+        );
+        assert_eq!(three / one, three);
+        assert_eq!(
+            <Saturating<1> as Div<&Saturating<1>>>::div(three, &one),
+            three
+        );
+        assert_eq!(
+            <&Saturating<1> as Div<Saturating<1>>>::div(&three, one),
+            three
+        );
+        assert_eq!(
+            <&Saturating<1> as Div<&Saturating<1>>>::div(&three, &one),
+            three
+        );
+        assert_eq!(three % two, one);
+        assert_eq!(
+            <Saturating<1> as Rem<&Saturating<1>>>::rem(three, &two),
+            one
+        );
+        assert_eq!(
+            <&Saturating<1> as Rem<Saturating<1>>>::rem(&three, two),
+            one
+        );
+        assert_eq!(
+            <&Saturating<1> as Rem<&Saturating<1>>>::rem(&three, &two),
+            one
+        );
+
+        let mut assigned = one;
+        assigned += two;
+        assert_eq!(assigned, three);
+        assigned -= &one;
+        assert_eq!(assigned, two);
+        assigned *= three;
+        assert_eq!(assigned, n(6));
+        assigned /= &two;
+        assert_eq!(assigned, three);
+        assigned %= two;
+        assert_eq!(assigned, one);
+
+        assert_eq!(SaturatingAdd::saturating_add(&two, &three), n(5));
+        assert_eq!(SaturatingSub::saturating_sub(&two, &three), n(0));
+        assert_eq!(SaturatingMul::saturating_mul(&two, &three), n(6));
+        assert_eq!(one / Saturating::<1>::zero(), Saturating(Uint::<1>::MAX));
+        assert_eq!(one % Saturating::<1>::zero(), Saturating::<1>::zero());
+    }
+}

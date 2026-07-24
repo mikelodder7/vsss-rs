@@ -23,7 +23,7 @@ use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-use crate::ParticipantIdGeneratorType;
+use crate::ParticipantIdGenerator;
 use rand_core::CryptoRng;
 #[cfg(feature = "zeroize")]
 use zeroize::DefaultIsZeroes;
@@ -564,30 +564,30 @@ impl Gf256 {
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
-    /// Split a byte array into shares.
-    pub fn split_array<B: AsRef<[u8]>>(
+    /// Split bytes into shares.
+    pub fn split_bytes<B: AsRef<[u8]>>(
         threshold: usize,
         limit: usize,
         secret: B,
         rng: impl CryptoRng,
     ) -> VsssResult<Vec<Vec<u8>>> {
-        Self::split_array_with_participant_generators(
+        Self::split_bytes_with_participant_generators(
             threshold,
             limit,
             secret,
             rng,
-            &[ParticipantIdGeneratorType::default()],
+            &[ParticipantIdGenerator::default()],
         )
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
-    /// Split a byte array into shares using the participant number generator.
-    pub fn split_array_with_participant_generators<B: AsRef<[u8]>>(
+    /// Split bytes into shares using participant number generators.
+    pub fn split_bytes_with_participant_generators<B: AsRef<[u8]>>(
         threshold: usize,
         limit: usize,
         secret: B,
         mut rng: impl CryptoRng,
-        participant_generators: &[ParticipantIdGeneratorType<IdentifierGf256>],
+        participant_generators: &[ParticipantIdGenerator<IdentifierGf256>],
     ) -> VsssResult<Vec<Vec<u8>>> {
         if limit > 255 {
             return Err(Error::InvalidSizeRequest);
@@ -597,6 +597,7 @@ impl Gf256 {
             return Err(Error::InvalidSecret);
         }
         let mut shares = Vec::with_capacity(limit);
+        let mut ids = Vec::with_capacity(limit);
 
         let collection = ParticipantIdGeneratorCollection::from(participant_generators);
         let mut participant_id_iter = collection.iter();
@@ -605,49 +606,126 @@ impl Gf256 {
             let id = participant_id_iter
                 .next()
                 .ok_or(Error::NotEnoughShareIdentifiers)?;
-            let mut inner = Vec::with_capacity(limit + 1);
+            let mut inner = Vec::with_capacity(secret.len() + 1);
             inner.push(id.0.0);
+            ids.push(id);
             shares.push(inner);
         }
+        check_params(threshold, limit)?;
+        let mut polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
         for b in secret {
             let share = IdentifierGf256(Gf256(*b));
-            let inner_shares = shamir::split_secret_with_participant_generator::<GfShare>(
-                threshold,
-                limit,
-                &share,
-                &mut rng,
-                participant_generators,
-            )?;
-            for (share, inner_share) in shares.iter_mut().zip(inner_shares.iter()) {
-                share.push(inner_share.value.0.0);
+            polynomial.fill(&share, &mut rng, threshold)?;
+            for (share, id) in shares.iter_mut().zip(ids.iter()) {
+                share.push(polynomial.evaluate(id, threshold).0.0);
             }
         }
         Ok(shares)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
-    /// Combine shares into a byte array.
-    pub fn combine_array<B: AsRef<[Vec<u8>]>>(shares: B) -> VsssResult<Vec<u8>> {
+    /// Split bytes into shares using an iterator of participant identifiers.
+    pub fn split_bytes_with_participant_ids_iter<B, I>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        mut rng: impl CryptoRng,
+        participant_ids: I,
+    ) -> VsssResult<Vec<Vec<u8>>>
+    where
+        B: AsRef<[u8]>,
+        I: IntoIterator<Item = IdentifierGf256>,
+    {
+        if limit > 255 {
+            return Err(Error::InvalidSizeRequest);
+        }
+        let secret = secret.as_ref();
+        if secret.is_empty() {
+            return Err(Error::InvalidSecret);
+        }
+        check_params(threshold, limit)?;
+
+        let mut shares = Vec::with_capacity(limit);
+        let mut ids = Vec::with_capacity(limit);
+        let mut participant_id_iter = participant_ids.into_iter();
+
+        for _ in 0..limit {
+            let id = participant_id_iter
+                .next()
+                .ok_or(Error::NotEnoughShareIdentifiers)?;
+            if id.is_zero().into() {
+                return Err(Error::SharingInvalidIdentifier);
+            }
+            let mut inner = Vec::with_capacity(secret.len() + 1);
+            inner.push(id.0.0);
+            ids.push(id);
+            shares.push(inner);
+        }
+
+        let mut polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        for b in secret {
+            let share = IdentifierGf256(Gf256(*b));
+            polynomial.fill(&share, &mut rng, threshold)?;
+            for (share, id) in shares.iter_mut().zip(ids.iter()) {
+                share.push(polynomial.evaluate(id, threshold).0.0);
+            }
+        }
+        Ok(shares)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Combine shares into bytes.
+    pub fn combine_bytes<B: AsRef<[Vec<u8>]>>(shares: B) -> VsssResult<Vec<u8>> {
         let shares = shares.as_ref();
 
         Self::are_shares_valid(shares)?;
 
         let mut secret = Vec::with_capacity(shares[0].len() - 1);
-        let mut inner_shares = Vec::<GfShare>::with_capacity(shares[0].len() - 1);
-
-        for share in shares {
-            inner_shares.push(DefaultShare {
-                identifier: IdentifierGf256(Gf256(share[0])),
-                value: IdentifierGf256(Gf256(0u8)),
-            });
-        }
+        let coefficients = lagrange_coefficients(shares)?;
         for i in 1..shares[0].len() {
-            for (inner_share, share) in inner_shares.iter_mut().zip(shares.iter()) {
-                inner_share.value = IdentifierGf256(Gf256(share[i]));
+            let mut byte = IdentifierGf256(Gf256(0u8));
+            for (share, coefficient) in shares.iter().zip(coefficients.iter()) {
+                let term = IdentifierGf256(Gf256(share[i])) * coefficient;
+                *byte.as_mut() += term.as_ref();
             }
-            secret.push(inner_shares.combine()?.0.0);
+            secret.push(byte.0.0);
         }
         Ok(secret)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Alias for [`Gf256::split_bytes`].
+    pub fn split_array<B: AsRef<[u8]>>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        rng: impl CryptoRng,
+    ) -> VsssResult<Vec<Vec<u8>>> {
+        Self::split_bytes(threshold, limit, secret, rng)
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Alias for [`Gf256::split_bytes_with_participant_generators`].
+    pub fn split_array_with_participant_generators<B: AsRef<[u8]>>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        rng: impl CryptoRng,
+        participant_generators: &[ParticipantIdGenerator<IdentifierGf256>],
+    ) -> VsssResult<Vec<Vec<u8>>> {
+        Self::split_bytes_with_participant_generators(
+            threshold,
+            limit,
+            secret,
+            rng,
+            participant_generators,
+        )
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    /// Alias for [`Gf256::combine_bytes`].
+    pub fn combine_array<B: AsRef<[Vec<u8>]>>(shares: B) -> VsssResult<Vec<u8>> {
+        Self::combine_bytes(shares)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -663,6 +741,49 @@ impl Gf256 {
         }
         Ok(())
     }
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+fn lagrange_coefficients(shares: &[Vec<u8>]) -> VsssResult<Vec<IdentifierGf256>> {
+    let identifiers: Vec<_> = shares
+        .iter()
+        .map(|share| IdentifierGf256(Gf256(share[0])))
+        .collect();
+
+    for identifier in &identifiers {
+        if identifier.is_zero().into() {
+            return Err(Error::SharingInvalidIdentifier);
+        }
+    }
+    for (i, x_i) in identifiers.iter().enumerate() {
+        for x_j in identifiers.iter().skip(i + 1) {
+            if x_i == x_j {
+                return Err(Error::SharingDuplicateIdentifier);
+            }
+        }
+    }
+
+    let mut coefficients = Vec::with_capacity(identifiers.len());
+    for (i, x_i) in identifiers.iter().enumerate() {
+        let mut num = IdentifierGf256::one();
+        let mut den = IdentifierGf256::one();
+        for (j, x_j) in identifiers.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+
+            let d = *x_j.as_ref() - *x_i.as_ref();
+            *den.as_mut() *= d;
+            *num.as_mut() *= x_j.as_ref();
+        }
+
+        let den = den
+            .invert()
+            .map_err(|_| Error::SharingDuplicateIdentifier)?;
+        coefficients.push((*num.as_ref() * den.as_ref()).into());
+    }
+
+    Ok(coefficients)
 }
 
 fn gf256_pow(base: u8, exp: u8) -> u8 {
@@ -836,7 +957,7 @@ mod tests {
     use super::gf256_cmp;
     use super::*;
     use crate::shamir;
-    use crate::{ParticipantIdGeneratorCollection, ParticipantIdGeneratorType};
+    use crate::{ParticipantIdGenerator, ParticipantIdGeneratorCollection};
     use rand::{RngExt, SeedableRng};
     use rand_chacha::ChaCha8Rng;
     use std::collections::HashSet;
@@ -925,7 +1046,13 @@ mod tests {
         let res = Gf256::combine_array(&shares[..3]);
         assert_eq!(res.unwrap(), secret);
 
-        let p = ParticipantIdGeneratorType::Sequential {
+        let shares = Gf256::split_bytes(3, 5, secret, &mut rng).unwrap();
+        assert_eq!(shares.len(), 5);
+
+        let res = Gf256::combine_bytes(&shares[..3]);
+        assert_eq!(res.unwrap(), secret);
+
+        let p = ParticipantIdGenerator::Sequential {
             start: IdentifierGf256(Gf256(10)),
             increment: IdentifierGf256(Gf256(1)),
             count: 5,
@@ -935,6 +1062,15 @@ mod tests {
         assert_eq!(shares.len(), 5);
 
         let res = Gf256::combine_array(&shares[..3]);
+        let secret2 = res.unwrap();
+        assert_eq!(secret2, secret);
+
+        let ids = (1u8..=5).map(|id| IdentifierGf256(Gf256(id)));
+        let shares =
+            Gf256::split_bytes_with_participant_ids_iter(3, 5, secret, &mut rng, ids).unwrap();
+        assert_eq!(shares.len(), 5);
+
+        let res = Gf256::combine_bytes(&shares[..3]);
         let secret2 = res.unwrap();
         assert_eq!(secret2, secret);
 
@@ -1055,7 +1191,7 @@ mod tests {
         // fixed code emits [253, 254, 255] then halts.
         let start = IdentifierGf256(Gf256(253));
         let inc = IdentifierGf256(Gf256(1));
-        let seq = ParticipantIdGeneratorType::Sequential {
+        let seq = ParticipantIdGenerator::Sequential {
             start,
             increment: inc,
             count: 10,
@@ -1173,6 +1309,169 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn gf256_formatting_conversions_and_field_methods_work() {
+        use elliptic_curve::ff::{Field, PrimeField};
+        use std::{format, string::ToString};
+        use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
+
+        let value = Gf256(0xab);
+        assert_eq!(value.to_string(), "171");
+        assert_eq!(format!("{value:x}"), "ab");
+        assert_eq!(format!("{value:X}"), "AB");
+        assert_eq!(format!("{value:b}"), "10101011");
+        assert_eq!(
+            Gf256::conditional_select(&Gf256(1), &Gf256(2), Choice::from(1)),
+            Gf256(2)
+        );
+        assert_eq!(Gf256(7).ct_eq(&Gf256(7)).unwrap_u8(), 1);
+
+        assert_eq!(u8::from(Gf256::from(0x12u8)), 0x12);
+        assert_eq!(u16::from(Gf256::from(0x12u16)), 0x12);
+        assert_eq!(u32::from(Gf256::from(0x12u32)), 0x12);
+        assert_eq!(u64::from(Gf256::from(0x12u64)), 0x12);
+        assert_eq!(u128::from(Gf256::from(0x12u128)), 0x12);
+
+        assert_eq!(Gf256::from_repr([0x0b]).unwrap(), Gf256(0x0b));
+        assert_eq!(Gf256(0x0b).to_repr(), [0x0b]);
+        assert_eq!(Gf256(3).is_odd().unwrap_u8(), 1);
+        assert_eq!(Gf256(2).is_odd().unwrap_u8(), 0);
+        assert_eq!(Gf256(3).square(), Gf256(3) * Gf256(3));
+        assert_eq!(Gf256(3).double(), Gf256(0));
+        assert_eq!(Gf256(3).invert().unwrap() * Gf256(3), Gf256(1));
+        assert!(bool::from(Gf256(0).invert().is_none()));
+    }
+
+    #[test]
+    fn gf256_operator_reference_forms_assignments_sum_and_product_work() {
+        use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Sub};
+
+        let a = Gf256(0x03);
+        let b = Gf256(0x05);
+        assert_eq!(a + b, Gf256(0x06));
+        assert_eq!(<Gf256 as Add<&Gf256>>::add(a, &b), Gf256(0x06));
+        assert_eq!(<&Gf256 as Add<Gf256>>::add(&a, b), Gf256(0x06));
+        assert_eq!(<&Gf256 as Add<&Gf256>>::add(&a, &b), Gf256(0x06));
+        assert_eq!(a - b, Gf256(0x06));
+        assert_eq!(<Gf256 as Sub<&Gf256>>::sub(a, &b), Gf256(0x06));
+        assert_eq!(<&Gf256 as Sub<Gf256>>::sub(&a, b), Gf256(0x06));
+        assert_eq!(<&Gf256 as Sub<&Gf256>>::sub(&a, &b), Gf256(0x06));
+        assert_eq!(a * b, Gf256(gf256_cmp::gf256_mul(3, 5)));
+        assert_eq!(<Gf256 as Mul<&Gf256>>::mul(a, &b), a * b);
+        assert_eq!(<&Gf256 as Mul<Gf256>>::mul(&a, b), a * b);
+        assert_eq!(<&Gf256 as Mul<&Gf256>>::mul(&a, &b), a * b);
+        assert_eq!(a / b, a * b.invert().unwrap());
+        assert_eq!(<Gf256 as Div<&Gf256>>::div(a, &b), a / b);
+        assert_eq!(<&Gf256 as Div<Gf256>>::div(&a, b), a / b);
+        assert_eq!(<&Gf256 as Div<&Gf256>>::div(&a, &b), a / b);
+        assert_eq!(Neg::neg(a), a);
+        assert_eq!(a & b, Gf256(0x01));
+        assert_eq!(<Gf256 as BitAnd<&Gf256>>::bitand(a, &b), Gf256(0x01));
+        assert_eq!(<&Gf256 as BitAnd<Gf256>>::bitand(&a, b), Gf256(0x01));
+        assert_eq!(<&Gf256 as BitAnd<&Gf256>>::bitand(&a, &b), Gf256(0x01));
+        assert_eq!(a | b, Gf256(0x07));
+        assert_eq!(<Gf256 as BitOr<&Gf256>>::bitor(a, &b), Gf256(0x07));
+        assert_eq!(<&Gf256 as BitOr<Gf256>>::bitor(&a, b), Gf256(0x07));
+        assert_eq!(<&Gf256 as BitOr<&Gf256>>::bitor(&a, &b), Gf256(0x07));
+        assert_eq!(a ^ b, Gf256(0x06));
+        assert_eq!(<Gf256 as BitXor<&Gf256>>::bitxor(a, &b), Gf256(0x06));
+        assert_eq!(<&Gf256 as BitXor<Gf256>>::bitxor(&a, b), Gf256(0x06));
+        assert_eq!(<&Gf256 as BitXor<&Gf256>>::bitxor(&a, &b), Gf256(0x06));
+
+        let mut assigned = a;
+        assigned += b;
+        assert_eq!(assigned, Gf256(0x06));
+        assigned -= &b;
+        assert_eq!(assigned, a);
+        assigned *= b;
+        assert_eq!(assigned, a * b);
+        assigned /= &b;
+        assert_eq!(assigned, a);
+        assigned &= b;
+        assert_eq!(assigned, Gf256(0x01));
+        assigned |= &Gf256(0x80);
+        assert_eq!(assigned, Gf256(0x81));
+        assigned ^= b;
+        assert_eq!(assigned, Gf256(0x84));
+
+        assert_eq!(
+            [Gf256(1), Gf256(2), Gf256(3)].iter().sum::<Gf256>(),
+            Gf256(0)
+        );
+        assert_eq!(
+            [Gf256(2), Gf256(3)].iter().product::<Gf256>(),
+            Gf256(gf256_cmp::gf256_mul(2, 3))
+        );
+    }
+
+    #[test]
+    fn gf256_identifier_share_element_and_error_paths_work() {
+        let identifier = IdentifierGf256(Gf256(7));
+        assert_eq!(IdentifierGf256::from(Gf256(7)), identifier);
+        assert_eq!(IdentifierGf256::from(&identifier), identifier);
+        assert_eq!(identifier.serialize(), [7]);
+        assert_eq!(IdentifierGf256::deserialize(&[7]), Ok(identifier));
+        assert_eq!(IdentifierGf256::from_slice(&[7]), Ok(identifier));
+        assert_eq!(
+            IdentifierGf256::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(identifier.to_vec(), vec![7]);
+        assert_eq!(IdentifierGf256::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(IdentifierGf256::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierGf256::one().invert(), Ok(IdentifierGf256::one()));
+        assert_eq!(
+            IdentifierGf256::zero().invert(),
+            Err(Error::InvalidShareElement)
+        );
+
+        let mut incremented = IdentifierGf256(Gf256(254));
+        incremented.inc(&IdentifierGf256(Gf256(1)));
+        assert_eq!(incremented, IdentifierGf256(Gf256(255)));
+        incremented.inc(&IdentifierGf256(Gf256(1)));
+        assert_eq!(incremented, IdentifierGf256(Gf256(0)));
+
+        assert_eq!(
+            Gf256::combine_bytes(Vec::<Vec<u8>>::new()),
+            Err(Error::SharingMinThreshold)
+        );
+        assert_eq!(
+            Gf256::combine_bytes(vec![vec![1]]),
+            Err(Error::SharingMinThreshold)
+        );
+        assert_eq!(
+            Gf256::combine_bytes(vec![vec![1], vec![2, 3]]),
+            Err(Error::InvalidShare)
+        );
+        assert_eq!(
+            Gf256::combine_bytes(vec![vec![0, 1], vec![2, 3]]),
+            Err(Error::SharingInvalidIdentifier)
+        );
+        assert_eq!(
+            Gf256::combine_bytes(vec![vec![1, 1], vec![1, 3]]),
+            Err(Error::SharingDuplicateIdentifier)
+        );
+        let mut rng = ChaCha8Rng::from_seed([0x22u8; 32]);
+        assert_eq!(
+            Gf256::split_bytes(2, 256, b"x", &mut rng),
+            Err(Error::InvalidSizeRequest)
+        );
+        assert_eq!(
+            Gf256::split_bytes(2, 2, b"", &mut rng),
+            Err(Error::InvalidSecret)
+        );
+        assert_eq!(
+            Gf256::split_bytes_with_participant_ids_iter(
+                2,
+                2,
+                b"x",
+                &mut rng,
+                [IdentifierGf256(Gf256(0)), IdentifierGf256(Gf256(1))]
+            ),
+            Err(Error::SharingInvalidIdentifier)
+        );
     }
 }
 

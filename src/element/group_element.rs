@@ -631,3 +631,300 @@ impl<G: Group + GroupEncoding + Default> ValueGroup<G> {
         Self(G::generator())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ValueGroup;
+    use crate::{
+        Error, IdentifierConstMontyResidue, IdentifierPrimeField, IdentifierPrimitive,
+        IdentifierResidue, ShareElement,
+    };
+    use core::ops::{Mul, MulAssign};
+    use crypto_bigint::{U256 as CryptoU256, const_monty_params};
+    use elliptic_curve::bigint::{U256 as EcU256, const_monty_params as ec_const_monty_params};
+    use k256::{ProjectivePoint, Scalar};
+    use std::{format, string::ToString};
+
+    ec_const_monty_params!(
+        EcResidueMod,
+        EcU256,
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+    );
+    const_monty_params!(
+        CryptoResidueMod,
+        CryptoU256,
+        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"
+    );
+
+    fn generator() -> ValueGroup<ProjectivePoint> {
+        ValueGroup(ProjectivePoint::GENERATOR)
+    }
+
+    #[test]
+    fn group_share_element_methods_round_trip() {
+        let point = generator();
+        let serialized = point.serialize();
+        let serialized_bytes: &[u8] = serialized.as_ref();
+
+        assert_eq!(point.to_string(), hex::encode(serialized_bytes));
+        assert_eq!(format!("{point}"), hex::encode(serialized_bytes));
+        assert_eq!(
+            ValueGroup::<ProjectivePoint>::deserialize(&serialized),
+            Ok(point)
+        );
+        assert_eq!(
+            ValueGroup::<ProjectivePoint>::from_slice(serialized_bytes),
+            Ok(point)
+        );
+        assert_eq!(point.to_vec(), serialized_bytes);
+        assert_eq!(
+            ValueGroup::<ProjectivePoint>::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(
+            ValueGroup::<ProjectivePoint>::zero().is_zero().unwrap_u8(),
+            1
+        );
+        assert_eq!(ValueGroup::<ProjectivePoint>::one(), point);
+        assert_eq!(
+            ValueGroup::<ProjectivePoint>::identity(),
+            ValueGroup::zero()
+        );
+        assert_eq!(ValueGroup::<ProjectivePoint>::generator(), point);
+    }
+
+    #[test]
+    fn group_reference_access_add_sub_neg_and_prime_field_scalars_work() {
+        let generator = generator();
+        let two = IdentifierPrimeField(Scalar::from(2u64));
+        let three = IdentifierPrimeField(Scalar::from(3u64));
+        let twice = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(2u64));
+        let thrice = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(3u64));
+
+        assert_eq!(*generator.as_ref(), ProjectivePoint::GENERATOR);
+        let mut mutable = ValueGroup(ProjectivePoint::IDENTITY);
+        *mutable.as_mut() = ProjectivePoint::GENERATOR;
+        assert_eq!(mutable, generator);
+        assert_eq!(ValueGroup::from(ProjectivePoint::GENERATOR), generator);
+        assert_eq!(generator + twice, thrice);
+        assert_eq!(thrice - generator, twice);
+        assert_eq!(-generator + generator, ValueGroup::identity());
+        assert_eq!(generator * two, twice);
+        assert_eq!(
+            <ValueGroup<ProjectivePoint> as Mul<&IdentifierPrimeField<Scalar>>>::mul(
+                generator, &three
+            ),
+            thrice
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<IdentifierPrimeField<Scalar>>>::mul(
+                &generator, two
+            ),
+            twice
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<&IdentifierPrimeField<Scalar>>>::mul(
+                &generator, &three
+            ),
+            thrice
+        );
+
+        mutable += generator;
+        mutable -= generator;
+        assert_eq!(mutable, generator);
+        mutable *= two;
+        assert_eq!(mutable, twice);
+        <ValueGroup<ProjectivePoint> as MulAssign<&IdentifierPrimeField<Scalar>>>::mul_assign(
+            &mut mutable,
+            &three,
+        );
+        assert_eq!(
+            mutable,
+            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(6u64))
+        );
+        assert_eq!(ValueGroup::<ProjectivePoint>::from(&three), thrice);
+    }
+
+    #[test]
+    fn group_multiplies_with_supported_identifier_wrappers() {
+        let generator = generator();
+        let primitive = IdentifierPrimitive::<u16, 2>(4);
+        let expected4 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(4u64));
+        let expected5 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(5u64));
+        let expected6 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(6u64));
+        let expected7 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(7u64));
+        let expected8 = ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(8u64));
+        let ec_uint = crate::element::uint5::IdentifierUint::<4>::from_slice(
+            EcU256::from(5u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        let crypto_uint = crate::element::uint::IdentifierUint::<4>::from_slice(
+            CryptoU256::from(6u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        let residue = IdentifierResidue::<EcResidueMod, 4>::from_slice(
+            EcU256::from(7u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+        let const_monty = IdentifierConstMontyResidue::<CryptoResidueMod, 4>::from_slice(
+            CryptoU256::from(8u64).to_be_bytes().as_ref(),
+        )
+        .unwrap();
+
+        assert_eq!(generator * primitive, expected4);
+        assert_eq!(
+            <ValueGroup<ProjectivePoint> as Mul<&IdentifierPrimitive<u16, 2>>>::mul(
+                generator, &primitive
+            ),
+            expected4
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<IdentifierPrimitive<u16, 2>>>::mul(
+                &generator, primitive
+            ),
+            expected4
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<&IdentifierPrimitive<u16, 2>>>::mul(
+                &generator, &primitive
+            ),
+            expected4
+        );
+
+        let mut assigned = generator;
+        assigned *= primitive;
+        assert_eq!(assigned, expected4);
+        <ValueGroup<ProjectivePoint> as MulAssign<&IdentifierPrimitive<u16, 2>>>::mul_assign(
+            &mut assigned,
+            &primitive,
+        );
+        assert_eq!(
+            assigned,
+            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(16u64))
+        );
+
+        assert_eq!(generator * ec_uint, expected5);
+        assert_eq!(
+            <ValueGroup<ProjectivePoint> as Mul<&crate::element::uint5::IdentifierUint<4>>>::mul(
+                generator, &ec_uint
+            ),
+            expected5
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<crate::element::uint5::IdentifierUint<4>>>::mul(
+                &generator, ec_uint
+            ),
+            expected5
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<&crate::element::uint5::IdentifierUint<4>>>::mul(
+                &generator, &ec_uint
+            ),
+            expected5
+        );
+        let mut assigned = generator;
+        assigned *= ec_uint;
+        assert_eq!(assigned, expected5);
+        <ValueGroup<ProjectivePoint> as MulAssign<
+            &crate::element::uint5::IdentifierUint<4>,
+        >>::mul_assign(&mut assigned, &ec_uint);
+        assert_eq!(
+            assigned,
+            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(25u64))
+        );
+
+        assert_eq!(generator * crypto_uint, expected6);
+        assert_eq!(
+            <ValueGroup<ProjectivePoint> as Mul<&crate::element::uint::IdentifierUint<4>>>::mul(
+                generator,
+                &crypto_uint
+            ),
+            expected6
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<crate::element::uint::IdentifierUint<4>>>::mul(
+                &generator,
+                crypto_uint
+            ),
+            expected6
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<&crate::element::uint::IdentifierUint<4>>>::mul(
+                &generator,
+                &crypto_uint
+            ),
+            expected6
+        );
+        let mut assigned = generator;
+        assigned *= crypto_uint;
+        assert_eq!(assigned, expected6);
+        <ValueGroup<ProjectivePoint> as MulAssign<
+            &crate::element::uint::IdentifierUint<4>,
+        >>::mul_assign(&mut assigned, &crypto_uint);
+        assert_eq!(
+            assigned,
+            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(36u64))
+        );
+
+        assert_eq!(generator * residue, expected7);
+        assert_eq!(
+            <ValueGroup<ProjectivePoint> as Mul<&IdentifierResidue<EcResidueMod, 4>>>::mul(
+                generator, &residue
+            ),
+            expected7
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<IdentifierResidue<EcResidueMod, 4>>>::mul(
+                &generator, residue
+            ),
+            expected7
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<&IdentifierResidue<EcResidueMod, 4>>>::mul(
+                &generator, &residue
+            ),
+            expected7
+        );
+        let mut assigned = generator;
+        assigned *= residue;
+        assert_eq!(assigned, expected7);
+        <ValueGroup<ProjectivePoint> as MulAssign<&IdentifierResidue<EcResidueMod, 4>>>::mul_assign(
+            &mut assigned,
+            &residue,
+        );
+        assert_eq!(
+            assigned,
+            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(49u64))
+        );
+
+        assert_eq!(generator * const_monty, expected8);
+        assert_eq!(
+            <ValueGroup<ProjectivePoint> as Mul<
+                &IdentifierConstMontyResidue<CryptoResidueMod, 4>,
+            >>::mul(generator, &const_monty),
+            expected8
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<
+                IdentifierConstMontyResidue<CryptoResidueMod, 4>,
+            >>::mul(&generator, const_monty),
+            expected8
+        );
+        assert_eq!(
+            <&ValueGroup<ProjectivePoint> as Mul<
+                &IdentifierConstMontyResidue<CryptoResidueMod, 4>,
+            >>::mul(&generator, &const_monty),
+            expected8
+        );
+        let mut assigned = generator;
+        assigned *= const_monty;
+        assert_eq!(assigned, expected8);
+        <ValueGroup<ProjectivePoint> as MulAssign<
+            &IdentifierConstMontyResidue<CryptoResidueMod, 4>,
+        >>::mul_assign(&mut assigned, &const_monty);
+        assert_eq!(
+            assigned,
+            ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(64u64))
+        );
+    }
+}

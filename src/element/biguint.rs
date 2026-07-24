@@ -149,3 +149,55 @@ impl ShareIdentifier for IdentifierBigUint {
             .ok_or(Error::InvalidShareElement)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::IdentifierBigUint;
+    use crate::{Error, ShareElement, ShareIdentifier};
+    use num::bigint::BigUint;
+    use num::traits::{One, Zero};
+    use std::{string::ToString, vec::Vec};
+
+    #[test]
+    fn conversions_and_share_element_methods_round_trip() {
+        let bytes = vec![0x01, 0x23, 0x45, 0x67];
+        let from_vec = IdentifierBigUint::from(bytes.clone());
+        let from_ref = IdentifierBigUint::from(&bytes);
+        let from_slice = IdentifierBigUint::from(bytes.as_slice());
+        let from_box = IdentifierBigUint::from(bytes.clone().into_boxed_slice());
+
+        assert_eq!(from_vec, from_ref);
+        assert_eq!(from_vec, from_slice);
+        assert_eq!(from_vec, from_box);
+        assert_eq!(
+            from_vec.to_string(),
+            BigUint::from_bytes_be(&bytes).to_string()
+        );
+        assert_eq!(Vec::<u8>::from(from_vec.clone()), bytes);
+        assert_eq!(Vec::<u8>::from(&from_vec), bytes);
+        assert_eq!(from_vec.serialize(), bytes);
+        assert_eq!(IdentifierBigUint::deserialize(&bytes), Ok(from_vec.clone()));
+        assert_eq!(IdentifierBigUint::from_slice(&bytes), Ok(from_vec.clone()));
+        assert_eq!(from_vec.to_vec(), bytes);
+        assert_eq!(IdentifierBigUint::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(IdentifierBigUint::one().is_zero().unwrap_u8(), 0);
+
+        let inner: BigUint = from_vec.clone().into();
+        assert_eq!(inner, BigUint::from_bytes_be(&bytes));
+    }
+
+    #[test]
+    fn identifier_increment_and_invert_follow_biguint_arithmetic() {
+        let mut identifier = IdentifierBigUint(BigUint::one());
+        identifier.inc(&IdentifierBigUint(BigUint::from(2u8)));
+        assert_eq!(*identifier, BigUint::from(3u8));
+        assert_eq!(
+            IdentifierBigUint::one().invert(),
+            Ok(IdentifierBigUint::one())
+        );
+        assert_eq!(
+            IdentifierBigUint(BigUint::zero()).invert(),
+            Err(Error::InvalidShareElement)
+        );
+    }
+}

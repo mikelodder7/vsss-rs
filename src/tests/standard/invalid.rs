@@ -28,13 +28,11 @@ pub fn split_invalid_args<S: Share, V: ShareVerifier<S>>() {
             .is_err()
     );
 
-    let participant_generators = [ParticipantIdGeneratorType::default()];
     let options = PedersenOptions {
-        secret,
+        secret: &secret,
         blinder: None,
         secret_generator: None,
         blinder_generator: None,
-        participant_generators: &participant_generators,
     };
     assert!(
         GenericArrayPedersenResult::<S, V, U2, U3>::split_secret_with_blind_verifiers(

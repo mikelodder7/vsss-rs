@@ -1595,6 +1595,354 @@ where
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{
+        ArrayFeldmanVerifierSet, ArrayPedersenVerifierSet, FeldmanVerifierSet,
+        GenericArrayFeldmanVerifierSet, GenericArrayPedersenVerifierSet,
+        HybridArrayFeldmanVerifierSet, HybridArrayPedersenVerifierSet, PedersenVerifierSet,
+        ReadableShareSet, VecFeldmanVerifierSet, VecPedersenVerifierSet, WriteableShareSet,
+    };
+    use crate::{Error, IdentifierPrimeField, PrimeFieldShare, Share, ValueGroup};
+    use generic_array::{
+        GenericArray,
+        typenum::{U3 as GenericU3, U4 as GenericU4},
+    };
+    use hybrid_array::{
+        Array,
+        typenum::{U3 as HybridU3, U4 as HybridU4},
+    };
+    use k256::{ProjectivePoint, Scalar};
+    use std::{vec, vec::Vec};
+
+    type TestShare = PrimeFieldShare<Scalar>;
+    type TestVerifier = ValueGroup<ProjectivePoint>;
+
+    fn share(identifier: u64, value: u64) -> TestShare {
+        TestShare::with_identifier_and_value(
+            IdentifierPrimeField(Scalar::from(identifier)),
+            IdentifierPrimeField(Scalar::from(value)),
+        )
+    }
+
+    fn verifier(value: u64) -> TestVerifier {
+        ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(value))
+    }
+
+    #[test]
+    fn writable_share_sets_create_default_storage() {
+        let array = <[TestShare; 3] as WriteableShareSet<TestShare>>::create(99);
+        assert_eq!(array.len(), 3);
+
+        let generic =
+            <GenericArray<TestShare, GenericU3> as WriteableShareSet<TestShare>>::create(99);
+        assert_eq!(generic.len(), 3);
+
+        let hybrid = <Array<TestShare, HybridU3> as WriteableShareSet<TestShare>>::create(99);
+        assert_eq!(hybrid.len(), 3);
+
+        let vec = <Vec<TestShare> as WriteableShareSet<TestShare>>::create(4);
+        assert_eq!(vec.len(), 4);
+    }
+
+    #[test]
+    fn verifier_set_wrappers_default_deref_and_owned_conversions_work() {
+        let mut array_feldman = ArrayFeldmanVerifierSet::<TestShare, TestVerifier, 3>::default();
+        assert_eq!(array_feldman.len(), 3);
+        array_feldman[0] = verifier(1);
+        assert_eq!(array_feldman.generator(), verifier(1));
+
+        let mut generic_feldman =
+            GenericArrayFeldmanVerifierSet::<TestShare, TestVerifier, GenericU3>::default();
+        assert_eq!(generic_feldman.len(), 3);
+        generic_feldman[0] = verifier(2);
+        let generic_inner = GenericArray::<TestVerifier, GenericU3>::from(generic_feldman);
+        let generic_feldman =
+            GenericArrayFeldmanVerifierSet::<TestShare, TestVerifier, GenericU3>::from(
+                generic_inner,
+            );
+        assert_eq!(generic_feldman.generator(), verifier(2));
+
+        let mut hybrid_feldman =
+            HybridArrayFeldmanVerifierSet::<TestShare, TestVerifier, HybridU3>::default();
+        assert_eq!(hybrid_feldman.len(), 3);
+        hybrid_feldman[0] = verifier(3);
+        let hybrid_inner = Array::<TestVerifier, HybridU3>::from(hybrid_feldman);
+        let hybrid_feldman =
+            HybridArrayFeldmanVerifierSet::<TestShare, TestVerifier, HybridU3>::from(hybrid_inner);
+        assert_eq!(hybrid_feldman.generator(), verifier(3));
+
+        let mut array_pedersen = ArrayPedersenVerifierSet::<TestShare, TestVerifier, 4>::default();
+        assert_eq!(array_pedersen.len(), 4);
+        array_pedersen[0] = verifier(4);
+        array_pedersen[1] = verifier(5);
+        assert_eq!(array_pedersen.secret_generator(), verifier(4));
+        assert_eq!(array_pedersen.blinder_generator(), verifier(5));
+
+        let mut generic_pedersen =
+            GenericArrayPedersenVerifierSet::<TestShare, TestVerifier, GenericU4>::default();
+        generic_pedersen[0] = verifier(6);
+        generic_pedersen[1] = verifier(7);
+        let generic_inner = GenericArray::<TestVerifier, GenericU4>::from(generic_pedersen);
+        let generic_pedersen =
+            GenericArrayPedersenVerifierSet::<TestShare, TestVerifier, GenericU4>::from(
+                generic_inner,
+            );
+        assert_eq!(generic_pedersen.secret_generator(), verifier(6));
+        assert_eq!(generic_pedersen.blinder_generator(), verifier(7));
+
+        let mut hybrid_pedersen =
+            HybridArrayPedersenVerifierSet::<TestShare, TestVerifier, HybridU4>::default();
+        hybrid_pedersen[0] = verifier(8);
+        hybrid_pedersen[1] = verifier(9);
+        let hybrid_inner = Array::<TestVerifier, HybridU4>::from(hybrid_pedersen);
+        let hybrid_pedersen =
+            HybridArrayPedersenVerifierSet::<TestShare, TestVerifier, HybridU4>::from(hybrid_inner);
+        assert_eq!(hybrid_pedersen.secret_generator(), verifier(8));
+        assert_eq!(hybrid_pedersen.blinder_generator(), verifier(9));
+    }
+
+    #[test]
+    fn vec_verifier_wrappers_default_empty_and_deref_mut_work() {
+        let mut feldman = VecFeldmanVerifierSet::<TestShare, TestVerifier>::default();
+        assert_eq!(feldman.len(), 0);
+        feldman.push(verifier(1));
+        feldman.push(verifier(2));
+        assert_eq!(feldman.generator(), verifier(1));
+        assert_eq!(feldman.verifiers(), &[verifier(2)]);
+
+        let mut feldman =
+            VecFeldmanVerifierSet::<TestShare, TestVerifier>::empty_feldman_set_with_capacity(
+                2,
+                verifier(3),
+            );
+        assert_eq!(feldman.len(), 3);
+        assert_eq!(feldman.generator(), verifier(3));
+        feldman.verifiers_mut()[0] = verifier(4);
+        assert_eq!(feldman.verifiers(), &[verifier(4), verifier(3)]);
+
+        let mut pedersen = VecPedersenVerifierSet::<TestShare, TestVerifier>::default();
+        assert_eq!(pedersen.len(), 0);
+        pedersen.push(verifier(5));
+        pedersen.push(verifier(6));
+        pedersen.push(verifier(7));
+        assert_eq!(pedersen.secret_generator(), verifier(5));
+        assert_eq!(pedersen.blinder_generator(), verifier(6));
+        assert_eq!(pedersen.blind_verifiers(), &[verifier(7)]);
+
+        let mut pedersen =
+            VecPedersenVerifierSet::<TestShare, TestVerifier>::empty_pedersen_set_with_capacity(
+                2,
+                verifier(8),
+                verifier(9),
+            );
+        assert_eq!(pedersen.len(), 4);
+        assert_eq!(pedersen.secret_generator(), verifier(8));
+        assert_eq!(pedersen.blinder_generator(), verifier(9));
+        assert_eq!(pedersen.blind_verifiers(), &[verifier(9), verifier(9)]);
+        pedersen.blind_verifiers_mut()[1] = verifier(10);
+        assert_eq!(pedersen.blind_verifiers(), &[verifier(9), verifier(10)]);
+    }
+
+    #[test]
+    fn readable_share_set_combine_handles_success_and_errors() {
+        let good = vec![share(1, 7), share(2, 7), share(3, 7)];
+        assert_eq!(good.combine(), Ok(IdentifierPrimeField(Scalar::from(7u64))));
+
+        assert_eq!(vec![share(1, 7)].combine(), Err(Error::SharingMinThreshold));
+        assert_eq!(
+            vec![share(0, 7), share(2, 7)].combine(),
+            Err(Error::SharingInvalidIdentifier)
+        );
+        assert_eq!(
+            vec![share(1, 7), share(1, 8)].combine(),
+            Err(Error::SharingDuplicateIdentifier)
+        );
+    }
+
+    #[test]
+    fn feldman_array_backed_sets_expose_generator_and_verifiers() {
+        let inner = [verifier(9), verifier(1), verifier(2)];
+        let mut array_set: ArrayFeldmanVerifierSet<TestShare, TestVerifier, 3> = inner.into();
+        assert_eq!(array_set.generator(), verifier(9));
+        assert_eq!(array_set.verifiers(), &[verifier(1), verifier(2)]);
+        array_set.verifiers_mut()[0] = verifier(3);
+        assert_eq!(<[TestVerifier; 3]>::from(array_set)[1], verifier(3));
+
+        let from_ref: ArrayFeldmanVerifierSet<TestShare, TestVerifier, 3> = (&inner).into();
+        assert_eq!(<[TestVerifier; 3]>::from(&from_ref), inner);
+
+        let empty =
+            ArrayFeldmanVerifierSet::<TestShare, TestVerifier, 3>::empty_feldman_set_with_capacity(
+                2,
+                verifier(4),
+            );
+        assert_eq!(empty.generator(), verifier(4));
+    }
+
+    #[test]
+    fn feldman_generic_hybrid_and_vec_sets_round_trip_storage() {
+        let generic_inner = GenericArray::<TestVerifier, GenericU3>::from_array([
+            verifier(9),
+            verifier(1),
+            verifier(2),
+        ]);
+        let generic_set: GenericArrayFeldmanVerifierSet<TestShare, TestVerifier, GenericU3> =
+            (&generic_inner).into();
+        assert_eq!(generic_set.generator(), verifier(9));
+        assert_eq!(
+            GenericArray::<TestVerifier, GenericU3>::from(generic_set.clone()),
+            generic_inner
+        );
+        assert_eq!(
+            GenericArray::<TestVerifier, GenericU3>::from(&generic_set),
+            generic_inner
+        );
+
+        let hybrid_inner = Array::<TestVerifier, HybridU3>::from_fn(|i| verifier(i as u64 + 1));
+        let hybrid_set: HybridArrayFeldmanVerifierSet<TestShare, TestVerifier, HybridU3> =
+            (&hybrid_inner).into();
+        assert_eq!(hybrid_set.generator(), verifier(1));
+        assert_eq!(
+            Array::<TestVerifier, HybridU3>::from(&hybrid_set),
+            hybrid_inner
+        );
+
+        let vec_inner = vec![verifier(9), verifier(1), verifier(2)];
+        let mut vec_set: VecFeldmanVerifierSet<TestShare, TestVerifier> = (&vec_inner).into();
+        assert_eq!(vec_set.generator(), verifier(9));
+        vec_set.verifiers_mut()[1] = verifier(5);
+        assert_eq!(Vec::<TestVerifier>::from(&vec_set)[2], verifier(5));
+        assert_eq!(
+            Vec::<TestVerifier>::from(VecFeldmanVerifierSet::<TestShare, TestVerifier>::from(
+                vec_inner.clone()
+            )),
+            vec_inner
+        );
+    }
+
+    #[test]
+    fn pedersen_array_and_vec_sets_expose_generators_and_verifiers() {
+        let inner = [verifier(9), verifier(8), verifier(1), verifier(2)];
+        let mut array_set: ArrayPedersenVerifierSet<TestShare, TestVerifier, 4> = inner.into();
+        assert_eq!(array_set.secret_generator(), verifier(9));
+        assert_eq!(array_set.blinder_generator(), verifier(8));
+        assert_eq!(array_set.blind_verifiers(), &[verifier(1), verifier(2)]);
+        array_set.blind_verifiers_mut()[0] = verifier(3);
+        assert_eq!(<[TestVerifier; 4]>::from(array_set)[2], verifier(3));
+        let from_ref: ArrayPedersenVerifierSet<TestShare, TestVerifier, 4> = (&inner).into();
+        assert_eq!(<[TestVerifier; 4]>::from(&from_ref), inner);
+
+        let vec_inner = vec![verifier(9), verifier(8), verifier(1), verifier(2)];
+        let mut vec_set: VecPedersenVerifierSet<TestShare, TestVerifier> = (&vec_inner).into();
+        assert_eq!(vec_set.secret_generator(), verifier(9));
+        assert_eq!(vec_set.blinder_generator(), verifier(8));
+        vec_set.blind_verifiers_mut()[1] = verifier(6);
+        assert_eq!(Vec::<TestVerifier>::from(&vec_set)[3], verifier(6));
+        assert_eq!(
+            Vec::<TestVerifier>::from(VecPedersenVerifierSet::<TestShare, TestVerifier>::from(
+                vec_inner.clone()
+            )),
+            vec_inner
+        );
+    }
+
+    #[test]
+    fn pedersen_generic_and_hybrid_sets_round_trip_storage() {
+        let generic_inner = GenericArray::<TestVerifier, GenericU4>::from_array([
+            verifier(9),
+            verifier(8),
+            verifier(1),
+            verifier(2),
+        ]);
+        let mut generic_set: GenericArrayPedersenVerifierSet<TestShare, TestVerifier, GenericU4> =
+            (&generic_inner).into();
+        assert_eq!(generic_set.secret_generator(), verifier(9));
+        assert_eq!(generic_set.blinder_generator(), verifier(8));
+        assert_eq!(generic_set.blind_verifiers(), &[verifier(1), verifier(2)]);
+        generic_set.blind_verifiers_mut()[0] = verifier(5);
+        assert_eq!(
+            GenericArray::<TestVerifier, GenericU4>::from(&generic_set)[2],
+            verifier(5)
+        );
+        assert_eq!(
+            GenericArray::<TestVerifier, GenericU4>::from(GenericArrayPedersenVerifierSet::<
+                TestShare,
+                TestVerifier,
+                GenericU4,
+            >::from(generic_inner)),
+            generic_inner
+        );
+        let empty = GenericArrayPedersenVerifierSet::<TestShare, TestVerifier, GenericU4>::empty_pedersen_set_with_capacity(
+            2,
+            verifier(7),
+            verifier(6),
+        );
+        assert_eq!(empty.secret_generator(), verifier(7));
+        assert_eq!(empty.blinder_generator(), verifier(6));
+
+        let hybrid_inner = Array::<TestVerifier, HybridU4>::from_fn(|i| verifier(i as u64 + 1));
+        let mut hybrid_set: HybridArrayPedersenVerifierSet<TestShare, TestVerifier, HybridU4> =
+            (&hybrid_inner).into();
+        assert_eq!(hybrid_set.secret_generator(), verifier(1));
+        assert_eq!(hybrid_set.blinder_generator(), verifier(2));
+        hybrid_set.blind_verifiers_mut()[1] = verifier(9);
+        assert_eq!(
+            Array::<TestVerifier, HybridU4>::from(&hybrid_set)[3],
+            verifier(9)
+        );
+        assert_eq!(
+            Array::<TestVerifier, HybridU4>::from(HybridArrayPedersenVerifierSet::<
+                TestShare,
+                TestVerifier,
+                HybridU4,
+            >::from(hybrid_inner)),
+            hybrid_inner
+        );
+        let empty = HybridArrayPedersenVerifierSet::<TestShare, TestVerifier, HybridU4>::empty_pedersen_set_with_capacity(
+            2,
+            verifier(5),
+            verifier(4),
+        );
+        assert_eq!(empty.secret_generator(), verifier(5));
+        assert_eq!(empty.blinder_generator(), verifier(4));
+    }
+
+    #[test]
+    fn verifier_sets_return_errors_for_invalid_inputs() {
+        let invalid_share = share(0, 7);
+        let feldman = VecFeldmanVerifierSet::<TestShare, TestVerifier>::from(vec![
+            TestVerifier::identity(),
+            verifier(1),
+        ]);
+        assert_eq!(
+            feldman.verify_share(&invalid_share),
+            Err(Error::InvalidShare)
+        );
+
+        let invalid_generator = VecFeldmanVerifierSet::<TestShare, TestVerifier>::from(vec![
+            TestVerifier::identity(),
+            verifier(1),
+        ]);
+        assert_eq!(
+            invalid_generator.verify_share(&share(1, 7)),
+            Err(Error::InvalidGenerator("Generator is identity"))
+        );
+
+        let pedersen = VecPedersenVerifierSet::<TestShare, TestVerifier>::from(vec![
+            TestVerifier::identity(),
+            verifier(8),
+            verifier(1),
+        ]);
+        assert_eq!(
+            pedersen.verify_share_and_blinder(&share(1, 7), &share(1, 3)),
+            Err(Error::InvalidGenerator(
+                "Generator or Blind generator is an identity"
+            ))
+        );
+    }
+}
+
 #[test]
 fn test_feldman_with_generator_and_verifiers() {
     type IdK256 = IdentifierPrimeField<k256::Scalar>;

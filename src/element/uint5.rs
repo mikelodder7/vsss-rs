@@ -191,3 +191,67 @@ where
         <Uint<LIMBS> as ArrayEncoding>::to_be_byte_array(&self.0.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::IdentifierUint;
+    use crate::{Error, ShareElement, ShareIdentifier};
+    use elliptic_curve::bigint::{U64, Uint};
+
+    #[test]
+    fn elliptic_curve_bigint_identifier_share_element_methods_round_trip() {
+        let bytes = [0, 0, 0, 0, 0, 0, 0, 9];
+        let identifier = IdentifierUint::<1>::from_slice(&bytes).unwrap();
+        let serialized = identifier.serialize();
+
+        assert_eq!(serialized.as_ref(), bytes.as_slice());
+        assert_eq!(
+            IdentifierUint::<1>::deserialize(&serialized),
+            Ok(identifier)
+        );
+        assert_eq!(
+            IdentifierUint::<1>::from_fixed_array(&serialized),
+            identifier
+        );
+        assert_eq!(identifier.to_fixed_array().as_ref(), bytes.as_slice());
+        assert_eq!(
+            IdentifierUint::<1>::from_generic_array(identifier.to_generic_array()),
+            identifier
+        );
+        assert_eq!(identifier.to_vec(), bytes);
+        assert_eq!(
+            IdentifierUint::<1>::from_slice(&[1, 2]),
+            Err(Error::InvalidShareElement)
+        );
+        assert_eq!(IdentifierUint::<1>::ZERO, IdentifierUint::<1>::zero());
+        assert_eq!(IdentifierUint::<1>::ONE, IdentifierUint::<1>::one());
+        assert_eq!(IdentifierUint::<1>::zero().is_zero().unwrap_u8(), 1);
+        assert_eq!(IdentifierUint::<1>::one().is_zero().unwrap_u8(), 0);
+
+        let inner = identifier.0;
+        assert_eq!(IdentifierUint::<1>::from(inner), identifier);
+        assert_eq!(identifier.to_vec(), bytes);
+    }
+
+    #[test]
+    fn elliptic_curve_bigint_identifier_reference_access_and_arithmetic_work() {
+        let mut identifier = IdentifierUint::<1>::one();
+        assert_eq!(identifier.as_ref().0, U64::ONE);
+        *identifier.as_mut() =
+            crate::Saturating(Uint::<1>::from_be_slice(&[0, 0, 0, 0, 0, 0, 0, 2]));
+        assert_eq!(
+            identifier.0.0,
+            Uint::<1>::from_be_slice(&[0, 0, 0, 0, 0, 0, 0, 2])
+        );
+
+        identifier.inc(&IdentifierUint::<1>::one());
+        assert_eq!(
+            identifier.0.0,
+            Uint::<1>::from_be_slice(&[0, 0, 0, 0, 0, 0, 0, 3])
+        );
+        assert_eq!(
+            IdentifierUint::<1>::one().invert(),
+            Ok(IdentifierUint::<1>::one())
+        );
+    }
+}

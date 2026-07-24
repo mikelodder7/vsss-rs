@@ -247,6 +247,12 @@ pub use subtle;
 pub(crate) const USIZE_BYTES: usize = size_of::<usize>();
 pub(crate) const ISIZE_BYTES: usize = size_of::<isize>();
 
+/// A share whose identifier and value are elements of the same prime field.
+pub type PrimeFieldShare<F> = DefaultShare<IdentifierPrimeField<F>, ValuePrimeField<F>>;
+
+/// A share whose identifier is a group scalar and whose value is a group element.
+pub type GroupShare<G> = DefaultShare<IdentifierPrimeField<<G as Group>::Scalar>, ValueGroup<G>>;
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Standard verifiable secret sharing scheme
 pub struct StdVsss<S, V>

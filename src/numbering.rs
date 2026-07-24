@@ -12,7 +12,7 @@ use crate::{Error, ShareIdentifier, VsssResult};
 
 /// The types of participant number generators
 #[derive(Debug, Clone)]
-pub enum ParticipantIdGeneratorType<'a, I: ShareIdentifier> {
+pub enum ParticipantIdGenerator<'a, I: ShareIdentifier> {
     /// Generate participant numbers sequentially beginning at `start` and incrementing by `increment`
     /// until `count` is reached then this generator stops.
     Sequential {
@@ -38,9 +38,13 @@ pub enum ParticipantIdGeneratorType<'a, I: ShareIdentifier> {
     },
 }
 
-impl<'a, I: ShareIdentifier + Copy> Copy for ParticipantIdGeneratorType<'a, I> {}
+impl<'a, I: ShareIdentifier + Copy> Copy for ParticipantIdGenerator<'a, I> {}
 
-impl<I: ShareIdentifier + Display> Display for ParticipantIdGeneratorType<'_, I> {
+/// Backwards-compatible alias for [`ParticipantIdGenerator`].
+#[deprecated(note = "renamed to ParticipantIdGenerator")]
+pub type ParticipantIdGeneratorType<'a, I> = ParticipantIdGenerator<'a, I>;
+
+impl<I: ShareIdentifier + Display> Display for ParticipantIdGenerator<'_, I> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Sequential {
@@ -70,7 +74,7 @@ impl<I: ShareIdentifier + Display> Display for ParticipantIdGeneratorType<'_, I>
     }
 }
 
-impl<I: ShareIdentifier> Default for ParticipantIdGeneratorType<'_, I> {
+impl<I: ShareIdentifier> Default for ParticipantIdGenerator<'_, I> {
     fn default() -> Self {
         Self::Sequential {
             start: I::one(),
@@ -81,19 +85,19 @@ impl<I: ShareIdentifier> Default for ParticipantIdGeneratorType<'_, I> {
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<'a, I: ShareIdentifier> From<&'a crate::Vec<I>> for ParticipantIdGeneratorType<'a, I> {
+impl<'a, I: ShareIdentifier> From<&'a crate::Vec<I>> for ParticipantIdGenerator<'a, I> {
     fn from(list: &'a crate::Vec<I>) -> Self {
         Self::List { list }
     }
 }
 
-impl<'a, I: ShareIdentifier> From<&'a [I]> for ParticipantIdGeneratorType<'a, I> {
+impl<'a, I: ShareIdentifier> From<&'a [I]> for ParticipantIdGenerator<'a, I> {
     fn from(list: &'a [I]) -> Self {
         Self::List { list }
     }
 }
 
-impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
+impl<'a, I: ShareIdentifier> ParticipantIdGenerator<'a, I> {
     /// Create a new sequential participant number generator
     pub fn sequential(start: Option<I>, increment: Option<I>, count: NonZeroUsize) -> Self {
         Self::Sequential {
@@ -163,32 +167,32 @@ impl<'a, I: ShareIdentifier> ParticipantIdGeneratorType<'a, I> {
 #[derive(Debug, Clone)]
 pub struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
     /// The collection of participant id generators
-    pub generators: &'a [ParticipantIdGeneratorType<'b, I>],
+    pub generators: &'a [ParticipantIdGenerator<'b, I>],
 }
 
 impl<'a, 'b, I: ShareIdentifier + Copy> Copy for ParticipantIdGeneratorCollection<'a, 'b, I> {}
 
-impl<'a, 'b, I: ShareIdentifier> From<&'a [ParticipantIdGeneratorType<'b, I>]>
+impl<'a, 'b, I: ShareIdentifier> From<&'a [ParticipantIdGenerator<'b, I>]>
     for ParticipantIdGeneratorCollection<'a, 'b, I>
 {
-    fn from(generators: &'a [ParticipantIdGeneratorType<'b, I>]) -> Self {
+    fn from(generators: &'a [ParticipantIdGenerator<'b, I>]) -> Self {
         Self { generators }
     }
 }
 
-impl<'a, 'b, I: ShareIdentifier, const L: usize> From<&'a [ParticipantIdGeneratorType<'b, I>; L]>
+impl<'a, 'b, I: ShareIdentifier, const L: usize> From<&'a [ParticipantIdGenerator<'b, I>; L]>
     for ParticipantIdGeneratorCollection<'a, 'b, I>
 {
-    fn from(generators: &'a [ParticipantIdGeneratorType<'b, I>; L]) -> Self {
+    fn from(generators: &'a [ParticipantIdGenerator<'b, I>; L]) -> Self {
         Self { generators }
     }
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-impl<'a, 'b, I: ShareIdentifier> From<&'a crate::Vec<ParticipantIdGeneratorType<'b, I>>>
+impl<'a, 'b, I: ShareIdentifier> From<&'a crate::Vec<ParticipantIdGenerator<'b, I>>>
     for ParticipantIdGeneratorCollection<'a, 'b, I>
 {
-    fn from(generators: &'a crate::Vec<ParticipantIdGeneratorType<'b, I>>) -> Self {
+    fn from(generators: &'a crate::Vec<ParticipantIdGenerator<'b, I>>) -> Self {
         Self {
             generators: generators.as_slice(),
         }
@@ -367,6 +371,7 @@ mod tests {
     use elliptic_curve::PrimeField;
     use k256::{FieldBytes, Scalar};
     use rand_core::{Rng, SeedableRng};
+    use std::string::ToString;
 
     #[cfg(any(feature = "alloc", feature = "std"))]
     #[test]
@@ -452,8 +457,8 @@ mod tests {
             IdentifierPrimeField::from(Scalar::from(50u64)),
         ];
         let set = [
-            ParticipantIdGeneratorType::list(&list),
-            ParticipantIdGeneratorType::sequential(
+            ParticipantIdGenerator::list(&list),
+            ParticipantIdGenerator::sequential(
                 Some(IdentifierPrimeField::from(Scalar::from(51u64))),
                 Some(IdentifierPrimeField::<Scalar>::ONE),
                 NonZeroUsize::new(5).unwrap(),
@@ -494,8 +499,8 @@ mod tests {
         let mut dst = [0u8; 32];
         rng.fill_bytes(&mut dst);
         let set = [
-            ParticipantIdGeneratorType::list(&list),
-            ParticipantIdGeneratorType::random(dst, NonZeroUsize::new(5).unwrap()),
+            ParticipantIdGenerator::list(&list),
+            ParticipantIdGenerator::random(dst, NonZeroUsize::new(5).unwrap()),
         ];
         let collection = ParticipantIdGeneratorCollection::from(&set);
         let expected = [
@@ -553,8 +558,8 @@ mod tests {
     fn test_empty_list_and_sequential_number_generator() {
         let list: [IdentifierPrimeField<Scalar>; 0] = [];
         let generators = [
-            ParticipantIdGeneratorType::list(&list),
-            ParticipantIdGeneratorType::sequential(None, None, NonZeroUsize::new(5).unwrap()),
+            ParticipantIdGenerator::list(&list),
+            ParticipantIdGenerator::sequential(None, None, NonZeroUsize::new(5).unwrap()),
         ];
         let collection = ParticipantIdGeneratorCollection::from(&generators);
         let list: Vec<_> = collection.iter().collect();
@@ -564,5 +569,72 @@ mod tests {
         assert_eq!(list[2], IdentifierPrimeField::from(Scalar::from(3u64)));
         assert_eq!(list[3], IdentifierPrimeField::from(Scalar::from(4u64)));
         assert_eq!(list[4], IdentifierPrimeField::from(Scalar::from(5u64)));
+    }
+
+    #[test]
+    fn participant_id_generator_constructors_and_display_work() {
+        let default = ParticipantIdGenerator::<IdentifierPrimeField<Scalar>>::default();
+        assert_eq!(
+            default.to_string(),
+            "Sequential { start: 0000000000000000000000000000000000000000000000000000000000000001, increment: 0000000000000000000000000000000000000000000000000000000000000001, count: 65535 }"
+        );
+
+        let sequential = ParticipantIdGenerator::sequential(
+            Some(IdentifierPrimeField::from(Scalar::from(2u64))),
+            Some(IdentifierPrimeField::from(Scalar::from(3u64))),
+            NonZeroUsize::new(2).unwrap(),
+        );
+        assert_eq!(
+            sequential.to_string(),
+            "Sequential { start: 0000000000000000000000000000000000000000000000000000000000000002, increment: 0000000000000000000000000000000000000000000000000000000000000003, count: 2 }"
+        );
+
+        let random = ParticipantIdGenerator::<IdentifierPrimeField<Scalar>>::random(
+            [0xab; 32],
+            NonZeroUsize::new(1).unwrap(),
+        );
+        assert_eq!(
+            random.to_string(),
+            "Random { seed: abababababababababababababababababababababababababababababababab, count: 1 }"
+        );
+
+        let ids = [
+            IdentifierPrimeField::from(Scalar::from(4u64)),
+            IdentifierPrimeField::from(Scalar::from(5u64)),
+        ];
+        assert_eq!(
+            ParticipantIdGenerator::list(&ids).to_string(),
+            "List { list: 0000000000000000000000000000000000000000000000000000000000000004, 0000000000000000000000000000000000000000000000000000000000000005, }"
+        );
+    }
+
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[test]
+    fn participant_id_generator_collection_accepts_vec_sources() {
+        let ids = vec![
+            IdentifierPrimeField::from(Scalar::from(8u64)),
+            IdentifierPrimeField::from(Scalar::from(9u64)),
+        ];
+        let list_generator = ParticipantIdGenerator::from(&ids);
+        let generators = vec![list_generator];
+        let collection = ParticipantIdGeneratorCollection::from(&generators);
+
+        assert_eq!(collection.iter().collect::<Vec<_>>(), ids);
+    }
+
+    #[test]
+    fn invalid_generators_stop_collection_iteration() {
+        let ids = [IdentifierPrimeField::from(Scalar::from(2u64))];
+        let generators = [
+            ParticipantIdGenerator::Sequential {
+                start: IdentifierPrimeField::from(Scalar::from(1u64)),
+                increment: IdentifierPrimeField::from(Scalar::from(1u64)),
+                count: 0,
+            },
+            ParticipantIdGenerator::list(&ids),
+        ];
+        let collection = ParticipantIdGeneratorCollection::from(&generators);
+
+        assert_eq!(collection.iter().next(), None);
     }
 }

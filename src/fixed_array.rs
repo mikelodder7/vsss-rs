@@ -38,3 +38,37 @@ impl_fixed_array!(
     i128 => 16,
     isize => ISIZE_BYTES,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::FixedArray;
+    use core::mem::size_of;
+
+    fn assert_round_trip<T, const LIMBS: usize>(value: T)
+    where
+        T: FixedArray<LIMBS> + Copy + Eq + core::fmt::Debug,
+    {
+        let bytes = value.to_fixed_array();
+        assert_eq!(T::from_fixed_array(&bytes), value);
+    }
+
+    #[test]
+    fn unsigned_primitives_round_trip_as_fixed_arrays() {
+        assert_round_trip::<u8, 1>(0xab);
+        assert_round_trip::<u16, 2>(0xabcd);
+        assert_round_trip::<u32, 4>(0xabcdef12);
+        assert_round_trip::<u64, 8>(0xabcdef1234567890);
+        assert_round_trip::<u128, 16>(0xabcdef1234567890fedcba0987654321);
+        assert_round_trip::<usize, { size_of::<usize>() }>(usize::MAX - 7);
+    }
+
+    #[test]
+    fn signed_primitives_round_trip_as_fixed_arrays() {
+        assert_round_trip::<i8, 1>(-5);
+        assert_round_trip::<i16, 2>(-1234);
+        assert_round_trip::<i32, 4>(-12345678);
+        assert_round_trip::<i64, 8>(-123456789012345);
+        assert_round_trip::<i128, 16>(-123456789012345678901234567890);
+        assert_round_trip::<isize, { size_of::<isize>() }>(isize::MIN + 7);
+    }
+}

@@ -75,10 +75,10 @@ fn share_binary_serde() {
     let sk3 = res.unwrap();
     assert_eq!(sk, sk3);
 
-    let res = serde_cbor::to_vec(&sk);
+    let res = serde_cbor_2::to_vec(&sk);
     assert!(res.is_ok());
     let bytes = res.unwrap();
-    let res = serde_cbor::from_slice::<
+    let res = serde_cbor_2::from_slice::<
         DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>,
     >(&bytes);
     assert!(res.is_ok());

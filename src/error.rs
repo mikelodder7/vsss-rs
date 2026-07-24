@@ -71,3 +71,62 @@ impl Display for Error {
 
 /// Results returned by this crate
 pub type VsssResult<T> = Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use std::string::ToString;
+
+    #[test]
+    fn display_messages_cover_all_error_variants() {
+        let cases = [
+            (
+                Error::SharingMinThreshold,
+                "Threshold cannot be less than 2",
+            ),
+            (
+                Error::SharingLimitLessThanThreshold,
+                "Limit is less than threshold",
+            ),
+            (
+                Error::InvalidSizeRequest,
+                "Requested more shares than space was provided",
+            ),
+            (Error::SharingInvalidIdentifier, "An invalid share detected"),
+            (
+                Error::SharingDuplicateIdentifier,
+                "Duplicate share detected",
+            ),
+            (
+                Error::SharingMaxRequest,
+                "The maximum number of shares to be made when splitting was reached",
+            ),
+            (
+                Error::InvalidShare,
+                "An invalid share was supplied for verification or combine",
+            ),
+            (
+                Error::InvalidGenerator("empty list"),
+                "An invalid generator was supplied for share generation: empty list",
+            ),
+            (
+                Error::InvalidSecret,
+                "An invalid secret was supplied for split",
+            ),
+            (
+                Error::InvalidShareConversion,
+                "A share cannot be converted to a group or field element",
+            ),
+            (Error::NotImplemented, "Not implemented"),
+            (Error::InvalidShareElement, "Invalid share element"),
+            (
+                Error::NotEnoughShareIdentifiers,
+                "Not enough share identifiers available",
+            ),
+        ];
+
+        for (error, message) in cases {
+            assert_eq!(error.to_string(), message);
+        }
+    }
+}

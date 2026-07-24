@@ -2,6 +2,7 @@
 
 [![Crate][crate-image]][crate-link]
 [![Docs][docs-image]][docs-link]
+[![Coverage][coverage-image]][coverage-link]
 ![Apache 2.0][license-image]
 
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
@@ -27,8 +28,10 @@ The default share numbering method uses incrementing numbers starting at 1. The 
 - ListAndRandomParticipantNumberGenerator: a combination of the above two methods. The list is used first and then random numbers are used after the list is exhausted.
 - ListAndSequentialParticipantNumberGenerator: a combination of the above two methods. The list is used first and then sequential numbers are used after the list is exhausted.
 
-Use `split_secret_with_participant_generator` to choose one of these numbering methods. The `split_secret` method
-uses SequentialParticipantNumberGenerator starting at 1 and incrementing by 1.
+Use `split_secret_with_participant_generators` to choose one or more [`ParticipantIdGenerator`] values, or
+`split_secret_with_participant_generators_iter` when the generators are produced by an iterator. Use
+`split_secret_with_participant_ids_iter` when participant identifiers are already available. The `split_secret`
+method uses sequential participant identifiers starting at 1 and incrementing by 1.
 
 ### Shares and Identifiers
 
@@ -121,9 +124,9 @@ the data. `StdPedersenResult` is provided when an allocator is available by defa
 When operating in standard mode, no traits should be necessary to be implemented and there are default functions
 to accomplish what you want just like in previous versions.
 
-`StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets but requires
-specifying lots of generic parameters. If you need to use a specific field, `DefaultStdVsss` is provided to make
-the process easier. `DefaultStdVsss` assumes the identifier is `u8` and the share is a `Vec<u8>`.
+`StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets. The
+`PrimeFieldShare<F>` and `GroupShare<G>` aliases can reduce the type noise for common field and group-backed
+shares.
 
 If you need custom structs in no-std mode the `vsss_arr_impl` macro will create the necessary implementations for you.
 
@@ -163,8 +166,12 @@ The default methods for splitting and combining secrets are:
 - shamir::split_secret
 - feldman::split_secret
 - pedersen::split_secret
-- combine_shares
-- combine_shares_group
+- `ReadableShareSet::combine`
+- `Gf16::split_bytes`, `Gf16::combine_bytes`
+- `Gf256::split_bytes`, `Gf256::combine_bytes`
+
+The older `Gf16::split_array`, `Gf16::combine_array`, `Gf256::split_array`, and `Gf256::combine_array` names are
+still available as aliases.
 
 ### P-256
 
@@ -175,34 +182,43 @@ use vsss_rs::{*, shamir};
 use elliptic_curve::ff::PrimeField;
 use p256::{NonZeroScalar, Scalar, SecretKey};
 
+type P256Share = PrimeFieldShare<Scalar>;
+
 let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
 let sk = SecretKey::random(&mut osrng);
 let nzs = sk.to_nonzero_scalar();
-let res = shamir::split_secret::<Scalar, u8, Vec<u8>>(2, 3, *nzs.as_ref(), &mut osrng);
+let secret = IdentifierPrimeField(*nzs.as_ref());
+let res = shamir::split_secret::<P256Share>(2, 3, &secret, &mut osrng);
 assert!(res.is_ok());
 let shares = res.unwrap();
-let res = combine_shares(&shares);
+let res = shares.combine();
 assert!(res.is_ok());
-let scalar: Scalar = res.unwrap();
-let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+let scalar = res.unwrap();
+let nzs_dup =  NonZeroScalar::from_repr(scalar.0.to_repr()).unwrap();
 let sk_dup = SecretKey::from(nzs_dup);
 assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 ```
 
-Or using the `DefaultStdVsss` struct
+Or using the scheme type directly
 
 ```rust
- use elliptic_curve::ff::Field;
+use elliptic_curve::ff::Field;
+use p256::Scalar;
+use vsss_rs::*;
 
 let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let secret = p256::Scalar::random(&mut osrng);
-let res = DefaultStdVsss::<p256::ProjectivePoint>::split_secret(2, 3, secret, &mut osrng);
+let secret = IdentifierPrimeField(Scalar::random(&mut osrng));
+let res = StdVsss::<PrimeFieldShare<Scalar>, ValueGroup<p256::ProjectivePoint>>::split_secret(
+    2,
+    3,
+    &secret,
+    &mut osrng,
+);
 assert!(res.is_ok());
 let shares = res.unwrap();
-let res = combine_shares(&shares);
+let res = shares.combine();
 assert!(res.is_ok());
-let scalar: p256::Scalar = res.unwrap();
-assert_eq!(secret, scalar);
+assert_eq!(secret, res.unwrap());
 ```
 
 ### Secp256k1
@@ -214,16 +230,18 @@ use vsss_rs::{*, shamir};
 use elliptic_curve::ff::PrimeField;
 use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
 
+type K256Share = PrimeFieldShare<Scalar>;
+
 let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
 let sk = SecretKey::random(&mut osrng);
-let secret = *sk.to_nonzero_scalar();
-let res = shamir::split_secret::<Scalar, [u8; 1], u8, Vec<u8>>(2, 3, secret, &mut osrng);
+let secret = IdentifierPrimeField(*sk.to_nonzero_scalar());
+let res = shamir::split_secret::<K256Share>(2, 3, &secret, &mut osrng);
 assert!(res.is_ok());
 let shares = res.unwrap();
-let res = combine_shares(&shares);
+let res = shares.combine();
 assert!(res.is_ok());
-let scalar: Scalar = res.unwrap();
-let nzs_dup = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+let scalar = res.unwrap();
+let nzs_dup = NonZeroScalar::from_repr(scalar.0.to_repr()).unwrap();
 let sk_dup = SecretKey::from(nzs_dup);
 assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
 ```
@@ -233,17 +251,20 @@ use vsss_rs::{*, feldman};
 use bls12_381_plus::{Scalar, G1Projective};
 use elliptic_curve::ff::Field;
 
+type BlsShare = PrimeFieldShare<Scalar>;
+type BlsVerifier = ValueGroup<G1Projective>;
+
 let mut rng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let secret = Scalar::random(&mut rng);
-let res = feldman::split_secret::<G1Projective, [u8; 1], u8, Vec<u8>>(2, 3, secret, None, &mut rng);
+let secret = IdentifierPrimeField(Scalar::random(&mut rng));
+let res = feldman::split_secret::<BlsShare, BlsVerifier>(2, 3, &secret, None, &mut rng);
 assert!(res.is_ok());
 let (shares, verifier) = res.unwrap();
 for s in &shares {
     assert!(verifier.verify_share(s).is_ok());
 }
-let res = combine_shares(&shares);
+let res = shares.combine();
 assert!(res.is_ok());
-let secret_1: Scalar = res.unwrap();
+let secret_1 = res.unwrap();
 assert_eq!(secret, secret_1);
 ```
 
@@ -313,4 +334,6 @@ conditions.
 [crate-link]: https://crates.io/crates/vsss-rs
 [docs-image]: https://docs.rs/vsss-rs/badge.svg
 [docs-link]: https://docs.rs/vsss-rs/
+[coverage-image]: https://codecov.io/gh/mikelodder7/vsss-rs/branch/main/graph/badge.svg
+[coverage-link]: https://codecov.io/gh/mikelodder7/vsss-rs
 [license-image]: https://img.shields.io/badge/license-Apache2.0-blue.svg
