@@ -652,8 +652,12 @@ impl Gf16 {
             hi_polynomial.fill(&hi, &mut rng, threshold)?;
             // Pack both nibble-shares into a single byte per participant.
             for (share, id) in shares.iter_mut().zip(ids.iter()) {
-                let lo_s = lo_polynomial.evaluate(id, threshold).0.0;
-                let hi_s = hi_polynomial.evaluate(id, threshold).0.0;
+                let mut lo_value = IdentifierGf16::default();
+                let mut hi_value = IdentifierGf16::default();
+                lo_polynomial.evaluate_in_place(id, threshold, &mut lo_value);
+                hi_polynomial.evaluate_in_place(id, threshold, &mut hi_value);
+                let lo_s = lo_value.0.0;
+                let hi_s = hi_value.0.0;
                 share.push((hi_s << 4) | lo_s);
             }
         }
@@ -726,8 +730,12 @@ impl Gf16 {
             lo_polynomial.fill(&lo, &mut rng, threshold)?;
             hi_polynomial.fill(&hi, &mut rng, threshold)?;
             for (share, id) in shares.iter_mut().zip(ids.iter()) {
-                let lo_s = lo_polynomial.evaluate(id, threshold).0.0;
-                let hi_s = hi_polynomial.evaluate(id, threshold).0.0;
+                let mut lo_value = IdentifierGf16::default();
+                let mut hi_value = IdentifierGf16::default();
+                lo_polynomial.evaluate_in_place(id, threshold, &mut lo_value);
+                hi_polynomial.evaluate_in_place(id, threshold, &mut hi_value);
+                let lo_s = lo_value.0.0;
+                let hi_s = hi_value.0.0;
                 share.push((hi_s << 4) | lo_s);
             }
         }

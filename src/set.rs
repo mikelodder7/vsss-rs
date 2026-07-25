@@ -17,20 +17,36 @@ where
 {
     /// Convert the given shares into a field element
     fn combine(&self) -> VsssResult<S::Value> {
-        let shares = self.as_ref();
-        if shares.len() < 2 {
-            return Err(Error::SharingMinThreshold);
-        }
-        for s in shares {
-            if s.identifier().is_zero().into() {
-                return Err(Error::SharingInvalidIdentifier);
-            }
-        }
-        if dup_checker(shares) {
-            return Err(Error::SharingDuplicateIdentifier);
-        }
-        interpolate(shares)
+        let mut secret = S::Value::default();
+        self.combine_in_place(&mut secret)?;
+        Ok(secret)
     }
+
+    /// Convert the given shares into a field element, writing into `out`.
+    fn combine_in_place(&self, out: &mut S::Value) -> VsssResult<()> {
+        let shares = self.as_ref();
+        validate_share_set(shares)?;
+        interpolate_in_place(shares, out)
+    }
+}
+
+/// Validate that a share set has enough shares, non-zero identifiers, and no duplicate identifiers.
+pub fn validate_share_set<S>(shares: &[S]) -> VsssResult<()>
+where
+    S: Share,
+{
+    if shares.len() < 2 {
+        return Err(Error::SharingMinThreshold);
+    }
+    for s in shares {
+        if s.identifier().is_zero().into() {
+            return Err(Error::SharingInvalidIdentifier);
+        }
+    }
+    if dup_checker(shares) {
+        return Err(Error::SharingDuplicateIdentifier);
+    }
+    Ok(())
 }
 
 /// Represents a data store for secret shares
@@ -44,11 +60,11 @@ where
 
 impl<S, B: AsRef<[S]>> ReadableShareSet<S> for B where S: Share {}
 
-fn interpolate<S>(shares: &[S]) -> VsssResult<S::Value>
+fn interpolate_in_place<S>(shares: &[S], secret: &mut S::Value) -> VsssResult<()>
 where
     S: Share,
 {
-    let mut secret = S::Value::default();
+    *secret = S::Value::default();
     // Calculate lagrange interpolation
     for (i, x_i) in shares.iter().enumerate() {
         let mut num = S::Identifier::one();
@@ -64,13 +80,13 @@ where
             *num.as_mut() *= x_j.identifier().as_ref();
         }
 
-        let den = den.invert().expect("shouldn't be zero");
+        let den = den.invert()?;
         let basis: S::Identifier = (num.as_ref().clone() * den.as_ref()).into();
         let t = x_i.value().clone() * &basis;
         *secret.as_mut() += t.as_ref();
     }
 
-    Ok(secret)
+    Ok(())
 }
 
 impl<S, const L: usize> WriteableShareSet<S> for [S; L]
@@ -152,36 +168,26 @@ where
     /// The verifiers as writeable
     fn verifiers_mut(&mut self) -> &mut [G];
 
-    /// Verify a share with this set
-    fn verify_share(&self, share: &S) -> VsssResult<()> {
-        if (share.value().is_zero() | share.identifier().is_zero()).into() {
+    /// Evaluate this verifier set at a share identifier.
+    fn evaluate_verifier_at(&self, identifier: &S::Identifier) -> VsssResult<G> {
+        if identifier.is_zero().into() {
             return Err(Error::InvalidShare);
         }
         if self.generator().is_zero().into() {
             return Err(Error::InvalidGenerator("Generator is identity"));
         }
 
-        let s = share.value();
+        evaluate_commitments_at::<S, G>(self.verifiers(), identifier)
+    }
 
-        let mut i = S::Identifier::one();
-
-        // FUTURE: execute this sum of products
-        // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
-        // as a constant time operation using <https://cr.yp.to/papers/pippenger.pdf>
-        // or Guide to Elliptic Curve Cryptography book,
-        // "Algorithm 3.48 Simultaneous multiple point multiplication"
-        // without precomputing the addition but still reduces doublings
-
-        // c_0
-        let commitments = self.verifiers();
-        let mut rhs = commitments[0];
-        for v in &commitments[1..] {
-            *i.as_mut() *= share.identifier().as_ref();
-
-            // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
-            rhs += *v * i.clone();
+    /// Verify a share with this set
+    fn verify_share(&self, share: &S) -> VsssResult<()> {
+        if share.value().is_zero().into() {
+            return Err(Error::InvalidShare);
         }
 
+        let rhs = self.evaluate_verifier_at(share.identifier())?;
+        let s = share.value();
         let lhs = self.generator() * s;
 
         let res: G = rhs - lhs;
@@ -235,11 +241,9 @@ where
     /// The verifiers as writeable
     fn blind_verifiers_mut(&mut self) -> &mut [G];
 
-    /// Verify a share and blinder with this set
-    fn verify_share_and_blinder(&self, share: &S, blinder: &S) -> VsssResult<()> {
-        if (share.value().is_zero() | blinder.value().is_zero() | share.identifier().is_zero())
-            .into()
-        {
+    /// Evaluate this verifier set at a share identifier.
+    fn evaluate_verifier_at(&self, identifier: &S::Identifier) -> VsssResult<G> {
+        if identifier.is_zero().into() {
             return Err(Error::InvalidShare);
         }
         let blind_generator = self.blinder_generator();
@@ -251,28 +255,20 @@ where
             ));
         }
 
+        evaluate_commitments_at::<S, G>(self.blind_verifiers(), identifier)
+    }
+
+    /// Verify a share and blinder with this set
+    fn verify_share_and_blinder(&self, share: &S, blinder: &S) -> VsssResult<()> {
+        if (share.value().is_zero() | blinder.value().is_zero()).into() {
+            return Err(Error::InvalidShare);
+        }
+
         let secret = share.value();
         let blinder = blinder.value();
-        let x = share.identifier();
-
-        let mut i = S::Identifier::one();
-
-        // FUTURE: execute this sum of products
-        // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
-        // as a constant time operation using <https://cr.yp.to/papers/pippenger.pdf>
-        // or Guide to Elliptic Curve Cryptography book,
-        // "Algorithm 3.48 Simultaneous multiple point multiplication"
-        // without precomputing the addition but still reduces doublings
-
-        let commitments = self.blind_verifiers();
-        // c_0
-        let mut rhs = commitments[0];
-        for v in &commitments[1..] {
-            *i.as_mut() *= x.as_ref();
-
-            // c_0 * c_1^i * c_2^{i^2} ... c_t^{i^t}
-            rhs += *v * i.clone();
-        }
+        let rhs = self.evaluate_verifier_at(share.identifier())?;
+        let blind_generator = self.blinder_generator();
+        let generator = self.secret_generator();
 
         let g: G = generator * secret;
         let h: G = blind_generator * blinder;
@@ -285,6 +281,26 @@ where
             Err(Error::InvalidShare)
         }
     }
+}
+
+fn evaluate_commitments_at<S, G>(commitments: &[G], identifier: &S::Identifier) -> VsssResult<G>
+where
+    S: Share,
+    G: ShareVerifier<S>,
+{
+    if commitments.is_empty() {
+        return Err(Error::InvalidSizeRequest);
+    }
+
+    let mut i = S::Identifier::one();
+    // FUTURE: execute this sum of products as a constant-time simultaneous
+    // multiple point multiplication.
+    let mut rhs = commitments[0];
+    for v in &commitments[1..] {
+        *i.as_mut() *= identifier.as_ref();
+        rhs += *v * i.clone();
+    }
+    Ok(rhs)
 }
 
 impl<S: Share, G: ShareVerifier<S>, const L: usize> FeldmanVerifierSet<S, G> for [G; L] {
@@ -1602,8 +1618,9 @@ mod tests {
         GenericArrayFeldmanVerifierSet, GenericArrayPedersenVerifierSet,
         HybridArrayFeldmanVerifierSet, HybridArrayPedersenVerifierSet, PedersenVerifierSet,
         ReadableShareSet, VecFeldmanVerifierSet, VecPedersenVerifierSet, WriteableShareSet,
+        validate_share_set,
     };
-    use crate::{Error, IdentifierPrimeField, PrimeFieldShare, Share, ValueGroup};
+    use crate::{Error, IdentifierPrimeField, PrimeFieldShare, Share, ShareElement, ValueGroup};
     use generic_array::{
         GenericArray,
         typenum::{U3 as GenericU3, U4 as GenericU4},
@@ -1747,9 +1764,25 @@ mod tests {
     #[test]
     fn readable_share_set_combine_handles_success_and_errors() {
         let good = vec![share(1, 7), share(2, 7), share(3, 7)];
+        assert_eq!(validate_share_set(&good), Ok(()));
         assert_eq!(good.combine(), Ok(IdentifierPrimeField(Scalar::from(7u64))));
 
+        let mut out = IdentifierPrimeField(Scalar::from(99u64));
+        assert_eq!(good.combine_in_place(&mut out), Ok(()));
+        assert_eq!(out, IdentifierPrimeField(Scalar::from(7u64)));
+
+        let mut out = IdentifierPrimeField(Scalar::from(99u64));
+        assert_eq!(
+            vec![share(1, 7)].combine_in_place(&mut out),
+            Err(Error::SharingMinThreshold)
+        );
+        assert_eq!(out, IdentifierPrimeField(Scalar::from(99u64)));
+
         assert_eq!(vec![share(1, 7)].combine(), Err(Error::SharingMinThreshold));
+        assert_eq!(
+            validate_share_set(&[share(1, 7)]),
+            Err(Error::SharingMinThreshold)
+        );
         assert_eq!(
             vec![share(0, 7), share(2, 7)].combine(),
             Err(Error::SharingInvalidIdentifier)
@@ -1939,6 +1972,33 @@ mod tests {
             Err(Error::InvalidGenerator(
                 "Generator or Blind generator is an identity"
             ))
+        );
+    }
+
+    #[test]
+    fn verifier_sets_evaluate_at_identifier() {
+        let id = IdentifierPrimeField(Scalar::from(3u64));
+        let feldman = VecFeldmanVerifierSet::<TestShare, TestVerifier>::from(vec![
+            verifier(1),
+            verifier(5),
+            verifier(2),
+        ]);
+        assert_eq!(feldman.evaluate_verifier_at(&id), Ok(verifier(11)));
+        assert_eq!(
+            feldman.evaluate_verifier_at(&IdentifierPrimeField::zero()),
+            Err(Error::InvalidShare)
+        );
+
+        let pedersen = VecPedersenVerifierSet::<TestShare, TestVerifier>::from(vec![
+            verifier(1),
+            verifier(2),
+            verifier(5),
+            verifier(2),
+        ]);
+        assert_eq!(pedersen.evaluate_verifier_at(&id), Ok(verifier(11)));
+        assert_eq!(
+            pedersen.evaluate_verifier_at(&IdentifierPrimeField::zero()),
+            Err(Error::InvalidShare)
         );
     }
 }

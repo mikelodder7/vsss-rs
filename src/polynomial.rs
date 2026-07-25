@@ -41,21 +41,28 @@ pub trait Polynomial<S: Share> {
         Ok(())
     }
 
-    /// Evaluate the polynomial with the specified `x`
-    fn evaluate(&self, x: &S::Identifier, threshold: usize) -> S::Value {
+    /// Evaluate the polynomial with the specified `x`, writing the result into `out`.
+    fn evaluate_in_place(&self, x: &S::Identifier, threshold: usize, out: &mut S::Value) {
         let coefficients = self.coefficients();
         // Compute the polynomial value using Horner's Method
         let degree = threshold - 1;
         // b_n = a_n
-        let mut out = coefficients[degree].identifier().clone();
+        let mut accumulator = coefficients[degree].identifier().clone();
 
         for i in (0..degree).rev() {
             // b_{n-1} = a_{n-1} + b_n*x
-            *out *= x.as_ref();
-            *out += coefficients[i].identifier().as_ref();
+            *accumulator *= x.as_ref();
+            *accumulator += coefficients[i].identifier().as_ref();
         }
-        let mut out = S::Value::from(&out);
-        *out += coefficients[0].value().as_ref();
+
+        *out = S::Value::from(&accumulator);
+        *out.as_mut() += coefficients[0].value().as_ref();
+    }
+
+    /// Evaluate the polynomial with the specified `x`
+    fn evaluate(&self, x: &S::Identifier, threshold: usize) -> S::Value {
+        let mut out = S::Value::default();
+        self.evaluate_in_place(x, threshold, &mut out);
         out
     }
 
@@ -189,6 +196,10 @@ mod tests {
             polynomial.evaluate(&x, 2),
             IdentifierPrimeField(Scalar::from(13u64))
         );
+
+        let mut out = IdentifierPrimeField(Scalar::from(99u64));
+        polynomial.evaluate_in_place(&x, 3, &mut out);
+        assert_eq!(out, IdentifierPrimeField(Scalar::from(61u64)));
     }
 
     #[test]

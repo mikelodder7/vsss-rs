@@ -617,7 +617,9 @@ impl Gf256 {
             let share = IdentifierGf256(Gf256(*b));
             polynomial.fill(&share, &mut rng, threshold)?;
             for (share, id) in shares.iter_mut().zip(ids.iter()) {
-                share.push(polynomial.evaluate(id, threshold).0.0);
+                let mut value = IdentifierGf256::default();
+                polynomial.evaluate_in_place(id, threshold, &mut value);
+                share.push(value.0.0);
             }
         }
         Ok(shares)
@@ -667,7 +669,9 @@ impl Gf256 {
             let share = IdentifierGf256(Gf256(*b));
             polynomial.fill(&share, &mut rng, threshold)?;
             for (share, id) in shares.iter_mut().zip(ids.iter()) {
-                share.push(polynomial.evaluate(id, threshold).0.0);
+                let mut value = IdentifierGf256::default();
+                polynomial.evaluate_in_place(id, threshold, &mut value);
+                share.push(value.0.0);
             }
         }
         Ok(shares)

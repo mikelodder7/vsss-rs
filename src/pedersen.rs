@@ -159,8 +159,10 @@ where
             let id = participant_id_iter
                 .next()
                 .ok_or(Error::NotEnoughShareIdentifiers)?;
-            let secret_value = secret_polynomial.evaluate(&id, threshold);
-            let blinder_value = blinder_polynomial.evaluate(&id, threshold);
+            let mut secret_value = S::Value::default();
+            let mut blinder_value = S::Value::default();
+            secret_polynomial.evaluate_in_place(&id, threshold, &mut secret_value);
+            blinder_polynomial.evaluate_in_place(&id, threshold, &mut blinder_value);
             *secret_share = S::with_identifier_and_value(id.clone(), secret_value);
             *blinder_share = S::with_identifier_and_value(id, blinder_value);
         }

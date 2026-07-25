@@ -71,16 +71,7 @@ where
         }
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
-        let mut verifier_set = Self::VerifierSet::empty_feldman_set_with_capacity(threshold, g);
-        // Generate the verifiable commitments to the polynomial for the shares
-        // Each share is multiple of the polynomial and the specified generator point.
-        // {g^p0, g^p1, g^p2, ..., g^pn}
-        let coefficients = polynomial.coefficients();
-        let verifiers = verifier_set.verifiers_mut();
-        verifiers[0] = g * coefficients[0].value();
-        for i in 1..threshold {
-            verifiers[i] = g * coefficients[i].identifier();
-        }
+        let verifier_set = create_feldman_verifier_set(&polynomial, threshold, g);
         let shares = create_shares_with_participant_generators(
             &polynomial,
             threshold,
@@ -132,13 +123,7 @@ where
         }
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
-        let mut verifier_set = Self::VerifierSet::empty_feldman_set_with_capacity(threshold, g);
-        let coefficients = polynomial.coefficients();
-        let verifiers = verifier_set.verifiers_mut();
-        verifiers[0] = g * coefficients[0].value();
-        for i in 1..threshold {
-            verifiers[i] = g * coefficients[i].identifier();
-        }
+        let verifier_set = create_feldman_verifier_set(&polynomial, threshold, g);
         let shares = create_shares_with_participant_ids_iter(
             &polynomial,
             threshold,
@@ -147,6 +132,25 @@ where
         )?;
         Ok((shares, verifier_set))
     }
+}
+
+fn create_feldman_verifier_set<P, S, V, VS>(polynomial: &P, threshold: usize, generator: V) -> VS
+where
+    P: Polynomial<S>,
+    S: Share,
+    V: ShareVerifier<S>,
+    VS: FeldmanVerifierSet<S, V>,
+{
+    let mut verifier_set = VS::empty_feldman_set_with_capacity(threshold, generator);
+    // Generate the verifiable commitments to the polynomial for the shares:
+    // {g^p0, g^p1, g^p2, ..., g^pn}.
+    let coefficients = polynomial.coefficients();
+    let verifiers = verifier_set.verifiers_mut();
+    verifiers[0] = generator * coefficients[0].value();
+    for i in 1..threshold {
+        verifiers[i] = generator * coefficients[i].identifier();
+    }
+    verifier_set
 }
 
 /// A default feldman implementation using [`GenericArray`]
@@ -348,14 +352,7 @@ where
     }
     let mut polynomial = <Vec<S> as Polynomial<S>>::create(threshold);
     polynomial.fill(secret, rng, threshold)?;
-    let mut verifier_set =
-        <Vec<V> as FeldmanVerifierSet<S, V>>::empty_feldman_set_with_capacity(threshold, g);
-    let coefficients = polynomial.coefficients();
-    let verifiers = verifier_set.verifiers_mut();
-    verifiers[0] = g * coefficients[0].value();
-    for i in 1..threshold {
-        verifiers[i] = g * coefficients[i].identifier();
-    }
+    let verifier_set = create_feldman_verifier_set(&polynomial, threshold, g);
     let shares = create_shares_with_participant_generators_iter(
         &polynomial,
         threshold,
