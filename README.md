@@ -30,8 +30,8 @@ The default share numbering method uses incrementing numbers starting at 1. The 
 
 Use `split_secret_with_participant_generators` to choose one or more [`ParticipantIdGenerator`] values, or
 `split_secret_with_participant_generators_iter` when the generators are produced by an iterator. Use
-`split_secret_with_participant_ids_iter` when participant identifiers are already available. The `split_secret`
-method uses sequential participant identifiers starting at 1 and incrementing by 1.
+`split_secret_with_ids` or `split_secret_with_participant_ids_iter` when participant identifiers are already
+available. The `split_secret` method uses sequential participant identifiers starting at 1 and incrementing by 1.
 
 ### Shares and Identifiers
 
@@ -122,8 +122,10 @@ When operating in standard mode, no traits should be necessary to be implemented
 to accomplish what you want just like in previous versions.
 
 `StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets. The
-`PrimeFieldShare<F>` and `GroupShare<G>` aliases can reduce the type noise for common field and group-backed
-shares.
+`StdShamir<S>`, `StdFeldman<S, V>`, `StdPedersen<S, V>`, `PrimeFieldShare<F>`, and `GroupShare<G>` aliases can
+reduce the type noise for common standard, field-backed, and group-backed shares. The longer participant and verifier
+method names remain available, but shorter aliases such as `split_secret_with_ids`, `shares_from_polynomial`,
+`evaluate_at`, and `verify_blinded_share` are available for common call paths.
 
 If you need custom structs in no-std mode the `vsss_arr_impl` macro will create the necessary implementations for you.
 

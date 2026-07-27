@@ -132,6 +132,27 @@ where
         )?;
         Ok((shares, verifier_set))
     }
+
+    /// Create shares from a secret and participant identifiers.
+    /// `generator` is a share verifier for computing feldman verifiers.
+    /// If [`None`], the default generator is used.
+    fn split_secret_with_ids_and_verifiers(
+        threshold: usize,
+        limit: usize,
+        secret: &S::Value,
+        generator: Option<V>,
+        rng: impl CryptoRng,
+        participant_ids: impl IntoIterator<Item = S::Identifier>,
+    ) -> VsssResult<(Self::ShareSet, Self::VerifierSet)> {
+        Self::split_secret_with_participant_ids_iter_and_verifiers(
+            threshold,
+            limit,
+            secret,
+            generator,
+            rng,
+            participant_ids,
+        )
+    }
 }
 
 fn create_feldman_verifier_set<P, S, V, VS>(polynomial: &P, threshold: usize, generator: V) -> VS
@@ -329,6 +350,30 @@ where
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret and participant identifiers.
+pub fn split_secret_with_ids<S, V>(
+    threshold: usize,
+    limit: usize,
+    secret: &S::Value,
+    generator: Option<V>,
+    rng: impl CryptoRng,
+    participant_ids: impl IntoIterator<Item = S::Identifier>,
+) -> VsssResult<(Vec<S>, Vec<V>)>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    split_secret_with_participant_ids_iter(
+        threshold,
+        limit,
+        secret,
+        generator,
+        rng,
+        participant_ids,
+    )
+}
+
+#[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret and an iterator of participant number generators.
 pub fn split_secret_with_participant_generators_iter<'a, S, V>(
     threshold: usize,
@@ -366,7 +411,8 @@ where
 mod tests {
     use super::{
         Feldman, GenericArrayFeldmanVsss, HybridArrayFeldmanVsss, split_secret,
-        split_secret_with_participant_generators, split_secret_with_participant_generators_iter,
+        split_secret_with_ids, split_secret_with_participant_generators,
+        split_secret_with_participant_generators_iter,
     };
     use crate::{
         Error, FeldmanVerifierSet, IdentifierPrimeField, ParticipantIdGenerator, PrimeFieldShare,
@@ -461,6 +507,39 @@ mod tests {
             )
             .unwrap();
         assert_eq!(shares[0].identifier.0, Scalar::from(20u64));
+        assert_eq!(shares.combine(), Ok(secret));
+        verifiers.verify_share(&shares[0]).unwrap();
+    }
+
+    #[test]
+    fn simplified_feldman_id_entrypoints_work() {
+        let mut rng = StdRng::from_seed([0x34u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(42u64));
+        let generator = TestVerifier::generator();
+        let ids = [5u64, 6, 7].map(|id| IdentifierPrimeField(Scalar::from(id)));
+
+        let (shares, verifiers) = split_secret_with_ids::<TestShare, TestVerifier>(
+            2,
+            3,
+            &secret,
+            Some(generator),
+            &mut rng,
+            ids,
+        )
+        .unwrap();
+        assert_eq!(shares[0].identifier.0, Scalar::from(5u64));
+        assert_eq!(shares.combine(), Ok(secret));
+        verifiers.verify_share(&shares[0]).unwrap();
+
+        let ids = [8u64, 9, 10].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let (shares, verifiers) = <StdVsss<TestShare, TestVerifier> as Feldman<
+            TestShare,
+            TestVerifier,
+        >>::split_secret_with_ids_and_verifiers(
+            2, 3, &secret, Some(generator), &mut rng, ids
+        )
+        .unwrap();
+        assert_eq!(shares[0].identifier.0, Scalar::from(8u64));
         assert_eq!(shares.combine(), Ok(secret));
         verifiers.verify_share(&shares[0]).unwrap();
     }

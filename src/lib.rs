@@ -254,6 +254,18 @@ pub type PrimeFieldShare<F> = DefaultShare<IdentifierPrimeField<F>, ValuePrimeFi
 pub type GroupShare<G> = DefaultShare<IdentifierPrimeField<<G as Group>::Scalar>, ValueGroup<G>>;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
+/// Standard Shamir secret sharing scheme.
+pub type StdShamir<S> = Vec<S>;
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Standard Feldman verifiable secret sharing scheme.
+pub type StdFeldman<S, V> = StdVsss<S, V>;
+
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Standard Pedersen verifiable secret sharing scheme.
+pub type StdPedersen<S, V> = StdVsss<S, V>;
+
+#[cfg(any(feature = "alloc", feature = "std"))]
 /// Standard verifiable secret sharing scheme
 pub struct StdVsss<S, V>
 where

@@ -152,11 +152,21 @@ where
     /// Create a new verifier set
     fn empty_feldman_set_with_capacity(size_hint: usize, generator: G) -> Self;
 
+    /// Create a new verifier set.
+    fn with_capacity(size_hint: usize, generator: G) -> Self {
+        Self::empty_feldman_set_with_capacity(size_hint, generator)
+    }
+
     /// Create a verifier set from an existing set of verifiers and generator
     fn feldman_set_with_generator_and_verifiers(generator: G, verifiers: &[G]) -> Self {
         let mut set = Self::empty_feldman_set_with_capacity(verifiers.len(), generator);
         set.verifiers_mut().copy_from_slice(verifiers);
         set
+    }
+
+    /// Create a verifier set from an existing set of verifiers and generator.
+    fn with_generator_and_verifiers(generator: G, verifiers: &[G]) -> Self {
+        Self::feldman_set_with_generator_and_verifiers(generator, verifiers)
     }
 
     /// The generator used for the verifiers
@@ -178,6 +188,11 @@ where
         }
 
         evaluate_commitments_at::<S, G>(self.verifiers(), identifier)
+    }
+
+    /// Evaluate this verifier set at a share identifier.
+    fn evaluate_at(&self, identifier: &S::Identifier) -> VsssResult<G> {
+        self.evaluate_verifier_at(identifier)
     }
 
     /// Verify a share with this set
@@ -214,6 +229,11 @@ where
         blinder_generator: G,
     ) -> Self;
 
+    /// Create a new verifier set.
+    fn with_capacity(size_hint: usize, secret_generator: G, blinder_generator: G) -> Self {
+        Self::empty_pedersen_set_with_capacity(size_hint, secret_generator, blinder_generator)
+    }
+
     /// Create a verifier set from an existing set of verifiers and generators
     fn pedersen_set_with_generators_and_verifiers(
         secret_generator: G,
@@ -227,6 +247,19 @@ where
         );
         set.blind_verifiers_mut().copy_from_slice(verifiers);
         set
+    }
+
+    /// Create a verifier set from an existing set of verifiers and generators.
+    fn with_generators_and_verifiers(
+        secret_generator: G,
+        blinder_generator: G,
+        verifiers: &[G],
+    ) -> Self {
+        Self::pedersen_set_with_generators_and_verifiers(
+            secret_generator,
+            blinder_generator,
+            verifiers,
+        )
     }
 
     /// The generator used for the verifiers of secrets
@@ -258,6 +291,11 @@ where
         evaluate_commitments_at::<S, G>(self.blind_verifiers(), identifier)
     }
 
+    /// Evaluate this verifier set at a share identifier.
+    fn evaluate_at(&self, identifier: &S::Identifier) -> VsssResult<G> {
+        self.evaluate_verifier_at(identifier)
+    }
+
     /// Verify a share and blinder with this set
     fn verify_share_and_blinder(&self, share: &S, blinder: &S) -> VsssResult<()> {
         if (share.value().is_zero() | blinder.value().is_zero()).into() {
@@ -280,6 +318,11 @@ where
         } else {
             Err(Error::InvalidShare)
         }
+    }
+
+    /// Verify a share and blinder with this set.
+    fn verify_blinded_share(&self, share: &S, blinder: &S) -> VsssResult<()> {
+        self.verify_share_and_blinder(share, blinder)
     }
 }
 
@@ -1806,11 +1849,16 @@ mod tests {
         assert_eq!(<[TestVerifier; 3]>::from(&from_ref), inner);
 
         let empty =
-            ArrayFeldmanVerifierSet::<TestShare, TestVerifier, 3>::empty_feldman_set_with_capacity(
-                2,
-                verifier(4),
-            );
+            ArrayFeldmanVerifierSet::<TestShare, TestVerifier, 3>::with_capacity(2, verifier(4));
         assert_eq!(empty.generator(), verifier(4));
+
+        let from_verifiers =
+            ArrayFeldmanVerifierSet::<TestShare, TestVerifier, 3>::with_generator_and_verifiers(
+                verifier(6),
+                &[verifier(7), verifier(8)],
+            );
+        assert_eq!(from_verifiers.generator(), verifier(6));
+        assert_eq!(from_verifiers.verifiers(), &[verifier(7), verifier(8)]);
     }
 
     #[test]
@@ -1984,6 +2032,7 @@ mod tests {
             verifier(2),
         ]);
         assert_eq!(feldman.evaluate_verifier_at(&id), Ok(verifier(11)));
+        assert_eq!(feldman.evaluate_at(&id), Ok(verifier(11)));
         assert_eq!(
             feldman.evaluate_verifier_at(&IdentifierPrimeField::zero()),
             Err(Error::InvalidShare)
@@ -1996,10 +2045,40 @@ mod tests {
             verifier(2),
         ]);
         assert_eq!(pedersen.evaluate_verifier_at(&id), Ok(verifier(11)));
+        assert_eq!(pedersen.evaluate_at(&id), Ok(verifier(11)));
         assert_eq!(
             pedersen.evaluate_verifier_at(&IdentifierPrimeField::zero()),
             Err(Error::InvalidShare)
         );
+    }
+
+    #[test]
+    fn verifier_set_simplified_constructors_and_verify_alias_work() {
+        let feldman =
+            VecFeldmanVerifierSet::<TestShare, TestVerifier>::with_capacity(2, verifier(3));
+        assert_eq!(feldman.generator(), verifier(3));
+        assert_eq!(feldman.verifiers(), &[verifier(3), verifier(3)]);
+
+        let pedersen =
+            VecPedersenVerifierSet::<TestShare, TestVerifier>::with_generators_and_verifiers(
+                verifier(1),
+                verifier(2),
+                &[verifier(7), verifier(2)],
+            );
+        assert_eq!(pedersen.secret_generator(), verifier(1));
+        assert_eq!(pedersen.blinder_generator(), verifier(2));
+        assert_eq!(
+            pedersen.verify_blinded_share(&share(3, 7), &share(3, 3)),
+            Ok(())
+        );
+
+        let pedersen = VecPedersenVerifierSet::<TestShare, TestVerifier>::with_capacity(
+            2,
+            verifier(4),
+            verifier(5),
+        );
+        assert_eq!(pedersen.secret_generator(), verifier(4));
+        assert_eq!(pedersen.blinder_generator(), verifier(5));
     }
 }
 

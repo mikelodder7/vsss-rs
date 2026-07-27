@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "6.0.0-rc6"
+version = "6.0.0-rc7"
 
 [features]
 default = ["bigint", "primitive", "serde", "std", "zeroize"]
@@ -24,9 +24,9 @@ legacy-curve-tests = []
 
 [dependencies]
 crypto-bigint = { version = "0.7", optional = true }
-elliptic-curve = { version = "0.14.0", features = ["ecdh"] }
+elliptic-curve = "0.14.0"
 elliptic-curve-tools = { version = "0.3.0", default-features = false, optional = true }
-generic-array = "1.3"
+generic-array = "1.4"
 hybrid-array = "0.4.13"
 num = { version = "0.4", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
@@ -42,16 +42,16 @@ bls12_381_plus = { version = "0.9.0-rc1", features = ["expose-fields"] }
 ciborium = "0.2.2"
 curve25519-dalek = { version = "5.0.0", features = ["digest", "group"] }
 ed25519-dalek = "3.0.0"
-ed448-goldilocks-plus = "0.18.0-rc1"
+ed448-goldilocks-plus = "0.18.0"
 hex = "0.4"
 hash2curve = "0.14"
 k256 = { version = "0.14.0", features = ["arithmetic"] }
 p256 = { version = "0.14.0", features = ["arithmetic"] }
-postcard = { version = "1.0", features = ["use-std"] }
+postcard = { version = "1.0", default-features = false, features = ["use-std"] }
 rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "sys_rng"] }
 rand_chacha = "0.10"
 rand_xorshift = "0.5"
-rstest = "0.26"
+rstest = { version = "0.26", default-features = false }
 serde_bare = "0.5"
 serde_cbor_2 = "0.13"
 serde_json = "1.0"
@@ -60,3 +60,7 @@ x25519-dalek = { version = "3.0.0", features = ["static_secrets"] }
 
 [package.metadata.cargo-udeps.ignore]
 development = ["bls12_381_plus", "ed448-goldilocks-plus", "hash2curve", "rstest"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

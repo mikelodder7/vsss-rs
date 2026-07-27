@@ -174,6 +174,23 @@ where
             pedersen_verifier_set,
         ))
     }
+
+    /// Create shares from a secret, participant identifiers, and options.
+    fn split_secret_with_ids_and_blind_verifiers(
+        threshold: usize,
+        limit: usize,
+        options: &PedersenOptions<S, V>,
+        rng: impl CryptoRng,
+        participant_ids: impl IntoIterator<Item = S::Identifier>,
+    ) -> VsssResult<Self::PedersenResult> {
+        Self::split_secret_with_participant_ids_iter_and_blind_verifiers(
+            threshold,
+            limit,
+            options,
+            rng,
+            participant_ids,
+        )
+    }
 }
 
 /// A result output from splitting a secret with [`Pedersen`]
@@ -628,12 +645,28 @@ where
     )
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
+/// Create shares from a secret with participant identifiers.
+pub fn split_secret_with_ids<S, V>(
+    threshold: usize,
+    limit: usize,
+    options: &PedersenOptions<S, V>,
+    rng: impl CryptoRng,
+    participant_ids: impl IntoIterator<Item = S::Identifier>,
+) -> VsssResult<StdPedersenResult<S, V>>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    split_secret_with_participant_ids_iter(threshold, limit, options, rng, participant_ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         GenericArrayPedersenResult, HybridArrayPedersenResult, Pedersen, PedersenOptions,
-        PedersenResult, split_secret, split_secret_with_participant_generators_iter,
-        split_secret_with_participant_ids_iter,
+        PedersenResult, split_secret, split_secret_with_ids,
+        split_secret_with_participant_generators_iter, split_secret_with_participant_ids_iter,
     };
     use crate::{
         Error, FeldmanVerifierSet, IdentifierPrimeField, ParticipantIdGenerator,
@@ -744,6 +777,29 @@ mod tests {
             Scalar::from(20u64)
         );
         assert_eq!(by_generators.secret_shares().combine(), Ok(secret));
+    }
+
+    #[test]
+    fn simplified_pedersen_id_entrypoints_work() {
+        let mut rng = StdRng::from_seed([0x44u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(55u64));
+        let options = test_options(&secret);
+        let ids = [5u64, 6, 7].map(|id| IdentifierPrimeField(Scalar::from(id)));
+
+        let result =
+            split_secret_with_ids::<TestShare, TestVerifier>(2, 3, &options, &mut rng, ids)
+                .unwrap();
+        assert_eq!(result.secret_shares()[0].identifier.0, Scalar::from(5u64));
+        assert_eq!(result.secret_shares().combine(), Ok(secret));
+
+        let ids = [8u64, 9, 10].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let result = <StdVsss<TestShare, TestVerifier> as Pedersen<
+            TestShare,
+            TestVerifier,
+        >>::split_secret_with_ids_and_blind_verifiers(2, 3, &options, &mut rng, ids)
+        .unwrap();
+        assert_eq!(result.secret_shares()[0].identifier.0, Scalar::from(8u64));
+        assert_eq!(result.secret_shares().combine(), Ok(secret));
     }
 
     #[test]
