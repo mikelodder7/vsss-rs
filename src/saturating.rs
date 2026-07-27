@@ -2,11 +2,11 @@ use core::{
     fmt::{self, Binary, Display, Formatter, LowerHex, Octal, UpperHex},
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
 };
-use elliptic_curve::{
-    bigint::{ArrayEncoding, Choice as BigintChoice, CtEq as BigintCtEq, Random, Uint, Zero},
-    rand_core::{Rng, TryRng},
+use crypto_bigint::{
+    ArrayEncoding, Choice as BigintChoice, CtEq as BigintCtEq, Random, Uint, Zero,
 };
 use num::traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
+use rand_core::{Rng, TryRng};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
 /// Provides intentionally-saturating arithmetic on `T`.

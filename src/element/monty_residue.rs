@@ -26,7 +26,7 @@ use crypto_bigint::{
     modular::{ConstMontyForm, ConstMontyParams, FixedMontyForm, FixedMontyParams},
 };
 use rand_core::CryptoRng;
-use subtle::Choice;
+use subtle::{Choice, ConstantTimeEq};
 
 use super::*;
 use crate::*;
@@ -218,7 +218,7 @@ where
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.ct_eq(&ConstMontyForm::<MOD, LIMBS>::ZERO)
+        ConstantTimeEq::ct_eq(&self.0, &ConstMontyForm::<MOD, LIMBS>::ZERO)
     }
 
     fn serialize(&self) -> Self::Serialization {

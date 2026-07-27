@@ -24,7 +24,11 @@ pub type ValuePrimeField<F> = IdentifierPrimeField<F>;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct IdentifierPrimeField<F: PrimeField>(
-    #[cfg_attr(feature = "serde", serde(with = "elliptic_curve_tools::prime_field"))] pub F,
+    #[cfg_attr(
+        feature = "curve-serde",
+        serde(with = "elliptic_curve_tools::prime_field")
+    )]
+    pub F,
 );
 
 impl<F: PrimeField> Display for IdentifierPrimeField<F> {

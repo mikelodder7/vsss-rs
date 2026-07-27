@@ -1,5 +1,7 @@
 use super::*;
 use crate::*;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::{boxed::Box, vec::Vec};
 use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
@@ -8,6 +10,8 @@ use num::CheckedDiv;
 use num::bigint::BigUint;
 use num::traits::{One, Zero};
 use rand_core::CryptoRng;
+#[cfg(feature = "std")]
+use std::{boxed::Box, vec::Vec};
 use subtle::Choice;
 
 /// A share identifier represented as a big unsigned number

@@ -1,11 +1,15 @@
 use core::fmt::Display;
+#[cfg(feature = "random-participant-ids")]
+use core::marker::PhantomData;
 use core::{
     fmt::{self, Debug, Formatter},
-    marker::PhantomData,
     num::NonZeroUsize,
 };
+#[cfg(feature = "random-participant-ids")]
 use rand_core::{Infallible, TryCryptoRng, TryRng};
+#[cfg(feature = "random-participant-ids")]
 use sha3::digest::{ExtendableOutput, Update, XofReader};
+#[cfg(feature = "random-participant-ids")]
 use shake::Shake256;
 
 use crate::{Error, ShareIdentifier, VsssResult};
@@ -25,6 +29,7 @@ pub enum ParticipantIdGenerator<'a, I: ShareIdentifier> {
     },
     /// Generate participant numbers randomly using the provided `seed`
     /// until `count` is reached then this generator stops.
+    #[cfg(feature = "random-participant-ids")]
     Random {
         /// The seed to use for the random number generator
         seed: [u8; 32],
@@ -56,6 +61,7 @@ impl<I: ShareIdentifier + Display> Display for ParticipantIdGenerator<'_, I> {
                 "Sequential {{ start: {}, increment: {}, count: {} }}",
                 start, increment, count
             ),
+            #[cfg(feature = "random-participant-ids")]
             Self::Random { seed, count } => {
                 write!(f, "Random {{ seed: ")?;
                 for &b in seed {
@@ -108,6 +114,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGenerator<'a, I> {
     }
 
     /// Create a new random participant number generator
+    #[cfg(feature = "random-participant-ids")]
     pub fn random(seed: [u8; 32], count: NonZeroUsize) -> Self {
         Self::Random {
             seed,
@@ -141,6 +148,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGenerator<'a, I> {
                     },
                 ))
             }
+            #[cfg(feature = "random-participant-ids")]
             Self::Random { seed, count } => {
                 if *count == 0 {
                     return Err(Error::InvalidGenerator(
@@ -240,6 +248,7 @@ impl<'a, 'b, I: ShareIdentifier> ParticipantIdGeneratorCollection<'a, 'b, I> {
 
 pub(crate) enum ParticipantIdGeneratorState<'a, I: ShareIdentifier> {
     Sequential(SequentialParticipantNumberGenerator<I>),
+    #[cfg(feature = "random-participant-ids")]
     Random(RandomParticipantNumberGenerator<I>),
     List(ListParticipantNumberGenerator<'a, I>),
 }
@@ -250,6 +259,7 @@ impl<'a, I: ShareIdentifier> Iterator for ParticipantIdGeneratorState<'a, I> {
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             Self::Sequential(iter) => iter.next(),
+            #[cfg(feature = "random-participant-ids")]
             Self::Random(iter) => iter.next(),
             Self::List(iter) => iter.next(),
         }
@@ -280,6 +290,7 @@ impl<I: ShareIdentifier> Iterator for SequentialParticipantNumberGenerator<I> {
 }
 
 /// A generator that creates random participant identifiers
+#[cfg(feature = "random-participant-ids")]
 #[derive(Debug)]
 pub(crate) struct RandomParticipantNumberGenerator<I: ShareIdentifier> {
     /// Domain separation tag
@@ -289,6 +300,7 @@ pub(crate) struct RandomParticipantNumberGenerator<I: ShareIdentifier> {
     _markers: PhantomData<I>,
 }
 
+#[cfg(feature = "random-participant-ids")]
 impl<I: ShareIdentifier> Iterator for RandomParticipantNumberGenerator<I> {
     type Item = I;
 
@@ -301,6 +313,7 @@ impl<I: ShareIdentifier> Iterator for RandomParticipantNumberGenerator<I> {
     }
 }
 
+#[cfg(feature = "random-participant-ids")]
 impl<I: ShareIdentifier> RandomParticipantNumberGenerator<I> {
     fn get_rng(&self, index: usize) -> XofRng {
         let mut hasher = Shake256::default();
@@ -333,8 +346,10 @@ impl<'a, I: ShareIdentifier> Iterator for ListParticipantNumberGenerator<'a, I> 
 
 #[derive(Clone)]
 #[repr(transparent)]
+#[cfg(feature = "random-participant-ids")]
 struct XofRng(<Shake256 as ExtendableOutput>::Reader);
 
+#[cfg(feature = "random-participant-ids")]
 impl TryRng for XofRng {
     type Error = Infallible;
 
@@ -356,8 +371,10 @@ impl TryRng for XofRng {
     }
 }
 
+#[cfg(feature = "random-participant-ids")]
 impl TryCryptoRng for XofRng {}
 
+#[cfg(feature = "random-participant-ids")]
 impl Debug for XofRng {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "XofRng")

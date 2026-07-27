@@ -7,6 +7,7 @@ use core::{
 };
 #[cfg(feature = "bigint")]
 use crypto_bigint::{Encoding, modular::ConstMontyParams};
+use elliptic_curve::{Group, group::GroupEncoding};
 #[cfg(feature = "bigint")]
 use elliptic_curve::{
     bigint::{self, ArrayEncoding, modular::ConstMontyParams as ResidueParams},
@@ -24,7 +25,7 @@ pub type ShareVerifierGroup<G> = ValueGroup<G>;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct ValueGroup<G: Group + GroupEncoding + Default>(
-    #[cfg_attr(feature = "serde", serde(with = "elliptic_curve_tools::group"))] pub G,
+    #[cfg_attr(feature = "curve-serde", serde(with = "elliptic_curve_tools::group"))] pub G,
 );
 
 impl<G: Group + GroupEncoding + Default> Display for ValueGroup<G> {

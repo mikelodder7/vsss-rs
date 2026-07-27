@@ -1,12 +1,14 @@
 //! Share identifiers for secret sharing schemes.
 
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(all(feature = "bigint", any(feature = "alloc", feature = "std")))]
 mod biguint;
 #[cfg(all(feature = "bigint", any(feature = "alloc", feature = "std")))]
 pub mod boxed_uint;
+#[cfg(feature = "curve")]
 mod group_element;
 #[cfg(feature = "bigint")]
 mod monty_residue;
+#[cfg(feature = "curve")]
 mod prime_field;
 #[cfg(feature = "primitive")]
 mod primitive;
@@ -15,13 +17,15 @@ mod residue;
 #[cfg(feature = "bigint")]
 pub mod uint;
 
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(all(feature = "bigint", any(feature = "alloc", feature = "std")))]
 pub use biguint::*;
 #[cfg(all(feature = "bigint", any(feature = "alloc", feature = "std")))]
 pub use boxed_uint::*;
+#[cfg(feature = "curve")]
 pub use group_element::*;
 #[cfg(feature = "bigint")]
 pub use monty_residue::*;
+#[cfg(feature = "curve")]
 pub use prime_field::*;
 #[cfg(feature = "primitive")]
 pub use primitive::*;

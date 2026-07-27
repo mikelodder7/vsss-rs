@@ -181,10 +181,10 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 use core::fmt::Debug;
 #[cfg(feature = "std")]
-use std::{boxed::Box, vec::Vec};
+use std::vec::Vec;
 
 /// Macros for creating VSSS implementations
 #[macro_use]
@@ -215,6 +215,7 @@ mod share;
 mod util;
 
 use shamir::check_params;
+#[allow(unused_imports)]
 use subtle::*;
 
 pub use element::*;
@@ -238,9 +239,10 @@ pub use util::*;
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use pedersen::StdPedersenResult;
 
+#[cfg(feature = "curve")]
 pub use elliptic_curve;
+#[cfg(feature = "curve")]
 use elliptic_curve::Group;
-use elliptic_curve::group::GroupEncoding;
 
 pub use subtle;
 
@@ -248,9 +250,11 @@ pub(crate) const USIZE_BYTES: usize = size_of::<usize>();
 pub(crate) const ISIZE_BYTES: usize = size_of::<isize>();
 
 /// A share whose identifier and value are elements of the same prime field.
+#[cfg(feature = "curve")]
 pub type PrimeFieldShare<F> = DefaultShare<IdentifierPrimeField<F>, ValuePrimeField<F>>;
 
 /// A share whose identifier is a group scalar and whose value is a group element.
+#[cfg(feature = "curve")]
 pub type GroupShare<G> = DefaultShare<IdentifierPrimeField<<G as Group>::Scalar>, ValueGroup<G>>;
 
 #[cfg(any(feature = "alloc", feature = "std"))]

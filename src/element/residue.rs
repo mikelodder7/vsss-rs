@@ -3,10 +3,8 @@ use core::{
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut, Mul},
 };
-use elliptic_curve::bigint::modular::{
-    ConstMontyForm as Residue, ConstMontyParams as ResidueParams,
-};
-use elliptic_curve::bigint::{ArrayEncoding, Encoding, Random, Uint, Zero};
+use crypto_bigint::modular::{ConstMontyForm as Residue, ConstMontyParams as ResidueParams};
+use crypto_bigint::{ArrayEncoding, Encoding, Random, Uint, Zero};
 
 use super::*;
 use crate::*;

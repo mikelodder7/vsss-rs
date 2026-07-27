@@ -5,7 +5,8 @@ use core::{
     hash::{Hash, Hasher},
     ops::Mul,
 };
-use elliptic_curve::PrimeField;
+#[cfg(feature = "curve")]
+use elliptic_curve::{Group, PrimeField, group::GroupEncoding};
 #[cfg(feature = "zeroize")]
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -141,6 +142,7 @@ where
 {
 }
 
+#[cfg(feature = "curve")]
 impl<F: PrimeField> From<(F, F)> for DefaultShare<IdentifierPrimeField<F>, ValuePrimeField<F>> {
     fn from((identifier, value): (F, F)) -> Self {
         Self {
@@ -150,12 +152,14 @@ impl<F: PrimeField> From<(F, F)> for DefaultShare<IdentifierPrimeField<F>, Value
     }
 }
 
+#[cfg(feature = "curve")]
 impl<F: PrimeField> From<DefaultShare<IdentifierPrimeField<F>, ValuePrimeField<F>>> for (F, F) {
     fn from(share: DefaultShare<IdentifierPrimeField<F>, ValuePrimeField<F>>) -> Self {
         (share.identifier.0, share.value.0)
     }
 }
 
+#[cfg(feature = "curve")]
 impl<G: Group + GroupEncoding + Default> From<(G::Scalar, G)>
     for DefaultShare<IdentifierPrimeField<G::Scalar>, ValueGroup<G>>
 {
@@ -167,6 +171,7 @@ impl<G: Group + GroupEncoding + Default> From<(G::Scalar, G)>
     }
 }
 
+#[cfg(feature = "curve")]
 impl<G: Group + GroupEncoding + Default>
     From<DefaultShare<IdentifierPrimeField<G::Scalar>, ValueGroup<G>>> for (G::Scalar, G)
 {

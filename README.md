@@ -93,6 +93,17 @@ let zero = IdentifierMontyResidue::<4>::zero_with_params(params);
 let one = IdentifierMontyResidue::<4>::one_with_params(params);
 ```
 
+### Minimal features
+
+For GF(16)/GF(256)-only use, disable default features and enable only the allocation mode you need:
+
+```toml
+vsss-rs = { version = "6", default-features = false, features = ["alloc"] }
+```
+
+Add `random-participant-ids` only if you need random participant identifier generation, `serde` only if you need
+serialization for GF types, and `curve`/`curve-serde` only if you need prime-field or group-backed curve APIs.
+
 ### Polynomials
 `Polynomial` holds the coefficients of the polynomial and provides methods to evaluate the polynomial at a given point.
 Polymomials are only used when splitting secrets.

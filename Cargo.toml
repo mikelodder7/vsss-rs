@@ -10,22 +10,26 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "6.0.0-rc7"
+version = "6.0.0-rc8"
 
 [features]
-default = ["bigint", "primitive", "serde", "std", "zeroize"]
+default = ["bigint", "curve-serde", "primitive", "random-participant-ids", "std", "zeroize"]
 alloc = ["rand/alloc", "serde?/alloc", "crypto-bigint?/alloc", "num?/std", "hex?/alloc", "elliptic-curve-tools?/alloc"]
-bigint = ["dep:crypto-bigint", "dep:num"]
+bigint = ["dep:crypto-bigint", "crypto-bigint/hybrid-array", "crypto-bigint/subtle", "dep:num"]
+curve = ["dep:elliptic-curve"]
+curve-serde = ["curve", "serde", "dep:elliptic-curve-tools", "elliptic-curve/serde", "elliptic-curve-tools/serde"]
 primitive = ["dep:num"]
-serde = ["dep:serde", "elliptic-curve/serde", "crypto-bigint?/serde", "num/serde", "generic-array/serde", "hybrid-array/serde", "elliptic-curve-tools/serde"]
-std = ["alloc", "num/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve-tools?/std"]
+random-participant-ids = ["dep:sha3", "dep:shake"]
+serde = ["dep:serde", "crypto-bigint?/serde", "num?/serde", "generic-array/serde", "hybrid-array/serde"]
+std = ["alloc", "num/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve?/std", "elliptic-curve-tools?/std"]
 zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 legacy-curve-tests = []
 
 [dependencies]
 crypto-bigint = { version = "0.7", optional = true }
-elliptic-curve = "0.14.0"
+elliptic-curve = { version = "0.14.0", default-features = false, features = ["arithmetic"], optional = true }
 elliptic-curve-tools = { version = "0.3.0", default-features = false, optional = true }
+ff = { version = "0.14", default-features = false }
 generic-array = "1.4"
 hybrid-array = "0.4.13"
 num = { version = "0.4", default-features = false, optional = true }
@@ -33,8 +37,8 @@ hex = { version = "0.4", default-features = false, optional = true }
 rand_core = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 subtle = { version = "2.6" }
-sha3 = { version = "0.12", default-features = false }
-shake = { version = "0.1", default-features = false }
+sha3 = { version = "0.12", default-features = false, optional = true }
+shake = { version = "0.1", default-features = false, optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"], optional = true }
 
 [dev-dependencies]

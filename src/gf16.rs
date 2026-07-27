@@ -18,7 +18,7 @@ use core::{
         DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
     },
 };
-use elliptic_curve::ff::{Field, PrimeField};
+use ff::{Field, PrimeField};
 use rand_core::TryRng;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
