@@ -22,7 +22,6 @@ on:
 env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
-  FEATURES: "bigint,primitive,serde,std,zeroize"
   RUST_LOG_STYLE: always
   RUSTFLAGS: "-Dwarnings"
   RUSTDOCFLAGS: "-Dwarnings"
@@ -48,7 +47,48 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - run: cargo test --features "$FEATURES" --release
+      - run: cargo test --all-features --release
+
+  feature-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: no-default
+            args: --no-default-features
+          - name: alloc
+            args: --no-default-features --features alloc
+          - name: alloc-serde
+            args: --no-default-features --features alloc,serde
+          - name: alloc-primitive
+            args: --no-default-features --features alloc,primitive
+          - name: alloc-bigint
+            args: --no-default-features --features alloc,bigint
+          - name: alloc-curve
+            args: --no-default-features --features alloc,curve
+          - name: alloc-curve-serde
+            args: --no-default-features --features alloc,curve-serde
+          - name: all-features
+            args: --all-features
+    name: feature-matrix (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - run: cargo check ${{ matrix.args }} --lib
+
+  feature-powerset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall --no-confirm cargo-hack
+      - run: cargo hack check --feature-powerset --depth 2 --exclude-features legacy-curve-tests --lib
 
   coverage:
     runs-on: ubuntu-latest
@@ -85,7 +125,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      - run: cargo clippy --all --features "$FEATURES" -- -D warnings
+      - run: cargo clippy --all-targets --all-features -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
@@ -104,7 +144,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - run: cargo doc --features "$FEATURES"
+      - run: cargo doc --no-deps --all-features
+
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall --no-confirm cargo-semver-checks
+      - run: cargo semver-checks check-release --all-features
 
   deps:
     runs-on: ubuntu-latest
@@ -115,7 +166,7 @@ jobs:
           toolchain: nightly
       - uses: cargo-bins/cargo-binstall@main
       - run: cargo binstall --no-confirm cargo-udeps
-      - run: cargo udeps --all-targets --features "$FEATURES"
+      - run: cargo udeps --all-targets --all-features
 
   outdated:
     runs-on: ubuntu-latest

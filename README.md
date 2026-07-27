@@ -101,8 +101,51 @@ For GF(16)/GF(256)-only use, disable default features and enable only the alloca
 vsss-rs = { version = "6", default-features = false, features = ["alloc"] }
 ```
 
+| Feature | Default | Adds |
+| --- | --- | --- |
+| `alloc` | Yes, through `std` | `Vec`/`Box` backed APIs for no-std alloc environments |
+| `std` | Yes | Standard-library support for dependencies that can use it |
+| `bigint` | Yes | `crypto-bigint`, `num-bigint`, and BigUint/Uint share element types |
+| `primitive` | Yes | Primitive integer share identifiers through `num-traits` |
+| `curve` | Yes, through `curve-serde` | Prime-field and group-backed share element APIs |
+| `curve-serde` | Yes | `curve`, `serde`, and curve serialization helpers |
+| `random-participant-ids` | Yes | Random participant identifier generation with SHAKE |
+| `serde` | Yes, through `curve-serde` | Serialization support for enabled share element types |
+| `zeroize` | Yes | Zeroize integration for supported share element types |
+| `legacy-curve-tests` | No | Compatibility-only test coverage for older curve combinations |
+
 Add `random-participant-ids` only if you need random participant identifier generation, `serde` only if you need
 serialization for GF types, and `curve`/`curve-serde` only if you need prime-field or group-backed curve APIs.
+
+GF(256)-only byte sharing:
+
+```rust
+use rand::{rngs::StdRng, SeedableRng};
+use vsss_rs::Gf256;
+
+fn main() -> Result<(), vsss_rs::Error> {
+    let mut rng = StdRng::from_seed([7u8; 32]);
+    let shares = Gf256::split_bytes(2, 3, b"secret", &mut rng)?;
+    let recovered = Gf256::combine_bytes(&shares[..2])?;
+    assert_eq!(recovered, b"secret");
+    Ok(())
+}
+```
+
+GF(16)-only byte sharing:
+
+```rust
+use rand::{rngs::StdRng, SeedableRng};
+use vsss_rs::Gf16;
+
+fn main() -> Result<(), vsss_rs::Error> {
+    let mut rng = StdRng::from_seed([9u8; 32]);
+    let shares = Gf16::split_bytes(2, 3, b"secret", &mut rng)?;
+    let recovered = Gf16::combine_bytes(&shares[..2])?;
+    assert_eq!(recovered, b"secret");
+    Ok(())
+}
+```
 
 ### Polynomials
 `Polynomial` holds the coefficients of the polynomial and provides methods to evaluate the polynomial at a given point.

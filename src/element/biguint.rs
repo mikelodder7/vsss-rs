@@ -6,9 +6,8 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
-use num::CheckedDiv;
-use num::bigint::BigUint;
-use num::traits::{One, Zero};
+use num_bigint::BigUint;
+use num_traits::{CheckedDiv, One, Zero};
 use rand_core::CryptoRng;
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec};
@@ -158,8 +157,8 @@ impl ShareIdentifier for IdentifierBigUint {
 mod tests {
     use super::IdentifierBigUint;
     use crate::{Error, ShareElement, ShareIdentifier};
-    use num::bigint::BigUint;
-    use num::traits::{One, Zero};
+    use num_bigint::BigUint;
+    use num_traits::{One, Zero};
     use std::{string::ToString, vec::Vec};
 
     #[test]

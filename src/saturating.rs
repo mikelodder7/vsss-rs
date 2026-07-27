@@ -5,7 +5,7 @@ use core::{
 use crypto_bigint::{
     ArrayEncoding, Choice as BigintChoice, CtEq as BigintCtEq, Random, Uint, Zero,
 };
-use num::traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
+use num_traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
 use rand_core::{Rng, TryRng};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
@@ -317,7 +317,7 @@ mod tests {
     use super::Saturating;
     use core::ops::{Add, Div, Mul, Rem, Sub};
     use elliptic_curve::bigint::{Uint, Zero};
-    use num::traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
+    use num_traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
     use std::{format, string::ToString};
     use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 

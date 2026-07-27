@@ -3,12 +3,9 @@ use core::{
     fmt::{Debug, Display},
     hash::Hash,
 };
-use num::{
-    PrimInt,
-    traits::{
-        ConstOne, ConstZero, FromBytes, NumAssign, NumAssignRef, NumOps, NumRef, SaturatingAdd,
-        SaturatingMul, SaturatingSub, ToBytes, ToPrimitive,
-    },
+use num_traits::{
+    ConstOne, ConstZero, FromBytes, NumAssign, NumAssignRef, NumOps, NumRef, PrimInt,
+    SaturatingAdd, SaturatingMul, SaturatingSub, ToBytes, ToPrimitive,
 };
 
 #[cfg(feature = "zeroize")]

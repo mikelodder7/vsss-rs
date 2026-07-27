@@ -10,18 +10,18 @@ license = "Apache-2.0 OR MIT"
 name = "vsss-rs"
 readme = "README.md"
 repository = "https://github.com/mikelodder7/vsss-rs"
-version = "6.0.0-rc8"
+version = "6.0.0-rc9"
 
 [features]
 default = ["bigint", "curve-serde", "primitive", "random-participant-ids", "std", "zeroize"]
-alloc = ["rand/alloc", "serde?/alloc", "crypto-bigint?/alloc", "num?/std", "hex?/alloc", "elliptic-curve-tools?/alloc"]
-bigint = ["dep:crypto-bigint", "crypto-bigint/hybrid-array", "crypto-bigint/subtle", "dep:num"]
+alloc = ["rand/alloc", "serde?/alloc", "crypto-bigint?/alloc", "hex?/alloc", "elliptic-curve-tools?/alloc"]
+bigint = ["dep:crypto-bigint", "crypto-bigint/hybrid-array", "crypto-bigint/subtle", "dep:num-bigint", "dep:num-traits"]
 curve = ["dep:elliptic-curve"]
-curve-serde = ["curve", "serde", "dep:elliptic-curve-tools", "elliptic-curve/serde", "elliptic-curve-tools/serde"]
-primitive = ["dep:num"]
+curve-serde = ["curve", "serde", "dep:elliptic-curve-tools", "elliptic-curve/serde", "elliptic-curve-tools/alloc", "elliptic-curve-tools/serde"]
+primitive = ["dep:num-traits"]
 random-participant-ids = ["dep:sha3", "dep:shake"]
-serde = ["dep:serde", "crypto-bigint?/serde", "num?/serde", "generic-array/serde", "hybrid-array/serde"]
-std = ["alloc", "num/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve?/std", "elliptic-curve-tools?/std"]
+serde = ["dep:serde", "crypto-bigint?/serde", "num-bigint?/serde", "generic-array/serde", "hybrid-array/serde"]
+std = ["alloc", "num-bigint?/std", "num-traits?/std", "rand/std", "hex/std", "serde?/std", "elliptic-curve?/std", "elliptic-curve-tools?/std"]
 zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 legacy-curve-tests = []
 
@@ -32,7 +32,8 @@ elliptic-curve-tools = { version = "0.3.0", default-features = false, optional =
 ff = { version = "0.14", default-features = false }
 generic-array = "1.4"
 hybrid-array = "0.4.13"
-num = { version = "0.4", default-features = false, optional = true }
+num-bigint = { version = "0.4", default-features = false, optional = true }
+num-traits = { version = "0.2", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 rand_core = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
