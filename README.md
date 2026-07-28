@@ -8,7 +8,8 @@
 This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
 
 * This implementation does not require the Rust standard library.
-* This library has received a few audits and is in production use.
+* This library is production ready and is in production use.
+* Thank you to LIT-Protocol and Turnkey for funding security audits of this library.
 * All operations are constant time unless explicitly noted.
 
 Gf256 is provided as a field for secret sharing schemes with just byte sequences. All operations are constant time.
