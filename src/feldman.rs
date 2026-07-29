@@ -23,6 +23,7 @@ use rand_core::CryptoRng;
 
 /// A secret sharing scheme that uses feldman commitments as verifiers
 /// (see [FeldmanVSS](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf))
+#[allow(async_fn_in_trait)]
 pub trait Feldman<S, V>: Shamir<S>
 where
     S: Share,
@@ -131,6 +132,40 @@ where
             participant_ids,
         )?;
         Ok((shares, verifier_set))
+    }
+
+    /// Create shares from a secret and an asynchronous stream of participant identifiers.
+    /// `generator` is a share verifier for computing Feldman verifiers.
+    /// If [`None`], the default generator is used.
+    ///
+    /// Exactly `limit` identifiers are consumed. Returns
+    /// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+    #[cfg(feature = "stream")]
+    async fn split_secret_with_participant_ids_stream_and_verifiers(
+        threshold: usize,
+        limit: usize,
+        secret: &S::Value,
+        generator: Option<V>,
+        rng: impl CryptoRng,
+        participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+    ) -> VsssResult<(Self::ShareSet, Self::VerifierSet)> {
+        check_params(threshold, limit)?;
+        let generator = generator.unwrap_or_else(V::one);
+        if generator.is_zero().into() {
+            return Err(Error::InvalidGenerator(
+                "Generator cannot be the identity element",
+            ));
+        }
+        let participant_ids =
+            collect_stream_exact(limit, participant_ids, Error::NotEnoughShareIdentifiers).await?;
+        Self::split_secret_with_participant_ids_iter_and_verifiers(
+            threshold,
+            limit,
+            secret,
+            Some(generator),
+            rng,
+            participant_ids,
+        )
     }
 
     /// Create shares from a secret and participant identifiers.
@@ -347,6 +382,35 @@ where
         rng,
         participant_ids,
     )
+}
+
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+/// Create shares from a secret and an asynchronous stream of participant identifiers.
+///
+/// Exactly `limit` identifiers are consumed. Returns
+/// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+pub async fn split_secret_with_participant_ids_stream<S, V>(
+    threshold: usize,
+    limit: usize,
+    secret: &S::Value,
+    generator: Option<V>,
+    rng: impl CryptoRng,
+    participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+) -> VsssResult<(Vec<S>, Vec<V>)>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    StdVsss::split_secret_with_participant_ids_stream_and_verifiers(
+        threshold,
+        limit,
+        secret,
+        generator,
+        rng,
+        participant_ids,
+    )
+    .await
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -594,5 +658,32 @@ mod tests {
                 "Generator cannot be the identity element"
             ))
         );
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn feldman_stream_entrypoint_verifies_and_combines() {
+        use crate::tests::utils::{TestStream, block_on};
+
+        let mut rng = StdRng::from_seed([0x35u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(42u64));
+        let ids = [5u64, 6, 7].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let (shares, verifiers) = block_on(super::split_secret_with_participant_ids_stream::<
+            TestShare,
+            TestVerifier,
+        >(
+            2,
+            3,
+            &secret,
+            Some(TestVerifier::generator()),
+            &mut rng,
+            TestStream::new(ids.into_iter()),
+        ))
+        .unwrap();
+
+        assert_eq!(shares.combine(), Ok(secret));
+        for share in &shares {
+            verifiers.verify_share(share).unwrap();
+        }
     }
 }

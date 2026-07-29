@@ -677,6 +677,34 @@ impl Gf256 {
         Ok(shares)
     }
 
+    #[cfg(feature = "stream")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+    /// Split bytes into shares using an asynchronous stream of participant identifiers.
+    ///
+    /// Exactly `limit` identifiers are consumed. Returns
+    /// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+    pub async fn split_bytes_with_participant_ids_stream<B>(
+        threshold: usize,
+        limit: usize,
+        secret: B,
+        rng: impl CryptoRng,
+        participant_ids: impl futures_core::Stream<Item = IdentifierGf256>,
+    ) -> VsssResult<Vec<Vec<u8>>>
+    where
+        B: AsRef<[u8]>,
+    {
+        if limit > 255 {
+            return Err(Error::InvalidSizeRequest);
+        }
+        if secret.as_ref().is_empty() {
+            return Err(Error::InvalidSecret);
+        }
+        check_params(threshold, limit)?;
+        let participant_ids =
+            collect_stream_exact(limit, participant_ids, Error::NotEnoughShareIdentifiers).await?;
+        Self::split_bytes_with_participant_ids_iter(threshold, limit, secret, rng, participant_ids)
+    }
+
     #[cfg(any(feature = "alloc", feature = "std"))]
     /// Combine shares into bytes.
     pub fn combine_bytes<B: AsRef<[Vec<u8>]>>(shares: B) -> VsssResult<Vec<u8>> {
@@ -695,6 +723,30 @@ impl Gf256 {
             secret.push(byte.0.0);
         }
         Ok(secret)
+    }
+
+    /// Combine an iterator of owned byte shares.
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    pub fn combine_bytes_iter(shares: impl IntoIterator<Item = Vec<u8>>) -> VsssResult<Vec<u8>> {
+        let shares: Vec<_> = shares.into_iter().collect();
+        Self::combine_bytes(shares)
+    }
+
+    /// Combine exactly `share_count` byte shares from an asynchronous stream.
+    ///
+    /// Returns [`Error::NotEnoughShares`] if the stream ends before yielding
+    /// `share_count` shares. Items after `share_count` are left in the stream.
+    #[cfg(feature = "stream")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+    pub async fn combine_bytes_stream(
+        share_count: usize,
+        shares: impl futures_core::Stream<Item = Vec<u8>>,
+    ) -> VsssResult<Vec<u8>> {
+        if share_count < 2 {
+            return Err(Error::SharingMinThreshold);
+        }
+        let shares = collect_stream_exact(share_count, shares, Error::NotEnoughShares).await?;
+        Self::combine_bytes(shares)
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -730,6 +782,18 @@ impl Gf256 {
     /// Alias for [`Gf256::combine_bytes`].
     pub fn combine_array<B: AsRef<[Vec<u8>]>>(shares: B) -> VsssResult<Vec<u8>> {
         Self::combine_bytes(shares)
+    }
+
+    /// Combine exactly `share_count` byte shares from an asynchronous stream.
+    ///
+    /// This is an alias for [`Gf256::combine_bytes_stream`].
+    #[cfg(feature = "stream")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+    pub async fn combine_array_stream(
+        share_count: usize,
+        shares: impl futures_core::Stream<Item = Vec<u8>>,
+    ) -> VsssResult<Vec<u8>> {
+        Self::combine_bytes_stream(share_count, shares).await
     }
 
     #[cfg(any(feature = "alloc", feature = "std"))]
@@ -1081,6 +1145,40 @@ mod tests {
         let res = Gf256::combine_array(&[shares[4].clone(), shares[1].clone(), shares[3].clone()]);
         let secret2 = res.unwrap();
         assert_eq!(secret2, secret);
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn split_and_combine_byte_streams() {
+        use crate::tests::utils::{TestStream, block_on};
+
+        let mut rng = ChaCha8Rng::from_seed([58u8; 32]);
+        let secret = b"streamed secret";
+        let ids = (1u8..=5).map(|id| IdentifierGf256(Gf256(id)));
+        let shares = block_on(Gf256::split_bytes_with_participant_ids_stream(
+            3,
+            5,
+            secret,
+            &mut rng,
+            TestStream::new(ids),
+        ))
+        .unwrap();
+
+        assert_eq!(
+            Gf256::combine_bytes_iter(shares[..3].iter().cloned()).unwrap(),
+            secret
+        );
+        let stream = TestStream::new(shares[..3].iter().cloned());
+        assert_eq!(
+            block_on(Gf256::combine_bytes_stream(3, stream)).unwrap(),
+            secret
+        );
+
+        let stream = TestStream::new(shares[..2].iter().cloned());
+        assert_eq!(
+            block_on(Gf256::combine_bytes_stream(3, stream)),
+            Err(Error::NotEnoughShares)
+        );
     }
 
     #[test]

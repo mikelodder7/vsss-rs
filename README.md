@@ -112,11 +112,14 @@ vsss-rs = { version = "6", default-features = false, features = ["alloc"] }
 | `curve-serde` | Yes | `curve`, `serde`, and curve serialization helpers |
 | `random-participant-ids` | Yes | Random participant identifier generation with SHAKE |
 | `serde` | Yes, through `curve-serde` | Serialization support for enabled share element types |
+| `stream` | No | Async participant-identifier split and exact-count share combine APIs; implies `alloc` |
 | `zeroize` | Yes | Zeroize integration for supported share element types |
 | `legacy-curve-tests` | No | Compatibility-only test coverage for older curve combinations |
 
 Add `random-participant-ids` only if you need random participant identifier generation, `serde` only if you need
 serialization for GF types, and `curve`/`curve-serde` only if you need prime-field or group-backed curve APIs.
+Enable `stream` when participant identifiers or shares arrive asynchronously. Stream combine methods take an explicit
+share count so they do not wait for a long-lived stream to terminate.
 
 GF(256)-only byte sharing:
 

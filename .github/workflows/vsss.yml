@@ -69,6 +69,8 @@ jobs:
             args: --no-default-features --features alloc,curve
           - name: alloc-curve-serde
             args: --no-default-features --features alloc,curve-serde
+          - name: stream
+            args: --no-default-features --features stream
           - name: all-features
             args: --all-features
     name: feature-matrix (${{ matrix.name }})

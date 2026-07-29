@@ -60,6 +60,74 @@ where
 
 impl<S, B: AsRef<[S]>> ReadableShareSet<S> for B where S: Share {}
 
+/// Combine an iterator of owned shares into a secret.
+///
+/// All shares yielded by the iterator are retained until interpolation completes.
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub fn combine_iter<S>(shares: impl IntoIterator<Item = S>) -> VsssResult<S::Value>
+where
+    S: Share,
+{
+    let shares: Vec<_> = shares.into_iter().collect();
+    shares.combine()
+}
+
+/// Combine an iterator of owned shares into a secret, writing into `out`.
+///
+/// All shares yielded by the iterator are retained until interpolation completes.
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub fn combine_iter_in_place<S>(
+    shares: impl IntoIterator<Item = S>,
+    out: &mut S::Value,
+) -> VsssResult<()>
+where
+    S: Share,
+{
+    let shares: Vec<_> = shares.into_iter().collect();
+    shares.combine_in_place(out)
+}
+
+/// Combine exactly `share_count` shares from an asynchronous stream into a secret.
+///
+/// Returns [`Error::NotEnoughShares`] if the stream ends before yielding
+/// `share_count` shares. Items after `share_count` are left in the stream.
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+pub async fn combine_stream<S>(
+    share_count: usize,
+    shares: impl futures_core::Stream<Item = S>,
+) -> VsssResult<S::Value>
+where
+    S: Share,
+{
+    if share_count < 2 {
+        return Err(Error::SharingMinThreshold);
+    }
+    let shares = collect_stream_exact(share_count, shares, Error::NotEnoughShares).await?;
+    shares.combine()
+}
+
+/// Combine exactly `share_count` shares from an asynchronous stream, writing into `out`.
+///
+/// Returns [`Error::NotEnoughShares`] if the stream ends before yielding
+/// `share_count` shares. Items after `share_count` are left in the stream.
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+pub async fn combine_stream_in_place<S>(
+    share_count: usize,
+    shares: impl futures_core::Stream<Item = S>,
+    out: &mut S::Value,
+) -> VsssResult<()>
+where
+    S: Share,
+{
+    if share_count < 2 {
+        return Err(Error::SharingMinThreshold);
+    }
+    let shares = collect_stream_exact(share_count, shares, Error::NotEnoughShares).await?;
+    shares.combine_in_place(out)
+}
+
 fn interpolate_in_place<S>(shares: &[S], secret: &mut S::Value) -> VsssResult<()>
 where
     S: Share,
@@ -1703,6 +1771,46 @@ mod tests {
 
         let vec = <Vec<TestShare> as WriteableShareSet<TestShare>>::create(4);
         assert_eq!(vec.len(), 4);
+    }
+
+    #[test]
+    fn combine_iterator_entrypoints_work() {
+        let shares = [share(1, 45), share(2, 47)];
+        let expected = IdentifierPrimeField(Scalar::from(43u64));
+
+        assert_eq!(super::combine_iter(shares), Ok(expected));
+
+        let mut out = IdentifierPrimeField::default();
+        super::combine_iter_in_place(shares, &mut out).unwrap();
+        assert_eq!(out, expected);
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn combine_stream_entrypoints_are_exact_and_report_errors() {
+        use crate::tests::utils::{TestStream, block_on};
+
+        let shares = [share(1, 45), share(2, 47), share(3, 49)];
+        let expected = IdentifierPrimeField(Scalar::from(43u64));
+        let stream = TestStream::new(shares.into_iter());
+        assert_eq!(block_on(super::combine_stream(2, stream)), Ok(expected));
+
+        let stream = TestStream::new(shares.into_iter());
+        let mut out = IdentifierPrimeField::default();
+        block_on(super::combine_stream_in_place(2, stream, &mut out)).unwrap();
+        assert_eq!(out, expected);
+
+        let stream = TestStream::new(shares[..2].iter().cloned());
+        assert_eq!(
+            block_on(super::combine_stream(3, stream)),
+            Err(Error::NotEnoughShares)
+        );
+
+        let stream = TestStream::new([share(1, 45), share(1, 47)].into_iter());
+        assert_eq!(
+            block_on(super::combine_stream(2, stream)),
+            Err(Error::SharingDuplicateIdentifier)
+        );
     }
 
     #[test]

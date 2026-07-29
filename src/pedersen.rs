@@ -32,6 +32,7 @@ pub struct PedersenOptions<'a, S: Share, V: ShareVerifier<S>> {
 
 /// A secret sharing scheme that uses pedersen commitments as verifiers
 /// (see [PedersenVSS](https://www.cs.cornell.edu/courses/cs754/2001fa/129.PDF))
+#[allow(async_fn_in_trait)]
 pub trait Pedersen<S, V>: Shamir<S>
 where
     S: Share,
@@ -173,6 +174,31 @@ where
             feldman_verifier_set,
             pedersen_verifier_set,
         ))
+    }
+
+    /// Create shares from a secret, an asynchronous stream of participant identifiers,
+    /// and options.
+    ///
+    /// Exactly `limit` identifiers are consumed. Returns
+    /// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+    #[cfg(feature = "stream")]
+    async fn split_secret_with_participant_ids_stream_and_blind_verifiers(
+        threshold: usize,
+        limit: usize,
+        options: &PedersenOptions<'_, S, V>,
+        rng: impl CryptoRng,
+        participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+    ) -> VsssResult<Self::PedersenResult> {
+        check_params(threshold, limit)?;
+        let participant_ids =
+            collect_stream_exact(limit, participant_ids, Error::NotEnoughShareIdentifiers).await?;
+        Self::split_secret_with_participant_ids_iter_and_blind_verifiers(
+            threshold,
+            limit,
+            options,
+            rng,
+            participant_ids,
+        )
     }
 
     /// Create shares from a secret, participant identifiers, and options.
@@ -645,6 +671,33 @@ where
     )
 }
 
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+/// Create shares from a secret with an asynchronous stream of participant identifiers.
+///
+/// Exactly `limit` identifiers are consumed. Returns
+/// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+pub async fn split_secret_with_participant_ids_stream<S, V>(
+    threshold: usize,
+    limit: usize,
+    options: &PedersenOptions<'_, S, V>,
+    rng: impl CryptoRng,
+    participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+) -> VsssResult<StdPedersenResult<S, V>>
+where
+    S: Share,
+    V: ShareVerifier<S>,
+{
+    StdVsss::split_secret_with_participant_ids_stream_and_blind_verifiers(
+        threshold,
+        limit,
+        options,
+        rng,
+        participant_ids,
+    )
+    .await
+}
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret with participant identifiers.
 pub fn split_secret_with_ids<S, V>(
@@ -938,5 +991,35 @@ mod tests {
             )
             .unwrap_err();
         assert_eq!(err, Error::NotEnoughShareIdentifiers);
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn pedersen_stream_entrypoint_verifies_and_combines() {
+        use crate::tests::utils::{TestStream, block_on};
+
+        let mut rng = StdRng::from_seed([0x44u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(55u64));
+        let options = test_options(&secret);
+        let ids = [5u64, 6, 7].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let result = block_on(super::split_secret_with_participant_ids_stream::<
+            TestShare,
+            TestVerifier,
+        >(
+            2, 3, &options, &mut rng, TestStream::new(ids.into_iter())
+        ))
+        .unwrap();
+
+        assert_eq!(result.secret_shares().combine(), Ok(secret));
+        for (share, blinder_share) in result
+            .secret_shares()
+            .iter()
+            .zip(result.blinder_shares().iter())
+        {
+            result
+                .pedersen_verifier_set()
+                .verify_share_and_blinder(share, blinder_share)
+                .unwrap();
+        }
     }
 }

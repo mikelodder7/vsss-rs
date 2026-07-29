@@ -3,6 +3,7 @@
 ## 6.0.0
 
 - Added iterator-based APIs alongside the existing slice-based methods for Shamir, Feldman, Pedersen, and share-set workflows.
+- Added an optional `stream` feature for asynchronous participant-identifier splitting and exact-count share combination.
 - Added shorter API aliases for common split, combine, polynomial, verifier, and share-set operations while keeping the older method names available.
 - Added in-place helpers for polynomial evaluation and share combining to support lower-allocation no-std use cases.
 - Added `BoxedUint` share element support when `bigint` and `alloc`/`std` are enabled.

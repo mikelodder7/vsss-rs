@@ -10,6 +10,7 @@ use hybrid_array::{Array, ArraySize};
 use rand_core::CryptoRng;
 
 /// A Polynomial that can create secret shares
+#[allow(async_fn_in_trait)]
 pub trait Shamir<S>
 where
     S: Share,
@@ -120,6 +121,24 @@ where
         create_shares_with_participant_ids_iter(&polynomial, threshold, limit, participant_ids)
     }
 
+    /// Create shares from a secret and an asynchronous stream of participant identifiers.
+    ///
+    /// Exactly `limit` identifiers are consumed. Returns
+    /// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+    #[cfg(feature = "stream")]
+    async fn split_secret_with_participant_ids_stream(
+        threshold: usize,
+        limit: usize,
+        secret: &S::Value,
+        rng: impl CryptoRng,
+        participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+    ) -> VsssResult<Self::ShareSet> {
+        check_params(threshold, limit)?;
+        let participant_ids =
+            collect_stream_exact(limit, participant_ids, Error::NotEnoughShareIdentifiers).await?;
+        Self::split_secret_with_participant_ids_iter(threshold, limit, secret, rng, participant_ids)
+    }
+
     /// Create shares from a secret and participant identifiers.
     fn split_secret_with_ids(
         threshold: usize,
@@ -143,6 +162,32 @@ where
         let mut polynomial = Self::InnerPolynomial::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
         create_shares_from_polynomial_in_place(&polynomial, threshold, participant_ids, out)
+    }
+
+    /// Create shares from a secret and an asynchronous stream of participant identifiers,
+    /// writing into `out`.
+    ///
+    /// Exactly `out.len()` identifiers are consumed. Returns
+    /// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+    #[cfg(feature = "stream")]
+    async fn split_secret_with_participant_ids_stream_in_place(
+        threshold: usize,
+        secret: &S::Value,
+        rng: impl CryptoRng,
+        participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+        out: &mut [S],
+    ) -> VsssResult<()> {
+        check_params(threshold, out.len())?;
+        let participant_ids =
+            collect_stream_exact(out.len(), participant_ids, Error::NotEnoughShareIdentifiers)
+                .await?;
+        Self::split_secret_with_participant_ids_iter_in_place(
+            threshold,
+            secret,
+            rng,
+            participant_ids,
+            out,
+        )
     }
 
     /// Create shares from a secret and participant identifiers, writing into `out`.
@@ -206,6 +251,30 @@ where
     create_shares_with_participant_ids_iter(polynomial, threshold, limit, participant_ids)
 }
 
+/// Create shares from an existing polynomial and an asynchronous stream of participant
+/// identifiers.
+///
+/// Exactly `limit` identifiers are consumed. Returns
+/// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+pub async fn create_shares_from_polynomial_stream<P, S, SS>(
+    polynomial: &P,
+    threshold: usize,
+    limit: usize,
+    participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+) -> VsssResult<SS>
+where
+    P: Polynomial<S>,
+    S: Share,
+    SS: WriteableShareSet<S>,
+{
+    validate_polynomial_params(polynomial, threshold, limit)?;
+    let participant_ids =
+        collect_stream_exact(limit, participant_ids, Error::NotEnoughShareIdentifiers).await?;
+    create_shares_from_polynomial(polynomial, threshold, limit, participant_ids)
+}
+
 /// Create shares from an existing polynomial and participant identifiers.
 pub fn shares_from_polynomial<P, S, SS>(
     polynomial: &P,
@@ -244,6 +313,29 @@ where
         *s = S::with_identifier_and_value(id, value);
     }
     Ok(())
+}
+
+/// Create shares from an existing polynomial and an asynchronous stream of participant
+/// identifiers, writing into `out`.
+///
+/// Exactly `out.len()` identifiers are consumed. Returns
+/// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+pub async fn create_shares_from_polynomial_stream_in_place<P, S>(
+    polynomial: &P,
+    threshold: usize,
+    participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+    out: &mut [S],
+) -> VsssResult<()>
+where
+    P: Polynomial<S>,
+    S: Share,
+{
+    validate_polynomial_params(polynomial, threshold, out.len())?;
+    let participant_ids =
+        collect_stream_exact(out.len(), participant_ids, Error::NotEnoughShareIdentifiers).await?;
+    create_shares_from_polynomial_in_place(polynomial, threshold, participant_ids, out)
 }
 
 /// Create shares from an existing polynomial and participant identifiers, writing into `out`.
@@ -482,6 +574,29 @@ pub fn split_secret_with_participant_ids_iter<S: Share>(
     )
 }
 
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+/// Create shares from a secret and an asynchronous stream of participant identifiers.
+///
+/// Exactly `limit` identifiers are consumed. Returns
+/// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+pub async fn split_secret_with_participant_ids_stream<S: Share>(
+    threshold: usize,
+    limit: usize,
+    secret: &S::Value,
+    rng: impl CryptoRng,
+    participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+) -> VsssResult<Vec<S>> {
+    StdVsssShamir::split_secret_with_participant_ids_stream(
+        threshold,
+        limit,
+        secret,
+        rng,
+        participant_ids,
+    )
+    .await
+}
+
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret and participant identifiers.
 pub fn split_secret_with_ids<S: Share>(
@@ -512,6 +627,29 @@ pub fn split_secret_with_participant_ids_iter_in_place<S: Share>(
     )
 }
 
+#[cfg(feature = "stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "stream")))]
+/// Create shares from a secret and an asynchronous stream of participant identifiers,
+/// writing into `out`.
+///
+/// Exactly `out.len()` identifiers are consumed. Returns
+/// [`Error::NotEnoughShareIdentifiers`] if the stream ends early.
+pub async fn split_secret_with_participant_ids_stream_in_place<S: Share>(
+    threshold: usize,
+    secret: &S::Value,
+    rng: impl CryptoRng,
+    participant_ids: impl futures_core::Stream<Item = S::Identifier>,
+    out: &mut [S],
+) -> VsssResult<()> {
+    StdVsssShamir::split_secret_with_participant_ids_stream_in_place(
+        threshold,
+        secret,
+        rng,
+        participant_ids,
+        out,
+    )
+    .await
+}
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret and participant identifiers, writing into `out`.
 pub fn split_secret_with_ids_in_place<S: Share>(
@@ -750,5 +888,71 @@ mod tests {
         shares_from_polynomial_with_generators_in_place(&polynomial, 2, &[generator], &mut shares)
             .unwrap();
         assert_eq!(shares[0], share(9, 62));
+    }
+
+    #[cfg(feature = "stream")]
+    #[test]
+    fn shamir_stream_entrypoints_work_and_report_short_streams() {
+        use crate::tests::utils::{TestStream, block_on};
+
+        let mut rng = StdRng::from_seed([0x54u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(44u64));
+        let ids = [10u64, 11, 12].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let shares = block_on(
+            super::split_secret_with_participant_ids_stream::<TestShare>(
+                2,
+                3,
+                &secret,
+                &mut rng,
+                TestStream::new(ids.into_iter()),
+            ),
+        )
+        .unwrap();
+        assert_eq!(shares[0].identifier.0, Scalar::from(10u64));
+        assert_eq!(shares.combine(), Ok(secret));
+
+        let ids = [13u64, 14, 15].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let mut out = [
+            TestShare::default(),
+            TestShare::default(),
+            TestShare::default(),
+        ];
+        block_on(super::split_secret_with_participant_ids_stream_in_place::<
+            TestShare,
+        >(
+            2,
+            &secret,
+            &mut rng,
+            TestStream::new(ids.into_iter()),
+            &mut out,
+        ))
+        .unwrap();
+        assert_eq!(out[0].identifier.0, Scalar::from(13u64));
+        assert_eq!(out.combine(), Ok(secret));
+
+        let short_ids = [IdentifierPrimeField(Scalar::from(1u64))];
+        assert_eq!(
+            block_on(
+                super::split_secret_with_participant_ids_stream::<TestShare>(
+                    2,
+                    3,
+                    &secret,
+                    &mut rng,
+                    TestStream::new(short_ids.into_iter()),
+                )
+            ),
+            Err(Error::NotEnoughShareIdentifiers)
+        );
+
+        let polynomial = [share(0, 44), share(2, 0)];
+        let ids = [1u64, 2, 3].map(|id| IdentifierPrimeField(Scalar::from(id)));
+        let generated: Vec<TestShare> = block_on(super::create_shares_from_polynomial_stream(
+            &polynomial,
+            2,
+            3,
+            TestStream::new(ids.into_iter()),
+        ))
+        .unwrap();
+        assert_eq!(generated[0], share(1, 46));
     }
 }

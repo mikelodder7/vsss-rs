@@ -3,6 +3,28 @@
     SPDX-License-Identifier: Apache-2.0
 */
 
+#[cfg(feature = "stream")]
+use crate::{Error, Vec, VsssResult};
+#[cfg(feature = "stream")]
+use futures_core::Stream;
+
+#[cfg(feature = "stream")]
+pub(crate) async fn collect_stream_exact<T>(
+    count: usize,
+    stream: impl Stream<Item = T>,
+    exhausted: Error,
+) -> VsssResult<Vec<T>> {
+    let mut stream = core::pin::pin!(stream);
+    let mut items = Vec::with_capacity(count);
+    for _ in 0..count {
+        let item = core::future::poll_fn(|cx| stream.as_mut().poll_next(cx))
+            .await
+            .ok_or(exhausted)?;
+        items.push(item);
+    }
+    Ok(items)
+}
+
 /// Uniform non-zero sample in `1..=modulus` from a 32-bit RNG word.
 ///
 /// Used by small-field share-identifier samplers (GF(256) with

@@ -35,6 +35,8 @@ pub enum Error {
     InvalidShareElement,
     /// Not enough share identifiers available when creating shares
     NotEnoughShareIdentifiers,
+    /// Not enough shares were available when combining from a stream
+    NotEnoughShares,
 }
 
 impl Display for Error {
@@ -65,6 +67,7 @@ impl Display for Error {
             Error::NotImplemented => write!(f, "Not implemented"),
             Error::InvalidShareElement => write!(f, "Invalid share element"),
             Error::NotEnoughShareIdentifiers => write!(f, "Not enough share identifiers available"),
+            Error::NotEnoughShares => write!(f, "Not enough shares available"),
         }
     }
 }
@@ -123,6 +126,7 @@ mod tests {
                 Error::NotEnoughShareIdentifiers,
                 "Not enough share identifiers available",
             ),
+            (Error::NotEnoughShares, "Not enough shares available"),
         ];
 
         for (error, message) in cases {
