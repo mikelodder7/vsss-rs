@@ -1,6 +1,6 @@
 # Changelog
 
-## 6.0.0
+## 6.0.0 - 2026-07-30
 
 - Added iterator-based APIs alongside the existing slice-based methods for Shamir, Feldman, Pedersen, and share-set workflows.
 - Added an optional `stream` feature for asynchronous participant-identifier splitting and exact-count share combination.

@@ -5,387 +5,204 @@
 [![Coverage][coverage-image]][coverage-link]
 ![Apache 2.0][license-image]
 
-This crate provides various cryptography verifiable secret sharing schemes when the rust standard library is available.
+`vsss-rs` implements Shamir secret sharing and the Feldman and Pedersen
+verifiable secret sharing schemes. It supports `no_std`, fixed-size storage,
+allocator-backed storage, prime fields, groups, and byte-oriented GF(16) and
+GF(256) sharing.
 
-* This implementation does not require the Rust standard library.
-* This library is production ready and is in production use.
-* Thank you to LIT-Protocol and Turnkey for funding security audits of this library.
-* All operations are constant time unless explicitly noted.
+The library is production-ready and in production use. Thank you to
+LIT Protocol and Turnkey for funding security audits of this library.
 
-Gf256 is provided as a field for secret sharing schemes with just byte sequences. All operations are constant time.
-Most implementations comparatively are not constant time due to: runtime is dependent on the value of the secret such as
-using if statements and looping with break statements, or using lookup tables that allow an attacker to monitor code or
-data access patterns. While great for performance, they are not constant time which is desirable for cryptographic operations.
-This implementation has been cross-checked for compatibility with other libraries and also implements the necessary
-traits to function with this library.
+## Schemes
 
-### Numbering
+| Scheme | Verification | Split result |
+| --- | --- | --- |
+| Shamir | None | Secret shares |
+| Feldman | Public commitments | Secret shares and Feldman verifiers |
+| Pedersen | Hiding commitments | Secret shares, blinder shares, blinder, and verifier sets |
 
-The default share numbering method uses incrementing numbers starting at 1. The following numbering methods are available:
+Combining shares is identical across the three schemes and is provided by
+`ReadableShareSet::combine`.
 
-- SequentialParticipantNumberGenerator: index for the share identifiers starts at a specified number and incrementing by a specified value until a limit is reached. The default is starting at 1 and incrementing by 1 until 255 is reached
-- RandomParticipantNumberGenerator: index for the share identifiers is random. The random number generator is based on the desired index, a domain separator which are hashed using [Shake256](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-208.pdf).
-- ListParticipantNumberGenerator: index for the share identifiers is based on a list. The provided list must be at least as long as the number of shares to be generated. This is useful when the share identifiers are known ahead of time like in the case of [proactive secret sharing](https://eprint.iacr.org/2017/719).
-- ListAndRandomParticipantNumberGenerator: a combination of the above two methods. The list is used first and then random numbers are used after the list is exhausted.
-- ListAndSequentialParticipantNumberGenerator: a combination of the above two methods. The list is used first and then sequential numbers are used after the list is exhausted.
+## Quick start
 
-Use `split_secret_with_participant_generators` to choose one or more [`ParticipantIdGenerator`] values, or
-`split_secret_with_participant_generators_iter` when the generators are produced by an iterator. Use
-`split_secret_with_ids` or `split_secret_with_participant_ids_iter` when participant identifiers are already
-available. The `split_secret` method uses sequential participant identifiers starting at 1 and incrementing by 1.
-
-### Shares and Identifiers
-
-Share identifiers can be more than just integer values by implementing the `ShareIdentifier` trait. The `ShareIdentifier` trait is a simple trait that provides the necessary
-methods for splitting and combining shares. The `ShareIdentifier` trait is implemented for 
-primitive integer values by default. Other values can be used by implementing the trait for the desired type 
-but keep in might endianness. By default, primitive types represented as big-endian byte sequences. As explained
-earlier, `Share` is implemented for [u8; N], GenericArray<u8, N>, Uint<LIMBS>, Vec<u8>, and ShareIdentifier for all unsigned integer types.
-Tuples such as {primitive integer type, [u8; N]} are also supported.
-Both traits can be implemented however consumers need them to be.
-
-The following tuples also implement `Share`:
-
-- ({primitive integer type}, \[u8; N\])
-- ({primitive integer type}, GenericArray<u8, N>) 
-- ({primitive integer type}, Vec<u8>) when used with the `std` or `alloc` feature
-
-If the share identifier is `u8` then the additional implementations exist.
-
-- \[u8; N+1\] where N is the share size and the first byte is the identifier
-- GenericArray<u8, N+1> where N is the share size and the first byte is the identifier
-- Vec<u8> where the first byte is the identifier
-
-### Share elements (bigint feature)
-
-With the `bigint` feature (enabled by default), the crate supports share identifiers and values based on **crypto-bigint 0.7**. Some types use `crypto-bigint` directly, while curve-compatible types use the matching `crypto-bigint` API re-exported by `elliptic-curve`.
-
-**Uint-based identifiers**
-
-- **`element::uint::IdentifierUint<LIMBS>`** — wraps the direct `crypto-bigint` 0.7 `Uint`; interoperates with prime-field and group elements via word conversion.
-- **`IdentifierBoxedUint<BITS>`** / **`ValueBoxedUint<BITS>`** — wraps `crypto-bigint` 0.7 `BoxedUint` when `bigint` and `alloc`/`std` are enabled; useful when the bit precision should be carried by the type without stack-allocating a const-generic `Uint`.
-
-**Residue-based identifiers (modular arithmetic)**
-
-- **`IdentifierResidue<MOD, LIMBS>`** / **`ValueResidue<MOD, LIMBS>`** — constant modulus via `elliptic_curve::bigint::Residue` and `ResidueParams` (crypto-bigint 0.7). `MOD` is a type implementing `ResidueParams<LIMBS>`.
-- **`IdentifierConstMontyResidue<MOD, LIMBS>`** / **`ValueConstMontyResidue<MOD, LIMBS>`** — constant modulus in Montgomery form (crypto-bigint 0.7 `ConstMontyForm`). Define the modulus with `crypto_bigint::impl_modulus!` and use the type as share identifier or value; implements `ShareElement` and `ShareIdentifier`.
-- **`IdentifierMontyResidue<LIMBS>`** / **`ValueMontyResidue<LIMBS>`** — runtime modulus in Montgomery form (crypto-bigint 0.7 `FixedMontyForm`). The modulus is given by `FixedMontyParams<LIMBS>`. Create values with `zero_with_params`, `one_with_params`, `new`, or `random_with_params`; this type does not implement `ShareElement` because zero/one require the runtime params.
-
-Example with a **constant modulus** (ConstMontyForm):
-
-```rust
-use crypto_bigint::{impl_modulus, U256};
-use vsss_rs::IdentifierConstMontyResidue;
-
-impl_modulus!(MyModulus, U256, "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");
-
-type MyResidue = IdentifierConstMontyResidue<MyModulus, 4>;
-```
-
-Example with a **runtime modulus** (FixedMontyForm):
-
-```rust
-use crypto_bigint::{modular::FixedMontyParams, Odd, U256};
-use vsss_rs::IdentifierMontyResidue;
-
-let modulus = Odd::new(U256::from(97u64)).expect("odd modulus");
-let params = FixedMontyParams::<4>::new(modulus);
-let zero = IdentifierMontyResidue::<4>::zero_with_params(params);
-let one = IdentifierMontyResidue::<4>::one_with_params(params);
-```
-
-### Minimal features
-
-For GF(16)/GF(256)-only use, disable default features and enable only the allocation mode you need:
+Add the crate and an RNG:
 
 ```toml
-vsss-rs = { version = "6", default-features = false, features = ["alloc"] }
+[dependencies]
+rand = "0.10"
+vsss-rs = "6"
 ```
 
-| Feature | Default | Adds |
-| --- | --- | --- |
-| `alloc` | Yes, through `std` | `Vec`/`Box` backed APIs for no-std alloc environments |
-| `std` | Yes | Standard-library support for dependencies that can use it |
-| `bigint` | Yes | `crypto-bigint`, `num-bigint`, and BigUint/Uint share element types |
-| `primitive` | Yes | Primitive integer share identifiers through `num-traits` |
-| `curve` | Yes, through `curve-serde` | Prime-field and group-backed share element APIs |
-| `curve-serde` | Yes | `curve`, `serde`, and curve serialization helpers |
-| `random-participant-ids` | Yes | Random participant identifier generation with SHAKE |
-| `serde` | Yes, through `curve-serde` | Serialization support for enabled share element types |
-| `stream` | No | Async participant-identifier split and exact-count share combine APIs; implies `alloc` |
-| `zeroize` | Yes | Zeroize integration for supported share element types |
-| `legacy-curve-tests` | No | Compatibility-only test coverage for older curve combinations |
-
-Add `random-participant-ids` only if you need random participant identifier generation, `serde` only if you need
-serialization for GF types, and `curve`/`curve-serde` only if you need prime-field or group-backed curve APIs.
-Enable `stream` when participant identifiers or shares arrive asynchronously. Stream combine methods take an explicit
-share count so they do not wait for a long-lived stream to terminate.
-
-GF(256)-only byte sharing:
+Split and combine a byte string with GF(256):
 
 ```rust
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use vsss_rs::Gf256;
 
 fn main() -> Result<(), vsss_rs::Error> {
     let mut rng = StdRng::from_seed([7u8; 32]);
     let shares = Gf256::split_bytes(2, 3, b"secret", &mut rng)?;
     let recovered = Gf256::combine_bytes(&shares[..2])?;
+
     assert_eq!(recovered, b"secret");
     Ok(())
 }
 ```
 
-GF(16)-only byte sharing:
+Split and combine a prime-field element with Shamir:
 
 ```rust
-use rand::{rngs::StdRng, SeedableRng};
-use vsss_rs::Gf16;
+use elliptic_curve::{Generate, ff::PrimeField};
+use p256::{NonZeroScalar, Scalar, SecretKey};
+use rand::{SeedableRng, rngs::StdRng};
+use vsss_rs::{IdentifierPrimeField, PrimeFieldShare, ReadableShareSet, shamir};
 
 fn main() -> Result<(), vsss_rs::Error> {
-    let mut rng = StdRng::from_seed([9u8; 32]);
-    let shares = Gf16::split_bytes(2, 3, b"secret", &mut rng)?;
-    let recovered = Gf16::combine_bytes(&shares[..2])?;
-    assert_eq!(recovered, b"secret");
+    let mut rng = StdRng::from_seed([1u8; 32]);
+    let key = SecretKey::generate_from_rng(&mut rng);
+    let secret = IdentifierPrimeField(*key.to_nonzero_scalar().as_ref());
+    let shares =
+        shamir::split_secret::<PrimeFieldShare<Scalar>>(2, 3, &secret, &mut rng)?;
+    let recovered = shares.combine()?;
+    let recovered = NonZeroScalar::from_repr(recovered.0.to_repr()).unwrap();
+
+    assert_eq!(SecretKey::from(recovered).to_bytes(), key.to_bytes());
     Ok(())
 }
 ```
 
-### Polynomials
-`Polynomial` holds the coefficients of the polynomial and provides methods to evaluate the polynomial at a given point.
-Polymomials are only used when splitting secrets.
+The curve example additionally needs:
 
-### Share Sets
-A share set is a collection of shares that belong to the same secret. The share set provides methods to combine into
-the original secret or another group. These are offered as `ReadableShareSet` and `WriteableShareSet`. In no-std mode,
-combines require a `ShareSetCombiner`.
-
-`ShareSetCombiner` is the data store used during a secret reconstruct operation.
-
-### Secret Sharing Schemes
-
-Secret sharing schemes are implemented as traits. The traits provide methods to split secrets and if applicable return the 
-verifier set. `Shamir` only splits secrets. `Feldman` returns a verifier set. `Pedersen` returns multiple verifier sets:
-one for itself and one for `Feldman`.
-
-`FeldmanVerifierSet` and `PedersenVerifierSet` are the verifier sets returned by the schemes. They provide methods to
-validate the shares. 
-
-Since `Pedersen` returns a large amount of information after a split the `PedersenResult` trait is used to encapsulate
-the data. `StdPedersenResult` is provided when an allocator is available by default.
-
-### Other noteworthy items
-
-When operating in standard mode, no traits should be necessary to be implemented and there are default functions
-to accomplish what you want just like in previous versions.
-
-`StdVsss` provides the majority of methods needed to accomplish splitting and reconstructing secrets. The
-`StdShamir<S>`, `StdFeldman<S, V>`, `StdPedersen<S, V>`, `PrimeFieldShare<F>`, and `GroupShare<G>` aliases can
-reduce the type noise for common standard, field-backed, and group-backed shares. The longer participant and verifier
-method names remain available, but shorter aliases such as `split_secret_with_ids`, `shares_from_polynomial`,
-`evaluate_at`, and `verify_blinded_share` are available for common call paths.
-
-If you need custom structs in no-std mode the `vsss_arr_impl` macro will create the necessary implementations for you.
-
-## [Documentation](https://docs.rs/vsss-rs)
-
-Verifiable Secret Sharing Schemes are using to split secrets into
-multiple shares and distribute them among different entities,
-with the ability to verify if the shares are correct and belong
-to a specific set. This crate includes Shamir's secret sharing
-scheme which does not support verification but is more of a
-building block for the other schemes.
-
-This crate supports Feldman and Pedersen verifiable secret sharing
-schemes.
-
-Feldman and Pedersen are similar in many ways. It's hard to describe when to use
-one over the other. Indeed, both are used in [distributed key generation](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.134.6445&rep=rep1&type=pdf).
-
-Feldman reveals the public value of the verifier whereas Pedersen's hides it.
-
-Feldman and Pedersen are different from Shamir when splitting the secret.
-Combining shares back into the original secret is identical across all methods
-and is available for each scheme for convenience.
-
-This crate is no-std compliant and uses const generics to specify sizes.
-
-Shares are represented as byte arrays by default but can be changed by implementing the provided traits.
-When specifying share sizes, use the field size in bytes + 1 for the identifier.
-Shares can represent finite fields or groups
-depending on the use case. The first byte is reserved for the share identifier (x-coordinate)
-and everything else is the actual value of the share (y-coordinate).
-
-## Default methods
-
-The default methods for splitting and combining secrets are:
-
-- shamir::split_secret
-- feldman::split_secret
-- pedersen::split_secret
-- `ReadableShareSet::combine`
-- `Gf16::split_bytes`, `Gf16::combine_bytes`
-- `Gf256::split_bytes`, `Gf256::combine_bytes`
-
-The older `Gf16::split_array`, `Gf16::combine_array`, `Gf256::split_array`, and `Gf256::combine_array` names are
-still available as aliases.
-
-### P-256
-
-To split a p256 secret using Shamir
-
-```rust
-use vsss_rs::{*, shamir};
-use elliptic_curve::ff::PrimeField;
-use p256::{NonZeroScalar, Scalar, SecretKey};
-
-type P256Share = PrimeFieldShare<Scalar>;
-
-let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let sk = SecretKey::random(&mut osrng);
-let nzs = sk.to_nonzero_scalar();
-let secret = IdentifierPrimeField(*nzs.as_ref());
-let res = shamir::split_secret::<P256Share>(2, 3, &secret, &mut osrng);
-assert!(res.is_ok());
-let shares = res.unwrap();
-let res = shares.combine();
-assert!(res.is_ok());
-let scalar = res.unwrap();
-let nzs_dup =  NonZeroScalar::from_repr(scalar.0.to_repr()).unwrap();
-let sk_dup = SecretKey::from(nzs_dup);
-assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
+```toml
+[dependencies]
+elliptic-curve = "0.14"
+p256 = { version = "0.14", features = ["arithmetic"] }
 ```
 
-Or using the scheme type directly
+See the [crate documentation][docs-link] for Feldman, Pedersen, K256,
+BLS12-381, Curve25519, Ed25519, Ed448, and X25519 examples.
 
-```rust
-use elliptic_curve::ff::Field;
-use p256::Scalar;
-use vsss_rs::*;
+## Shares and identifiers
 
-let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let secret = IdentifierPrimeField(Scalar::random(&mut osrng));
-let res = StdVsss::<PrimeFieldShare<Scalar>, ValueGroup<p256::ProjectivePoint>>::split_secret(
-    2,
-    3,
-    &secret,
-    &mut osrng,
-);
-assert!(res.is_ok());
-let shares = res.unwrap();
-let res = shares.combine();
-assert!(res.is_ok());
-assert_eq!(secret, res.unwrap());
+The `Share` trait separates a share into an identifier and a value. The crate
+provides:
+
+- `(Identifier, Value)` for tuple-based shares.
+- `DefaultShare<Identifier, Value>` for shares with named fields.
+- `PrimeFieldShare<F>` for field-valued shares.
+- `GroupShare<G>` for group-valued shares.
+- `Gf16::split_bytes` and `Gf256::split_bytes` for byte strings.
+
+Identifiers implement `ShareIdentifier`; values implement `ShareElement`.
+Custom field or group representations can be integrated by implementing these
+traits.
+
+Participant identifiers default to sequential nonzero values beginning at one.
+`ParticipantIdGenerator` supports:
+
+- `Sequential { start, increment, count }`
+- `List { list }`
+- `Random { seed, count }` with the `random-participant-ids` feature
+
+Use `split_secret_with_participant_generators` for generators,
+`split_secret_with_participant_ids_iter` for an iterator of identifiers, or
+`split_secret_with_participant_ids_stream` for an asynchronous stream.
+
+## Combining shares
+
+Collections implementing `ReadableShareSet` provide `combine` and
+`combine_in_place`. Allocator-backed callers can also use:
+
+- `combine_iter`
+- `combine_iter_in_place`
+- `combine_stream`
+- `combine_stream_in_place`
+
+Stream combination consumes exactly the requested number of shares and returns
+`Error::NotEnoughShares` if the stream ends early. The selected shares are
+retained until interpolation completes because every Lagrange coefficient
+depends on the complete identifier set.
+
+GF(16) and GF(256) provide equivalent `combine_bytes_iter` and
+`combine_bytes_stream` methods.
+
+## `no_std` and storage
+
+The crate is `#![no_std]`. Without an allocator, fixed arrays,
+`generic_array::GenericArray`, and `hybrid_array::Array` can hold polynomials,
+shares, and verifier sets. The `vsss_fixed_array_impl!` macro can define a
+complete fixed-size Shamir/Feldman/Pedersen implementation.
+
+Enable `alloc` for `Vec`-backed APIs in a `no_std` environment. The `std`
+feature implies `alloc`.
+
+For a minimal GF(16)/GF(256 build:
+
+```toml
+[dependencies]
+vsss-rs = { version = "6", default-features = false, features = ["alloc"] }
 ```
 
-### Secp256k1
+## Features
 
-To split a k256 secret using Shamir
+| Feature | Default | Adds |
+| --- | --- | --- |
+| `alloc` | Through `std` | `Vec`/`Box` APIs for allocator-enabled environments |
+| `std` | Yes | Standard-library support in dependencies |
+| `bigint` | Yes | `crypto-bigint`, `num-bigint`, and bigint share elements |
+| `primitive` | Yes | Primitive integer share elements |
+| `curve` | Through `curve-serde` | Prime-field and group-backed share elements |
+| `curve-serde` | Yes | `curve`, Serde, and curve serialization helpers |
+| `random-participant-ids` | Yes | SHAKE-based random participant identifiers |
+| `serde` | Through `curve-serde` | Serialization for supported types |
+| `stream` | No | Async identifier splitting and exact-count share combination; implies `alloc` |
+| `zeroize` | Yes | Zeroization for supported share elements |
+| `legacy-curve-tests` | No | Compatibility-only tests for older curve combinations |
 
-```rust
-use vsss_rs::{*, shamir};
-use elliptic_curve::ff::PrimeField;
-use k256::{NonZeroScalar, Scalar, ProjectivePoint, SecretKey};
+## Big integer share elements
 
-type K256Share = PrimeFieldShare<Scalar>;
+With `bigint`, the crate supports:
 
-let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let sk = SecretKey::random(&mut osrng);
-let secret = IdentifierPrimeField(*sk.to_nonzero_scalar());
-let res = shamir::split_secret::<K256Share>(2, 3, &secret, &mut osrng);
-assert!(res.is_ok());
-let shares = res.unwrap();
-let res = shares.combine();
-assert!(res.is_ok());
-let scalar = res.unwrap();
-let nzs_dup = NonZeroScalar::from_repr(scalar.0.to_repr()).unwrap();
-let sk_dup = SecretKey::from(nzs_dup);
-assert_eq!(sk_dup.to_bytes(), sk.to_bytes());
-```
-or to use feldman
-```rust
-use vsss_rs::{*, feldman};
-use bls12_381_plus::{Scalar, G1Projective};
-use elliptic_curve::ff::Field;
+- `IdentifierUint<LIMBS>` and `ValueUint<LIMBS>`
+- `IdentifierBoxedUint<BITS>` and `ValueBoxedUint<BITS>` with `alloc`
+- `IdentifierResidue<MOD, LIMBS>` and `ValueResidue<MOD, LIMBS>`
+- `IdentifierConstMontyResidue<MOD, LIMBS>` and
+  `ValueConstMontyResidue<MOD, LIMBS>`
+- Runtime-modulus `IdentifierMontyResidue<LIMBS>` and
+  `ValueMontyResidue<LIMBS>` helpers
 
-type BlsShare = PrimeFieldShare<Scalar>;
-type BlsVerifier = ValueGroup<G1Projective>;
+Runtime-modulus Montgomery values do not implement `ShareElement`, because
+their zero and one values require runtime parameters.
 
-let mut rng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let secret = IdentifierPrimeField(Scalar::random(&mut rng));
-let res = feldman::split_secret::<BlsShare, BlsVerifier>(2, 3, &secret, None, &mut rng);
-assert!(res.is_ok());
-let (shares, verifier) = res.unwrap();
-for s in &shares {
-    assert!(verifier.verify_share(s).is_ok());
-}
-let res = shares.combine();
-assert!(res.is_ok());
-let secret_1 = res.unwrap();
-assert_eq!(secret, secret_1);
-```
+## Security
 
-### Curve25519
+Share counts and identifiers are public inputs. Field and group operations used
+for secret material are designed to avoid secret-dependent control flow and
+table lookups. Applications remain responsible for authenticating transported
+shares and, when using Feldman or Pedersen, verifying shares before combining
+them.
 
-Curve25519-dalek 5.0.0 implements the native `ff` and `group` traits, so its scalar
-and group types can be used with Shamir, Feldman, and Pedersen.
-
-Here's an example of using Ed25519 and x25519
-
-```rust
-use curve25519_dalek::scalar::Scalar;
-use rand::{RngExt, SeedableRng};
-use ed25519_dalek::SigningKey;
-use vsss_rs::*;
-use x25519_dalek::StaticSecret;
-
-type Ed25519Share = DefaultShare<IdentifierPrimeField<Scalar>, IdentifierPrimeField<Scalar>>;
-
-let mut osrng = rand::rngs::StdRng::from_seed([1u8; 32]);
-let sc = Scalar::hash_from_bytes::<sha2::Sha512>(&osrng.random::<[u8; 32]>());
-let sk1 = StaticSecret::from(sc.to_bytes());
-let ske1 = SigningKey::from_bytes(&sc.to_bytes());
-let secret = IdentifierPrimeField(sc);
-let res = shamir::split_secret::<Ed25519Share>(2, 3, &secret, &mut osrng);
-assert!(res.is_ok());
-let shares = res.unwrap();
-let res = shares.combine();
-assert!(res.is_ok());
-let scalar = res.unwrap();
-assert_eq!(scalar.0, sc);
-let sk2 = StaticSecret::from(scalar.0.to_bytes());
-let ske2 = SigningKey::from_bytes(&scalar.0.to_bytes());
-assert_eq!(sk2.to_bytes(), sk1.to_bytes());
-assert_eq!(ske1.to_bytes(), ske2.to_bytes());
-```
-
-Either `RistrettoPoint` or `SubgroupPoint` may be used when using Feldman and Pedersen VSSS.
-
-# License
+Please follow the private reporting process in [SECURITY.md](SECURITY.md)
+rather than opening a public issue.
 
 ## License
 
-Licensed under either of
+Licensed under either:
 
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT License](LICENSE-MIT)
 
 at your option.
 
-# Contribution
+Unless explicitly stated otherwise, contributions intentionally submitted for
+inclusion are licensed under the same terms without additional conditions.
 
-Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be licensed as above, without any additional terms or
-conditions.
+## References
 
-# References
-
-1. [How to share a secret, Shamir, A. Nov, 1979](https://dl.acm.org/doi/pdf/10.1145/359168.359176)
-1. [A Practical Scheme for Non-interactive Verifiable Secret Sharing, Feldman, P. 1987](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf)
-1. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing, Pedersen, T. 1991](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
-
-[//]: # (badges)
+1. [How to Share a Secret — Adi Shamir, 1979](https://dl.acm.org/doi/10.1145/359168.359176)
+2. [A Practical Scheme for Non-interactive Verifiable Secret Sharing — Paul Feldman, 1987](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf)
+3. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing — Torben Pedersen, 1991](https://link.springer.com/chapter/10.1007/3-540-46766-1_9)
 
 [crate-image]: https://img.shields.io/crates/v/vsss-rs.svg
 [crate-link]: https://crates.io/crates/vsss-rs
