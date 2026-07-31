@@ -1,10 +1,10 @@
 use super::*;
 
-/// A trait for converting a type to and from a fixed size array.
+/// A trait for converting a type to and from a fixed-size array.
 pub trait FixedArray<const LIMBS: usize> {
-    /// Convert the type to a fixed size array.
+    /// Convert the type to a fixed-size array.
     fn to_fixed_array(&self) -> [u8; LIMBS];
-    /// Convert from a fixed size array to the type.
+    /// Convert from a fixed-size array to the type.
     fn from_fixed_array(array: &[u8; LIMBS]) -> Self;
 }
 

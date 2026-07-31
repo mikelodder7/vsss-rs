@@ -301,18 +301,18 @@ where
         Self(FixedMontyForm::<LIMBS>::one(&params))
     }
 
-    /// Create a residue representing `integer` mod the modulus in `params`.
+    /// Create a residue representing `integer` modulo the modulus in `params`.
     pub fn new(integer: &Uint<LIMBS>, params: FixedMontyParams<LIMBS>) -> Self {
         Self(FixedMontyForm::<LIMBS>::new(integer, &params))
     }
 
-    /// Generate a random residue mod the modulus in `params`.
+    /// Generate a random residue modulo the modulus in `params`.
     pub fn random_with_params(mut rng: impl CryptoRng, params: FixedMontyParams<LIMBS>) -> Self {
         let raw = Uint::<LIMBS>::random_mod_vartime(&mut rng, params.modulus().as_nz_ref());
         Self(FixedMontyForm::<LIMBS>::new(&raw, &params))
     }
 
-    /// Params (modulus etc.) for this residue.
+    /// Parameters (modulus, etc.) for this residue.
     pub fn params(&self) -> &FixedMontyParams<LIMBS> {
         self.0.params()
     }

@@ -1,6 +1,6 @@
-//! A polynomial structure for holding coefficients and evaluating
-//! Sizes greater than 32 should probably use Vec instead of fixed sizes
-//! due to stack allocations
+//! A polynomial type for storing coefficients and evaluating the polynomial.
+//! Sizes greater than 32 should probably use `Vec` instead of fixed-size storage
+//! because of stack allocations.
 
 use crate::*;
 use generic_array::{ArrayLength, GenericArray};
@@ -44,7 +44,7 @@ pub trait Polynomial<S: Share> {
     /// Evaluate the polynomial with the specified `x`, writing the result into `out`.
     fn evaluate_in_place(&self, x: &S::Identifier, threshold: usize, out: &mut S::Value) {
         let coefficients = self.coefficients();
-        // Compute the polynomial value using Horner's Method
+        // Compute the polynomial value using Horner's method.
         let degree = threshold - 1;
         // b_n = a_n
         let mut accumulator = coefficients[degree].identifier().clone();
@@ -59,17 +59,17 @@ pub trait Polynomial<S: Share> {
         *out.as_mut() += coefficients[0].value().as_ref();
     }
 
-    /// Evaluate the polynomial with the specified `x`
+    /// Evaluate the polynomial with the specified `x`.
     fn evaluate(&self, x: &S::Identifier, threshold: usize) -> S::Value {
         let mut out = S::Value::default();
         self.evaluate_in_place(x, threshold, &mut out);
         out
     }
 
-    /// Return the coefficients of the polynomial
+    /// Return the coefficients of the polynomial.
     fn coefficients(&self) -> &[S];
 
-    /// Return the mutable coefficients of the polynomial
+    /// Return the mutable coefficients of the polynomial.
     fn coefficients_mut(&mut self) -> &mut [S];
 }
 

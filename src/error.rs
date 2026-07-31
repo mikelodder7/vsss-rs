@@ -12,8 +12,8 @@ pub enum Error {
     SharingMinThreshold,
     /// Error when limit is less than threshold
     SharingLimitLessThanThreshold,
-    /// When dealing with fixed size arrays, the caller requested more shares than there is space
-    /// or more shares the field supports.
+    /// When dealing with fixed-size arrays, the caller requested more shares than the array can
+    /// hold or more shares than the field supports.
     InvalidSizeRequest,
     /// Invalid share identifier
     SharingInvalidIdentifier,
@@ -21,11 +21,11 @@ pub enum Error {
     SharingDuplicateIdentifier,
     /// The maximum number of shares to be made when splitting
     SharingMaxRequest,
-    /// An invalid share was supplied for verification or combine
+    /// An invalid share was supplied for verification or combination
     InvalidShare,
     /// An invalid generator was supplied for share generation
     InvalidGenerator(&'static str),
-    /// An invalid secret was supplied for split
+    /// An invalid secret was supplied for splitting
     InvalidSecret,
     /// A share cannot be converted to a group or field element
     InvalidShareConversion,

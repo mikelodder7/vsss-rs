@@ -12,7 +12,7 @@ use subtle::Choice;
 use super::*;
 use crate::*;
 
-/// A share value represented as [`Uint<LIMBS>`]
+/// A share value represented as [`Uint<LIMBS>`].
 pub type ValueUint<const LIMBS: usize> = IdentifierUint<LIMBS>;
 
 /// A share identifier represented as a Big unsigned integer with

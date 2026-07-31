@@ -272,8 +272,8 @@ pub fn combine_all<G: Group + GroupEncoding + Default>() {
         );
     }
 
-    // There is 5*4*3 possible choices
-    // try them all. May take a while
+    // There are 5 * 4 * 3 possible choices.
+    // Try them all. This may take a while.
     for i in 0..5 {
         for j in 0..5 {
             if i == j {

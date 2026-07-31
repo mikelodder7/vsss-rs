@@ -2,14 +2,14 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-//! Secret splitting for Shamir Secret Sharing Scheme
-//! and combine methods for field and group elements
+//! Secret splitting for Shamir's secret sharing scheme and combination methods
+//! for field and group elements.
 use super::*;
 use generic_array::{ArrayLength, GenericArray};
 use hybrid_array::{Array, ArraySize};
 use rand_core::CryptoRng;
 
-/// A Polynomial that can create secret shares
+/// A polynomial that can create secret shares.
 #[allow(async_fn_in_trait)]
 pub trait Shamir<S>
 where
@@ -221,8 +221,8 @@ where
 {
     check_params(threshold, limit)?;
     validate_polynomial_params(polynomial, threshold, limit)?;
-    // Generate the shares of (x, y) coordinates
-    // x coordinates are in the range from [1, N+1). 0 is reserved for the secret
+    // Generate the shares as (x, y) coordinates.
+    // The x-coordinates are in the range [1, N + 1). Zero is reserved for the secret.
     let mut shares = SS::create(limit);
     if shares.as_mut().len() < limit {
         return Err(Error::InvalidSizeRequest);

@@ -9,7 +9,7 @@ use num_traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
 use rand_core::{Rng, TryRng};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
-/// Provides intentionally-saturating arithmetic on `T`.
+/// Provides intentionally saturating arithmetic on `T`.
 ///
 /// This is analogous to the [`core::num::Saturating`] but allows this crate to
 /// define trait impls for [`Uint`](https://docs.rs/crypto-bigint/latest/crypto_bigint/struct.Uint.html).

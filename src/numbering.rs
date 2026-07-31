@@ -14,21 +14,20 @@ use shake::Shake256;
 
 use crate::{Error, ShareIdentifier, VsssResult};
 
-/// The types of participant number generators
+/// The types of participant number generators.
 #[derive(Debug, Clone)]
 pub enum ParticipantIdGenerator<'a, I: ShareIdentifier> {
-    /// Generate participant numbers sequentially beginning at `start` and incrementing by `increment`
-    /// until `count` is reached then this generator stops.
+    /// Generate `count` participant numbers sequentially, beginning at `start` and
+    /// incrementing by `increment`.
     Sequential {
         /// The starting identifier
         start: I,
-        /// The amount to increment by each time a new id is needed
+        /// The amount to increment each time a new identifier is needed
         increment: I,
         /// The total number of identifiers to generate
         count: usize,
     },
-    /// Generate participant numbers randomly using the provided `seed`
-    /// until `count` is reached then this generator stops.
+    /// Generate `count` participant numbers randomly using the provided `seed`.
     #[cfg(feature = "random-participant-ids")]
     Random {
         /// The seed to use for the random number generator
@@ -38,14 +37,14 @@ pub enum ParticipantIdGenerator<'a, I: ShareIdentifier> {
     },
     /// Use the provided list of identifiers
     List {
-        /// The list of identifiers to use. Once all have been used the generator will stop
+        /// The list of identifiers to use. Once all have been used, the generator will stop
         list: &'a [I],
     },
 }
 
 impl<'a, I: ShareIdentifier + Copy> Copy for ParticipantIdGenerator<'a, I> {}
 
-/// Backwards-compatible alias for [`ParticipantIdGenerator`].
+/// Backward-compatible alias for [`ParticipantIdGenerator`].
 #[deprecated(note = "renamed to ParticipantIdGenerator")]
 pub type ParticipantIdGeneratorType<'a, I> = ParticipantIdGenerator<'a, I>;
 
@@ -122,7 +121,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGenerator<'a, I> {
         }
     }
 
-    /// Create a new list participant number generator
+    /// Create a new participant number generator backed by a list
     pub fn list(list: &'a [I]) -> Self {
         Self::List { list }
     }
@@ -174,7 +173,7 @@ impl<'a, I: ShareIdentifier> ParticipantIdGenerator<'a, I> {
 /// A collection of participant number generators
 #[derive(Debug, Clone)]
 pub struct ParticipantIdGeneratorCollection<'a, 'b, I: ShareIdentifier> {
-    /// The collection of participant id generators
+    /// The collection of participant ID generators
     pub generators: &'a [ParticipantIdGenerator<'b, I>],
 }
 

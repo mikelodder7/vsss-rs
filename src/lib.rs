@@ -2,11 +2,11 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-//! Verifiable Secret Sharing Schemes are using to split secrets into
-//! multiple shares and distribute them among different entities,
-//! with the ability to verify if the shares are correct and belong
+//! Verifiable secret sharing schemes are used to split secrets into
+//! multiple shares and distribute them among different entities while
+//! providing the ability to verify that the shares are correct and belong
 //! to a specific set. This crate includes Shamir's secret sharing
-//! scheme which does not support verification but is more of a
+//! scheme, which does not support verification but serves as a
 //! building block for the other schemes.
 //!
 //! This crate supports Feldman and Pedersen verifiable secret sharing
@@ -16,32 +16,30 @@
 //! one over the other. Indeed, both are used in
 //! [GennaroDKG](https://link.springer.com/article/10.1007/s00145-006-0347-3).
 //!
-//! Feldman reveals the public value of the verifier whereas Pedersen's hides it.
+//! Feldman reveals the public value of the verifier, whereas Pedersen hides it.
 //!
 //! Feldman and Pedersen are different from Shamir when splitting the secret.
 //! Combining shares back into the original secret is identical across all methods
 //! and is available for each scheme for convenience.
 //!
-//! This crate is no-standard compliant and uses const generics to specify sizes.
+//! This crate is `no_std` compatible and uses const generics to specify sizes.
 //!
-//! This crate supports any number as the maximum number of shares to be requested.
-//! Anything higher than 255 is pretty ridiculous but if such a use case exists please let me know.
-//! This said, any number of shares can be requested since identifiers can be any size.
+//! Most applications need no more than 255 shares. That said, this crate does not
+//! impose that limit: any number can be requested because identifiers can be any size.
 //!
-//! Shares are represented as [`ShareElement`]s. Shares can be represented by
-//! really but is most commonly finite fields or groups
-//! depending on the use case. In the simplest case,
-//! the share identifier is the x-coordinate
-//! and the actual value of the share the y-coordinate.
+//! Shares are represented as [`ShareElement`]s. A share element can use any
+//! suitable representation, but finite fields and groups are the most common,
+//! depending on the use case. In the simplest case, the share identifier is the
+//! x-coordinate, and the actual share value is the y-coordinate.
 //! However, anything can be used as the identifier as long as it implements the
 //! [`ShareIdentifier`] trait.
 //!
 //! Feldman and Pedersen use the [`ShareVerifier`] trait to verify shares.
 //!
 //! In version 5, many of the required generics were removed and replaced with associated types.
-//! This simplifies the API and makes it easier to use and reduced the amount of necessary code.
+//! This simplified the API, made it easier to use, and reduced the amount of necessary code.
 //!
-//! To split a p256 secret using Shamir
+//! To split a P-256 secret using Shamir:
 //!
 //! ```
 //! #[cfg(any(feature = "alloc", feature = "std"))]
@@ -69,7 +67,7 @@
 //! }
 //! ```
 //!
-//! To split a k256 secret using Shamir
+//! To split a K-256 secret using Shamir:
 //!
 //! ```
 //! #[cfg(any(feature = "alloc", feature = "std"))]
@@ -96,7 +94,7 @@
 //! }
 //! ```
 //!
-//! Feldman or Pedersen return extra information for verification using their respective verifiers
+//! Feldman and Pedersen return extra information for verification using their respective verifiers.
 //!
 //! ```
 //! #[cfg(any(feature = "alloc", feature = "std"))]
@@ -127,7 +125,7 @@
 //! Curve25519-dalek 5.0.0 implements the native `ff` and `group` traits, so its scalar
 //! and group types can be used with Shamir, Feldman, and Pedersen.
 //!
-//! Here's an example of using Ed25519 and x25519
+//! Here is an example using Ed25519 and X25519:
 //!
 //! ```
 //! #[cfg(any(feature = "alloc", feature = "std"))]
@@ -270,7 +268,7 @@ pub type StdFeldman<S, V> = StdVsss<S, V>;
 pub type StdPedersen<S, V> = StdVsss<S, V>;
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-/// Standard verifiable secret sharing scheme
+/// Standard verifiable secret sharing scheme.
 pub struct StdVsss<S, V>
 where
     S: Share,

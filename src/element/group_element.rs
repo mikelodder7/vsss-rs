@@ -20,7 +20,7 @@ use zeroize::DefaultIsZeroes;
 /// A share verifier group element.
 pub type ShareVerifierGroup<G> = ValueGroup<G>;
 
-/// A share element represented as a group field element.
+/// A share element represented as a group element.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]

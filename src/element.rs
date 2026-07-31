@@ -106,7 +106,7 @@ pub trait ShareIdentifier: ShareElement<Inner: ShareIdentifierInner> {
     }
 }
 
-/// Objects that represent the ability to verify shamir shares
+/// Objects that represent the ability to verify Shamir shares.
 pub trait ShareVerifier<S: Share>:
     ShareElement
     + Copy

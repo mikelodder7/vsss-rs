@@ -55,14 +55,14 @@ pub(crate) fn field_bounded_add(a: u8, b: u8, field_size: u16) -> u8 {
     (sum as u8) & in_range
 }
 
-/// A trait for constant time indicating if a value is zero.
+/// A trait for indicating in constant time whether a value is zero.
 pub trait CtIsZero {
     /// Returns a `subtle::Choice` indicating if the value is zero.
     /// Returns 1 if the value is zero, otherwise 0.
     fn ct_is_zero(&self) -> subtle::Choice;
 }
 
-/// A trait for constant time indicating if a value is not zero.
+/// A trait for indicating in constant time whether a value is nonzero.
 pub trait CtIsNotZero {
     /// Returns a `subtle::Choice` indicating if the value is not zero.
     /// Returns 1 if the value is not zero, otherwise 0.

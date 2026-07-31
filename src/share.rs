@@ -20,7 +20,7 @@ pub trait Share: Sized + Debug + Eq + PartialEq + Clone + Default {
         + for<'a> From<&'a Self::Identifier>
         + for<'a> Mul<&'a Self::Identifier, Output = Self::Value>;
 
-    /// A new share with a given value
+    /// Create a new share with a given value
     fn with_identifier_and_value(identifier: Self::Identifier, value: Self::Value) -> Self;
     /// The identifier for this share
     fn identifier(&self) -> &Self::Identifier;

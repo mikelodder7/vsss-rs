@@ -188,12 +188,10 @@ rather than opening a public issue.
 
 ## License
 
-Licensed under either:
+Licensed under either of the following, at your option:
 
 - [Apache License, Version 2.0](LICENSE-APACHE)
 - [MIT License](LICENSE-MIT)
-
-at your option.
 
 Unless explicitly stated otherwise, contributions intentionally submitted for
 inclusion are licensed under the same terms without additional conditions.

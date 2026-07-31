@@ -1,9 +1,9 @@
 #[macro_export]
-/// Implements all the VSSS traits for a fixed array
+/// Implements all the VSSS traits for a fixed array.
 macro_rules! vsss_fixed_array_impl {
     ($name:ident, $pedersen_result:ident, $threshold:expr, $shares:expr) => {
         #[derive(Debug, Copy, Clone)]
-        /// A Vsss implementation
+        /// A VSSS implementation.
         pub struct $name<S: Share, V: ShareVerifier<S>>(core::marker::PhantomData<(S, V)>);
 
         impl<S: Share, V: ShareVerifier<S>> Shamir<S> for $name<S, V> {
@@ -21,7 +21,7 @@ macro_rules! vsss_fixed_array_impl {
             type PedersenResult = $pedersen_result<S, V>;
         }
 
-        /// A pedersen result for static arrays
+        /// A Pedersen result for static arrays.
         #[derive(Debug, Copy, Clone)]
         pub struct $pedersen_result<S: Share, V: ShareVerifier<S>> {
             blinder: S::Value,

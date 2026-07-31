@@ -1,7 +1,6 @@
-//! Sets are used for storing shares and other data associated with
-//! secret sharing operations like splitting, combining, and verifying
-//! Sizes greater than 32 should probably use Vec instead of fixed sizes
-//! due to stack allocations
+//! Sets store shares and other data associated with secret sharing operations,
+//! such as splitting, combining, and verifying. Sizes greater than 32 should
+//! probably use `Vec` instead of fixed-size storage because of stack allocations.
 use crate::*;
 use core::{
     marker::PhantomData,
@@ -54,7 +53,7 @@ pub trait WriteableShareSet<S>: ReadableShareSet<S> + AsMut<[S]>
 where
     S: Share,
 {
-    /// Create a new writeable share set
+    /// Create a new writable share set
     fn create(size_hint: usize) -> Self;
 }
 
@@ -133,7 +132,7 @@ where
     S: Share,
 {
     *secret = S::Value::default();
-    // Calculate lagrange interpolation
+    // Calculate Lagrange interpolation.
     for (i, x_i) in shares.iter().enumerate() {
         let mut num = S::Identifier::one();
         let mut den = S::Identifier::one();
@@ -210,8 +209,8 @@ where
     false
 }
 
-/// Objects that represent the ability to verify shamir shares using
-/// Feldman verifiers
+/// Objects that represent the ability to verify Shamir shares using
+/// Feldman verifiers.
 pub trait FeldmanVerifierSet<S, G>: Sized
 where
     S: Share,
@@ -243,7 +242,7 @@ where
     /// The verifiers
     fn verifiers(&self) -> &[G];
 
-    /// The verifiers as writeable
+    /// The writable verifiers
     fn verifiers_mut(&mut self) -> &mut [G];
 
     /// Evaluate this verifier set at a share identifier.
@@ -283,8 +282,8 @@ where
     }
 }
 
-/// Objects that represent the ability to verify shamir shares using
-/// Pedersen verifiers
+/// Objects that represent the ability to verify Shamir shares using
+/// Pedersen verifiers.
 pub trait PedersenVerifierSet<S, G>: Sized
 where
     S: Share,
@@ -339,7 +338,7 @@ where
     /// The verifiers
     fn blind_verifiers(&self) -> &[G];
 
-    /// The verifiers as writeable
+    /// The writable verifiers
     fn blind_verifiers_mut(&mut self) -> &mut [G];
 
     /// Evaluate this verifier set at a share identifier.
@@ -476,8 +475,8 @@ impl<S: Share, G: ShareVerifier<S>, L: ArraySize> FeldmanVerifierSet<S, G> for A
     }
 }
 
-/// A wrapper around a fixed size array of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a fixed-size array of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// use vsss_rs::{DefaultShare, IdentifierPrimeField, ShareVerifierGroup, ArrayFeldmanVerifierSet};
 ///
@@ -606,8 +605,8 @@ where
     }
 }
 
-/// A wrapper around a generic array of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a generic array of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, GenericArrayFeldmanVerifierSet};
 /// use generic_array::typenum::U3;
@@ -747,8 +746,8 @@ where
     }
 }
 
-/// A wrapper around a hybrid array of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a hybrid array of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, HybridArrayFeldmanVerifierSet};
 /// use hybrid_array::typenum::U3;
@@ -907,8 +906,8 @@ impl<S: Share, G: ShareVerifier<S>> FeldmanVerifierSet<S, G> for Vec<G> {
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-/// A wrapper around a Vec of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a `Vec` of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// #[cfg(any(feature = "alloc", feature = "std"))]
 /// {
@@ -1061,8 +1060,8 @@ impl<S: Share, G: ShareVerifier<S>, const L: usize> PedersenVerifierSet<S, G> fo
     }
 }
 
-/// A wrapper around arrays of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around an array of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, ArrayPedersenVerifierSet};
 /// type K256Share = DefaultShare<IdentifierPrimeField<k256::Scalar>, IdentifierPrimeField<k256::Scalar>>;
@@ -1260,8 +1259,8 @@ impl<S: Share, G: ShareVerifier<S>, L: ArraySize> PedersenVerifierSet<S, G> for 
     }
 }
 
-/// A wrapper around a generic array of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a generic array of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, GenericArrayPedersenVerifierSet};
 /// use generic_array::typenum::U4;
@@ -1410,8 +1409,8 @@ where
     }
 }
 
-/// A wrapper around a hybrid array of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a hybrid array of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// use vsss_rs::{DefaultShare, IdentifierPrimeField, ValueGroup, HybridArrayPedersenVerifierSet};
 /// use hybrid_array::typenum::U4;
@@ -1587,8 +1586,8 @@ impl<S: Share, V: ShareVerifier<S>> PedersenVerifierSet<S, V> for Vec<V> {
 }
 
 #[cfg(any(feature = "alloc", feature = "std"))]
-/// A wrapper around a Vec of verifiers
-/// Allows for convenient type aliasing
+/// A wrapper around a `Vec` of verifiers.
+/// Allows for convenient type aliasing.
 /// ```
 /// #[cfg(any(feature = "alloc", feature = "std"))]
 /// {

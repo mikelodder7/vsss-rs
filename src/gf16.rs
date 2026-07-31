@@ -1,11 +1,11 @@
-//! Represents Galois Field of 2^4 elements. This uses constant time operations
-//! for all operations as related to shamir secret sharing. Too many implementations
-//! use lookup tables which help for speed but leak secret information.
-//! No lookup tables are used in this implementation because Cryptographic operations should
+//! Represents the Galois field of 2^4 elements. This implementation uses
+//! constant-time operations throughout Shamir secret sharing. Many implementations
+//! use lookup tables, which improve speed but leak secret information.
+//! No lookup tables are used because cryptographic operations should:
 //!
-//! 1. Ensure runtime is independent of secret data
-//! 2. Ensure code access patterns are independent of secret data
-//! 3. Ensure data access patterns are independent of secret data
+//! 1. Ensure runtime is independent of secret data.
+//! 2. Ensure code access patterns are independent of secret data.
+//! 3. Ensure data access patterns are independent of secret data.
 
 use crate::util::{CtIsNotZero, field_bounded_add, uniform_nonzero_u8};
 use crate::*;
@@ -32,7 +32,7 @@ use zeroize::DefaultIsZeroes;
 type GfShare = DefaultShare<IdentifierGf16, IdentifierGf16>;
 
 /// Represents the finite field GF(2^4) with 16 elements.
-/// Elements are stored in the lower nibble of a u8 (values 0x00..=0x0F).
+/// Elements are stored in the lower nibble of a `u8` (values `0x00..=0x0F`).
 /// Uses the irreducible polynomial x^4 + x + 1 for multiplication.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -581,7 +581,7 @@ impl Gf16 {
     /// Each input byte is treated as two 4-bit nibbles (low = bits 0-3, high = bits 4-7).
     /// Both nibbles are independently shared as GF(16) elements and packed back into
     /// a single share byte, preserving the 1:1 byte ratio between secret and share data.
-    /// Maximum of 15 shares (the field has 15 non-zero elements).
+    /// Supports a maximum of 15 shares (the field has 15 nonzero elements).
     pub fn split_array<B: AsRef<[u8]>>(
         threshold: usize,
         limit: usize,
@@ -895,7 +895,7 @@ fn lagrange_coefficients(shares: &[Vec<u8>]) -> VsssResult<Vec<IdentifierGf16>> 
 
 /// Constant-time multiplication in GF(2^4) modulo x^4 + x + 1.
 ///
-/// Uses the i8 arithmetic trick for constant-time operation:
+/// Uses the `i8` arithmetic trick for constant-time operation:
 /// `-(b & 1)` in signed arithmetic gives 0 (b even) or -1/0xFF (b odd),
 /// serving as a branchless conditional mask.
 /// Reduction: when bit 3 overflows on left-shift, XOR with 0x03 (= x + 1,
@@ -944,9 +944,9 @@ fn gf16_pow(base: u8, exp: u8) -> u8 {
 #[repr(transparent)]
 /// Represents an identifier in the Galois Field GF(2^4).
 ///
-/// Used solely for Sequential Participant ID generation,
-/// since GF16 addition = xor i.e. identifiers just oscillate between
-/// the start number and the incremented number instead of adding.
+/// Used solely for sequential participant ID generation because addition in
+/// GF(16) is XOR; otherwise, identifiers would oscillate between the starting
+/// number and the incremented number instead of increasing.
 pub struct IdentifierGf16(pub Gf16);
 
 impl Display for IdentifierGf16 {

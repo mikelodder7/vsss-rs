@@ -1,11 +1,11 @@
-//! Represents Galois Field of 2^8 elements. This uses constant time operations
-//! for all operations as related to shamir secret sharing. Too many implementations
-//! use lookup tables which help for speed but leak secret information.
-//! No lookup tables are used in this implementation because Cryptographic operations should
+//! Represents the Galois field of 2^8 elements. This implementation uses
+//! constant-time operations throughout Shamir secret sharing. Many implementations
+//! use lookup tables, which improve speed but leak secret information.
+//! No lookup tables are used because cryptographic operations should:
 //!
-//! 1. Ensure runtime is independent of secret data
-//! 2. Ensure code access patterns are independent of secret data
-//! 3. Ensure data access patterns are independent of secret data
+//! 1. Ensure runtime is independent of secret data.
+//! 2. Ensure code access patterns are independent of secret data.
+//! 3. Ensure data access patterns are independent of secret data.
 
 use crate::util::{CtIsNotZero, field_bounded_add, uniform_nonzero_u8};
 use crate::*;
@@ -886,9 +886,9 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
 #[repr(transparent)]
 /// Represents an identifier in the Galois Field GF(2^8).
 ///
-/// Used solely for Sequential Participant ID generation,
-/// since GF256 addition = xor i.e. identifiers just oscillate between
-/// the start number and the incremented number instead of adding.
+/// Used solely for sequential participant ID generation because addition in
+/// GF(256) is XOR; otherwise, identifiers would oscillate between the starting
+/// number and the incremented number instead of increasing.
 pub struct IdentifierGf256(pub Gf256);
 
 impl Display for IdentifierGf256 {
@@ -1262,7 +1262,7 @@ mod tests {
         // probability of observing at least one zero share value
         // under uniform coefficients. With the ChaCha seed below the
         // outcome is of course deterministic; the count is sized so
-        // that any seed has high safety margin.
+        // that any seed has a high safety margin.
         let threshold = 11;
         let limit = 15;
         let runs = 200;
@@ -1580,7 +1580,7 @@ mod tests {
 #[cfg(test)]
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod gf256_cmp {
-    // Ref https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
+    // Reference: https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
 
     #[rustfmt::skip]
     const GF256_LOG: [u8; 256] = [
@@ -1697,7 +1697,7 @@ mod gf256_cmp {
         }
     }
 
-    /// Divide in GF(256)/
+    /// Divide in GF(256).
     pub fn gf256_div(a: u8, b: u8) -> u8 {
         // multiply `a` against inverse `b`
         gf256_mul(a, GF256_EXP[usize::from(255 - GF256_LOG[usize::from(b)])])

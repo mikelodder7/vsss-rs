@@ -2,8 +2,8 @@
     Copyright Michael Lodder. All Rights Reserved.
     SPDX-License-Identifier: Apache-2.0
 */
-//! Feldman's Verifiable secret sharing scheme.
-//! see <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
+//! Feldman's verifiable secret sharing scheme.
+//! See <https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf>.
 #[cfg(any(feature = "alloc", feature = "std"))]
 use crate::shamir::create_shares_with_participant_generators_iter;
 use crate::shamir::{
@@ -21,8 +21,8 @@ use generic_array::{
 use hybrid_array::{Array, ArraySize};
 use rand_core::CryptoRng;
 
-/// A secret sharing scheme that uses feldman commitments as verifiers
-/// (see [FeldmanVSS](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf))
+/// A secret sharing scheme that uses Feldman commitments as verifiers.
+/// See [FeldmanVSS](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf).
 #[allow(async_fn_in_trait)]
 pub trait Feldman<S, V>: Shamir<S>
 where
@@ -33,7 +33,7 @@ where
     type VerifierSet: FeldmanVerifierSet<S, V>;
 
     /// Create shares from a secret.
-    /// `generator` is a share verifier for computing feldman verifiers.
+    /// `generator` is a share verifier for computing Feldman verifiers.
     /// If [`None`], the default generator is used.
     fn split_secret_with_verifier(
         threshold: usize,
@@ -53,7 +53,7 @@ where
     }
 
     /// Create shares from a secret and participant number generators.
-    /// `generator` is a share verifier for computing feldman verifiers.
+    /// `generator` is a share verifier for computing Feldman verifiers.
     /// If [`None`], the default generator is used.
     fn split_secret_with_participant_generators_and_verifiers(
         threshold: usize,
@@ -83,7 +83,7 @@ where
     }
 
     /// Create shares from a secret and participant number generators.
-    /// `generator` is a share verifier for computing feldman verifiers.
+    /// `generator` is a share verifier for computing Feldman verifiers.
     /// If [`None`], the default generator is used.
     #[deprecated(note = "renamed to split_secret_with_participant_generators_and_verifiers")]
     fn split_secret_with_participant_generator_and_verifiers(
@@ -105,7 +105,7 @@ where
     }
 
     /// Create shares from a secret and an iterator of participant identifiers.
-    /// `generator` is a share verifier for computing feldman verifiers.
+    /// `generator` is a share verifier for computing Feldman verifiers.
     /// If [`None`], the default generator is used.
     fn split_secret_with_participant_ids_iter_and_verifiers(
         threshold: usize,
@@ -169,7 +169,7 @@ where
     }
 
     /// Create shares from a secret and participant identifiers.
-    /// `generator` is a share verifier for computing feldman verifiers.
+    /// `generator` is a share verifier for computing Feldman verifiers.
     /// If [`None`], the default generator is used.
     fn split_secret_with_ids_and_verifiers(
         threshold: usize,
@@ -209,7 +209,7 @@ where
     verifier_set
 }
 
-/// A default feldman implementation using [`GenericArray`]
+/// A default Feldman implementation using [`GenericArray`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
@@ -251,7 +251,7 @@ where
     type VerifierSet = GenericArray<V, Add1<THRESHOLD>>;
 }
 
-/// A default feldman implementation using [`Array`]
+/// A default Feldman implementation using [`Array`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
@@ -295,8 +295,8 @@ where
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 /// Create shares from a secret.
-/// `generator` is the point to use for computing feldman verifiers.
-/// If None, the default generator is used.
+/// `generator` is the point to use for computing Feldman verifiers.
+/// If [`None`], the default generator is used.
 pub fn split_secret<S, V>(
     threshold: usize,
     limit: usize,
