@@ -640,8 +640,16 @@ impl Gf16 {
             shares.push(inner);
         }
         check_params(threshold, limit)?;
-        let mut lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        let mut hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        // The polynomials hold the secret nibbles and their coefficients. Clear
+        // them on every exit, so freed memory keeps none of them.
+        #[cfg(feature = "zeroize")]
+        let (lo_polynomial, hi_polynomial) = (
+            zeroize::Zeroizing::new(lo_polynomial),
+            zeroize::Zeroizing::new(hi_polynomial),
+        );
+        let (mut lo_polynomial, mut hi_polynomial) = (lo_polynomial, hi_polynomial);
         for b in secret {
             // Each byte is split into two nibbles and shared independently.
             // The low nibble and high nibble are each a GF(16) element (0..=15).
@@ -721,8 +729,16 @@ impl Gf16 {
             shares.push(inner);
         }
 
-        let mut lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        let mut hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        // The polynomials hold the secret nibbles and their coefficients. Clear
+        // them on every exit, so freed memory keeps none of them.
+        #[cfg(feature = "zeroize")]
+        let (lo_polynomial, hi_polynomial) = (
+            zeroize::Zeroizing::new(lo_polynomial),
+            zeroize::Zeroizing::new(hi_polynomial),
+        );
+        let (mut lo_polynomial, mut hi_polynomial) = (lo_polynomial, hi_polynomial);
         for b in secret {
             let lo = IdentifierGf16(Gf16(*b & 0x0f));
             let hi = IdentifierGf16(Gf16((*b >> 4) & 0x0f));
@@ -1630,6 +1646,29 @@ mod tests {
             ),
             Err(Error::SharingInvalidIdentifier)
         );
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn split_polynomial_zeroizes_gf16() {
+        use zeroize::Zeroize;
+        let mut rng = ChaCha8Rng::from_seed([0x5Au8; 32]);
+        let mut polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(3);
+        polynomial
+            .fill(&IdentifierGf16(Gf16(0x4)), &mut rng, 3)
+            .expect("fill");
+        assert!(
+            polynomial
+                .iter()
+                .any(|s| s.value != IdentifierGf16::default())
+        );
+
+        polynomial.iter_mut().for_each(Zeroize::zeroize);
+
+        assert_eq!(polynomial.len(), 3);
+        assert!(polynomial.iter().all(|s| {
+            s.identifier == IdentifierGf16::default() && s.value == IdentifierGf16::default()
+        }));
     }
 }
 
