@@ -12,8 +12,9 @@ use super::hash::{hash_to_mask, hash_to_ring};
 use super::keygen::{MasterPublicKey, MasterSecretKey};
 use super::ring::PolyQ;
 use super::sampler::TrapdoorSampler;
-use super::{B_X, GAMMA_KEY, N, Q, ROUNDING_BITS, SIGMA_EXTRACT, lattice_error, wipe};
-use crate::VsssResult;
+use super::{B_X, GAMMA_KEY, N, Q, ROUNDING_BITS, SIGMA_EXTRACT};
+use crate::secret::Secret;
+use crate::{Error, VsssResult};
 use core::fmt::{self, Debug, Formatter};
 use digest::Digest;
 use rand_core::CryptoRng;
@@ -108,10 +109,10 @@ impl Ciphertext {
         let ring_bytes = 4 * N;
         let (u, rest) = bytes
             .split_at_checked(ring_bytes)
-            .ok_or(lattice_error("lattice: ciphertext is too short"))?;
+            .ok_or(Error::Lattice("ciphertext is too short"))?;
         let (v, masked) = rest
             .split_at_checked(ring_bytes)
-            .ok_or(lattice_error("lattice: ciphertext is too short"))?;
+            .ok_or(Error::Lattice("ciphertext is too short"))?;
         Ok(Self {
             u: PolyQ::from_bytes(u)?,
             v: PolyQ::from_bytes(v)?,
@@ -126,6 +127,11 @@ impl Ciphertext {
 ///
 /// Extraction is randomized. Callers should extract each identity once and
 /// keep the key, as the paper's local cache does.
+///
+/// # Security
+///
+/// About 110-bit classical security, below 128; see the
+/// [module docs](crate::lattice#security-level).
 pub fn extract<D: Digest>(
     msk: &MasterSecretKey,
     mpk: &MasterPublicKey,
@@ -135,57 +141,61 @@ pub fn extract<D: Digest>(
     let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT)?;
     let t = hash_to_ring::<D>(id);
     for _ in 0..MAX_EXTRACT_ATTEMPTS {
-        let mut s2 = sampler.sample_key(&t, &mut rng)?;
-        let key = IdentitySecretKey::new(PolyQ::from(&s2));
-        wipe(&mut s2);
-        if verify_key::<D>(mpk, id, &key) {
+        let s2 = Secret::new(sampler.sample_key(&t, &mut rng)?);
+        let key = IdentitySecretKey::new(PolyQ::from(&*s2));
+        if verify_key_with_t(mpk, &t, &key) {
             return Ok(key);
         }
     }
-    Err(lattice_error(
-        "lattice: key extraction exhausted its attempts",
-    ))
+    Err(Error::Lattice("key extraction exhausted its attempts"))
 }
 
 /// `VerKey(h, ID, sk)`: accept when `s1 = [t − s2·h]_q` and `[s2]_q` satisfy
 /// `‖(s1, s2)‖₂ ≤ Γ_key` over the integers.
 pub fn verify_key<D: Digest>(mpk: &MasterPublicKey, id: &[u8], key: &IdentitySecretKey) -> bool {
-    let t = hash_to_ring::<D>(id);
-    let s1 = &t - &(key.s2() * mpk.h());
-    let bound = u128::from(GAMMA_KEY).pow(2);
-    s1.centered_norm_sq()
-        .checked_add(key.s2().centered_norm_sq())
-        .is_some_and(|norm_sq| norm_sq <= bound)
+    verify_key_with_t(mpk, &hash_to_ring::<D>(id), key)
+}
+
+/// [`verify_key`] for an identity already hashed to `t = H(ID)`. Each norm
+/// is below `2^68`, so their sum cannot overflow.
+fn verify_key_with_t(mpk: &MasterPublicKey, t: &PolyQ, key: &IdentitySecretKey) -> bool {
+    let s1 = t - &(key.s2() * mpk.h());
+    s1.centered_norm_sq() + key.s2().centered_norm_sq() <= u128::from(GAMMA_KEY).pow(2)
 }
 
 /// `Enc(h, ID, m)` for a message `m` of any length.
+///
+/// # Security
+///
+/// About 110-bit classical security, below 128; see the
+/// [module docs](crate::lattice#security-level).
 pub fn encrypt<D: Digest>(
     mpk: &MasterPublicKey,
     id: &[u8],
     message: &[u8],
     mut rng: impl CryptoRng,
 ) -> VsssResult<Ciphertext> {
-    let (mut r, mut e1) = (0..MAX_ENCRYPT_ATTEMPTS)
+    let (r, e1) = (0..MAX_ENCRYPT_ATTEMPTS)
         .map(|_| (ternary(&mut rng), ternary(&mut rng)))
         .find(|(r, e1)| weight(r) + weight(e1) <= B_X * B_X)
-        .ok_or(lattice_error(
-            "lattice: encryption randomness exhausted its attempts",
+        .ok_or(Error::Lattice(
+            "encryption randomness exhausted its attempts",
         ))?;
-    let mut e2 = ternary(&mut rng);
-    let mut k = [0u8; KEY_BYTES];
-    rng.fill_bytes(&mut k);
+    let (r, e1) = (Secret::new(r), Secret::new(e1));
+    let e2 = Secret::new(ternary(&mut rng));
+    let mut k = Secret::new([0u8; KEY_BYTES]);
+    rng.fill_bytes(&mut *k);
 
     let t = hash_to_ring::<D>(id);
-    let r_q = PolyQ::from_signed(&r)?;
-    let u = &(&r_q * mpk.h()) + &PolyQ::from_signed(&e1)?;
-    let half_q_k = PolyQ::from_coeffs(&key_bits(&k).map(|b| b * (Q / 2)).collect::<Vec<_>>())?;
-    let v = &(&(&r_q * &t) + &PolyQ::from_signed(&e2)?) + &half_q_k;
-    let v = round_low_bits(&v)?;
-    let masked = xor(message, &hash_to_mask::<D>(&k, message.len() * 8));
-    wipe(&mut r);
-    wipe(&mut e1);
-    wipe(&mut e2);
-    wipe(&mut k);
+    let r_q = Secret::new(PolyQ::from_signed(&r)?);
+    let u = &(&*r_q * mpk.h()) + &*Secret::new(PolyQ::from_signed(&e1)?);
+    let half_q_k = Secret::new(PolyQ::from_reduced(
+        key_bits(&*k).map(|b| b * (Q / 2)).collect(),
+    ));
+    let e2_q = Secret::new(PolyQ::from_signed(&e2)?);
+    let unrounded = Secret::new(&(&(&*r_q * &t) + &*e2_q) + &*half_q_k);
+    let v = round_low_bits(&unrounded);
+    let masked = xor(message, &hash_to_mask::<D>(&*k, message.len() * 8));
     Ok(Ciphertext { u, v, masked })
 }
 
@@ -193,23 +203,23 @@ pub fn encrypt<D: Digest>(
 /// otherwise, then `m = c' ⊕ H'(k)`. A malformed ciphertext cannot reach
 /// this point: [`Ciphertext::from_bytes`] and deserialization reject it.
 pub fn decrypt<D: Digest>(key: &IdentitySecretKey, ciphertext: &Ciphertext) -> Vec<u8> {
-    let w = ciphertext.v() - &(ciphertext.u() * key.s2());
+    let w = Secret::new(ciphertext.v() - &(ciphertext.u() * key.s2()));
     let quarter = i64::from(Q / 4);
-    let mut k: Vec<u8> = w
-        .centered()
-        .chunks(8)
-        .map(|bits| {
-            bits.iter().enumerate().fold(0u8, |byte, (j, c)| {
-                byte | (u8::from(c.abs() >= quarter) << j)
+    let centered = Secret::new(w.centered());
+    let k = Secret::new(
+        centered
+            .chunks(8)
+            .map(|bits| {
+                bits.iter().enumerate().fold(0u8, |byte, (j, c)| {
+                    byte | (u8::from(c.abs() >= quarter) << j)
+                })
             })
-        })
-        .collect();
-    let message = xor(
+            .collect::<Vec<u8>>(),
+    );
+    xor(
         ciphertext.masked(),
         &hash_to_mask::<D>(&k, ciphertext.masked().len() * 8),
-    );
-    wipe(&mut k);
-    message
+    )
 }
 
 /// `N` coefficients drawn uniformly from `{−1, 0, 1}`, two random bits at a
@@ -235,14 +245,14 @@ fn key_bits(k: &[u8]) -> impl Iterator<Item = u32> + '_ {
 }
 
 /// `v := 2^ℓ·⌊v / 2^ℓ⌉ mod q`, rounding halves up.
-fn round_low_bits(v: &PolyQ) -> VsssResult<PolyQ> {
+fn round_low_bits(v: &PolyQ) -> PolyQ {
     let half = 1u32 << (ROUNDING_BITS - 1);
-    let rounded: Vec<u32> = v
-        .coeffs()
-        .iter()
-        .map(|&c| ((c + half) >> ROUNDING_BITS) << ROUNDING_BITS)
-        .collect();
-    PolyQ::from_coeffs(&rounded)
+    PolyQ::from_reduced(
+        v.coeffs()
+            .iter()
+            .map(|&c| (((c + half) >> ROUNDING_BITS) << ROUNDING_BITS) & (Q - 1))
+            .collect(),
+    )
 }
 
 /// `a ⊕ b` over the shorter length; callers pass equal lengths.
@@ -273,6 +283,17 @@ mod tests {
             assert!(!verify_key::<Sha256>(mpk, b"someone else", &key));
             assert_eq!(std::format!("{key:?}"), "IdentitySecretKey { .. }");
         }
+    }
+
+    #[test]
+    fn verify_key_with_t_matches_verify_key() {
+        let (msk, mpk) = &keys()[1];
+        let mut rng = StdRng::from_seed([77u8; 32]);
+        let key = extract::<Sha256>(msk, mpk, b"hashed", &mut rng).expect("extract");
+        let t = hash_to_ring::<Sha256>(b"hashed");
+        assert!(verify_key_with_t(mpk, &t, &key));
+        let other = hash_to_ring::<Sha256>(b"other");
+        assert!(!verify_key_with_t(mpk, &other, &key));
     }
 
     #[test]
@@ -369,7 +390,7 @@ mod tests {
         c[1] = (1 << 23) - 1; // rounds down
         c[2] = 1 << 23; // half rounds up
         c[3] = Q - 1; // wraps to 0
-        let rounded = round_low_bits(&PolyQ::from_coeffs(&c).expect("length N")).expect("ok");
+        let rounded = round_low_bits(&PolyQ::from_coeffs(&c).expect("length N"));
         assert_eq!(&rounded.coeffs()[..4], &[1 << 24, 0, 1 << 24, 0]);
     }
 

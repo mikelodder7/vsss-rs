@@ -228,14 +228,7 @@ where
 }
 
 #[cfg(feature = "zeroize")]
-impl<F: PrimeField> zeroize::Zeroize for IdentifierPrimeField<F> {
-    /// `F` is not required to implement `Zeroize`, so this stores zero and
-    /// passes the field through `black_box` so the store cannot be elided.
-    fn zeroize(&mut self) {
-        self.0 = F::ZERO;
-        core::hint::black_box(&self.0);
-    }
-}
+impl<F: PrimeField> zeroize::DefaultIsZeroes for IdentifierPrimeField<F> {}
 
 impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     type Serialization = F::Repr;

@@ -37,15 +37,42 @@ where
     if shares.len() < 2 {
         return Err(Error::SharingMinThreshold);
     }
-    for s in shares {
-        if s.identifier().is_zero().into() {
-            return Err(Error::SharingInvalidIdentifier);
-        }
+    validate_identifiers(shares.iter().map(Share::identifier))
+}
+
+/// Reject zero identifiers, which would expose the secret, with
+/// [`Error::SharingInvalidIdentifier`], then repeated ones with
+/// [`Error::SharingDuplicateIdentifier`].
+pub(crate) fn validate_identifiers<'a, I: ShareIdentifier + 'a>(
+    ids: impl Iterator<Item = &'a I> + Clone,
+) -> VsssResult<()> {
+    if ids.clone().any(|id| bool::from(id.is_zero())) {
+        return Err(Error::SharingInvalidIdentifier);
     }
-    if dup_checker(shares) {
+    if has_duplicates(ids) {
         return Err(Error::SharingDuplicateIdentifier);
     }
     Ok(())
+}
+
+/// Whether two identifiers are equal, in `O(n log n)` by sorting their
+/// canonical encodings.
+#[cfg(any(feature = "alloc", feature = "std"))]
+fn has_duplicates<'a, I: ShareIdentifier + 'a>(ids: impl Iterator<Item = &'a I>) -> bool {
+    let mut encodings: Vec<I::Serialization> = ids.map(ShareElement::serialize).collect();
+    encodings.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    encodings
+        .windows(2)
+        .any(|pair| matches!(pair, [a, b] if a.as_ref() == b.as_ref()))
+}
+
+/// Whether two identifiers are equal. Without an allocator there is nowhere
+/// to sort, so every pair is compared.
+#[cfg(not(any(feature = "alloc", feature = "std")))]
+fn has_duplicates<'a, I: ShareIdentifier + 'a>(ids: impl Iterator<Item = &'a I> + Clone) -> bool {
+    ids.clone()
+        .enumerate()
+        .any(|(i, a)| ids.clone().skip(i + 1).any(|b| a == b))
 }
 
 /// Represents a data store for secret shares
@@ -171,7 +198,7 @@ where
     L: ArrayLength,
 {
     fn create(_size_hint: usize) -> Self {
-        Self::try_from_iter((0..L::to_usize()).map(|_| S::default())).unwrap()
+        Self::default()
     }
 }
 
@@ -181,7 +208,7 @@ where
     L: ArraySize,
 {
     fn create(_size_hint: usize) -> Self {
-        Self::try_from_iter((0..L::to_usize()).map(|_| S::default())).unwrap()
+        Self::default()
     }
 }
 
@@ -193,20 +220,6 @@ where
     fn create(size_hint: usize) -> Self {
         (0..size_hint).map(|_| S::default()).collect()
     }
-}
-
-fn dup_checker<S>(set: &[S]) -> bool
-where
-    S: Share,
-{
-    for (i, x_i) in set.iter().enumerate() {
-        for x_j in set.iter().skip(i + 1) {
-            if x_i.identifier() == x_j.identifier() {
-                return true;
-            }
-        }
-    }
-    false
 }
 
 /// Objects that represent the ability to verify Shamir shares using
@@ -1728,7 +1741,7 @@ mod tests {
         GenericArrayFeldmanVerifierSet, GenericArrayPedersenVerifierSet,
         HybridArrayFeldmanVerifierSet, HybridArrayPedersenVerifierSet, PedersenVerifierSet,
         ReadableShareSet, VecFeldmanVerifierSet, VecPedersenVerifierSet, WriteableShareSet,
-        validate_share_set,
+        validate_identifiers, validate_share_set,
     };
     use crate::{Error, IdentifierPrimeField, PrimeFieldShare, Share, ShareElement, ValueGroup};
     use generic_array::{
@@ -1940,6 +1953,23 @@ mod tests {
         assert_eq!(
             vec![share(1, 7), share(1, 8)].combine(),
             Err(Error::SharingDuplicateIdentifier)
+        );
+    }
+
+    #[test]
+    fn validate_identifiers_rejects_zero_first_then_duplicates() {
+        let id = |n: u64| IdentifierPrimeField(Scalar::from(n));
+        let ids = |ns: &[u64]| ns.iter().map(|&n| id(n)).collect::<Vec<_>>();
+        assert_eq!(validate_identifiers(ids(&[3, 1, 2]).iter()), Ok(()));
+        assert_eq!(validate_identifiers(ids(&[]).iter()), Ok(()));
+        assert_eq!(
+            validate_identifiers(ids(&[3, 1, 3]).iter()),
+            Err(Error::SharingDuplicateIdentifier)
+        );
+        // A zero identifier is reported even when there is also a repeat.
+        assert_eq!(
+            validate_identifiers(ids(&[1, 1, 0]).iter()),
+            Err(Error::SharingInvalidIdentifier)
         );
     }
 

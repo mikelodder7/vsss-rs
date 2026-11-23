@@ -122,12 +122,13 @@ where
             .clone()
             .unwrap_or_else(|| S::Value::random(&mut rng));
 
-        let mut secret_polynomial =
-            ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
-        let mut blinder_polynomial =
-            ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
-        secret_polynomial.fill(options.secret, &mut rng, threshold)?;
-        blinder_polynomial.fill(&blinder, &mut rng, threshold)?;
+        let secret_polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::random(
+            options.secret,
+            &mut rng,
+            threshold,
+        )?;
+        let blinder_polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::random(&blinder, &mut rng, threshold)?;
 
         let mut feldman_verifier_set =
             Self::FeldmanVerifierSet::empty_feldman_set_with_capacity(threshold, g);

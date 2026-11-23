@@ -14,7 +14,7 @@
 //! The degree-1 norms are the resultants `Res(f, x^N + 1)` and
 //! `Res(g, x^N + 1)`, so the base case fails exactly when
 //! `gcd(R_f, R_g) ≠ 1`.
-use super::fft::{Complex, fft, ifft};
+use super::fft::{Complex, fft, ifft, pair_norm_sq};
 use super::poly::negacyclic_mul_big;
 use num_bigint::BigInt;
 use num_traits::{One, Signed, ToPrimitive, Zero};
@@ -60,10 +60,8 @@ fn solve_big(f: Vec<BigInt>, g: Vec<BigInt>, q: &BigInt) -> Option<(Vec<BigInt>,
         return Some((std::vec![-(q * v)], std::vec![q * u]));
     }
     let (fp, gp) = solve_big(field_norm(&f), field_norm(&g), q)?;
-    // `f` and `g` are still needed for the reduction, so their conjugates
-    // are fresh copies.
-    let mut big_f = negacyclic_mul_big(&lift(fp), &conjugate(&g));
-    let mut big_g = negacyclic_mul_big(&lift(gp), &conjugate(&f));
+    let mut big_f = lift_times_conjugate(&fp, &g);
+    let mut big_g = lift_times_conjugate(&gp, &f);
     reduce(&f, &g, &mut big_f, &mut big_g)?;
     Some((big_f, big_g))
 }
@@ -105,14 +103,20 @@ fn xgcd(a: BigInt, b: BigInt) -> Bezout {
     }
 }
 
-/// `N(f) = f0² − x·f1²` in `Z[x]/(x^(n/2) + 1)`, where
-/// `f = f0(x²) + x·f1(x²)`.
+/// The halves `(f0, f1)` of `f = f0(x²) + x·f1(x²)`.
 ///
 /// The callers keep `f`, so the strided halves are copied into contiguous
 /// buffers for the multiplier.
+fn halves(f: &[BigInt]) -> (Vec<BigInt>, Vec<BigInt>) {
+    let even = f.iter().step_by(2).cloned().collect();
+    let odd = f.iter().skip(1).step_by(2).cloned().collect();
+    (even, odd)
+}
+
+/// `N(f) = f0² − x·f1²` in `Z[x]/(x^(n/2) + 1)`, where
+/// `f = f0(x²) + x·f1(x²)`.
 fn field_norm(f: &[BigInt]) -> Vec<BigInt> {
-    let even: Vec<BigInt> = f.iter().step_by(2).cloned().collect();
-    let odd: Vec<BigInt> = f.iter().skip(1).step_by(2).cloned().collect();
+    let (even, odd) = halves(f);
     let even_sq = negacyclic_mul_big(&even, &even);
     let mut shifted = negacyclic_mul_big(&odd, &odd);
     // x·p wraps the top coefficient to the bottom with a sign flip.
@@ -127,16 +131,18 @@ fn field_norm(f: &[BigInt]) -> Vec<BigInt> {
         .collect()
 }
 
-/// `p(x) ↦ p(x²)`, doubling the degree.
-fn lift(p: Vec<BigInt>) -> Vec<BigInt> {
-    p.into_iter().flat_map(|c| [c, BigInt::zero()]).collect()
-}
-
-/// `p(x) ↦ p(−x)`, as a new polynomial: callers keep `p`.
-fn conjugate(p: &[BigInt]) -> Vec<BigInt> {
-    p.iter()
-        .enumerate()
-        .map(|(i, c)| if i.is_multiple_of(2) { c.clone() } else { -c })
+/// `p(x²)·q(−x)` in `Z[x]/(x^n + 1)`, for `p` in the half-size ring and
+/// `q` in the full one.
+///
+/// With `q = q0(x²) + x·q1(x²)`, `q(−x) = q0(x²) − x·q1(x²)`, so the
+/// product is `(p·q0)(x²) − x·(p·q1)(x²)`: two half-size products, and the
+/// odd part never wraps.
+fn lift_times_conjugate(p: &[BigInt], q: &[BigInt]) -> Vec<BigInt> {
+    let (q0, q1) = halves(q);
+    negacyclic_mul_big(p, &q0)
+        .into_iter()
+        .zip(negacyclic_mul_big(p, &q1))
+        .flat_map(|(even, odd)| [even, -odd])
         .collect()
 }
 
@@ -160,13 +166,9 @@ fn top_bits(p: &[BigInt], shift: u64) -> Option<Vec<f64>> {
 /// longer than `(f, g)`.
 fn reduce(f: &[BigInt], g: &[BigInt], big_f: &mut [BigInt], big_g: &mut [BigInt]) -> Option<()> {
     let size = PRECISION.max(max_bits(f)).max(max_bits(g));
-    let fa = fft(&top_bits(f, size - PRECISION)?)?;
-    let ga = fft(&top_bits(g, size - PRECISION)?)?;
-    let den: Vec<f64> = fa
-        .iter()
-        .zip(&ga)
-        .map(|(x, y)| x.norm_sq() + y.norm_sq())
-        .collect();
+    let fa = fft(&top_bits(f, size - PRECISION)?).ok()?;
+    let ga = fft(&top_bits(g, size - PRECISION)?).ok()?;
+    let den = pair_norm_sq(&fa, &ga);
 
     for _ in 0..MAX_REDUCE_ITERATIONS {
         let big_size = PRECISION.max(max_bits(big_f)).max(max_bits(big_g));
@@ -174,18 +176,17 @@ fn reduce(f: &[BigInt], g: &[BigInt], big_f: &mut [BigInt], big_g: &mut [BigInt]
             return Some(());
         }
         let shift = big_size - PRECISION;
-        let big_fa = fft(&top_bits(big_f, shift)?)?;
-        let big_ga = fft(&top_bits(big_g, shift)?)?;
+        let big_fa = fft(&top_bits(big_f, shift)?).ok()?;
+        let big_ga = fft(&top_bits(big_g, shift)?).ok()?;
         let k_fft: Vec<Complex> = big_fa
             .iter()
             .zip(&big_ga)
             .zip(fa.iter().zip(&ga))
             .zip(&den)
-            .map(|(((bf, bg), (sf, sg)), d)| {
-                bf.times(sf.conj()).plus(bg.times(sg.conj())).scale(1.0 / d)
-            })
+            .map(|(((&bf, &bg), (sf, sg)), d)| (bf * sf.conj() + bg * sg.conj()).scale(1.0 / d))
             .collect();
-        let k = ifft(&k_fft)?
+        let k = ifft(&k_fft)
+            .ok()?
             .into_iter()
             .map(|c| {
                 let r = c.round();
@@ -245,15 +246,37 @@ mod tests {
         );
     }
 
+    /// `p(x) ↦ p(x²)`, doubling the degree.
+    fn lift(p: Vec<BigInt>) -> Vec<BigInt> {
+        p.into_iter().flat_map(|c| [c, BigInt::zero()]).collect()
+    }
+
+    /// `p(x) ↦ p(−x)`.
+    fn conjugate(p: &[BigInt]) -> Vec<BigInt> {
+        p.iter()
+            .enumerate()
+            .map(|(i, c)| if i.is_multiple_of(2) { c.clone() } else { -c })
+            .collect()
+    }
+
     #[test]
-    fn lift_and_conjugate_match_their_definitions() {
+    fn helpers_match_their_definitions() {
         let p = to_big(&[1, 2, 3, 4]);
-        assert_eq!(lift(p.clone()), to_big(&[1, 0, 2, 0, 3, 0, 4, 0]));
-        assert_eq!(conjugate(&p), to_big(&[1, -2, 3, -4]));
+        assert_eq!(halves(&p), (to_big(&[1, 3]), to_big(&[2, 4])));
         assert_eq!(max_bits(&to_big(&[0, -9, 3])), 4);
         assert_eq!(
             top_bits(&to_big(&[1 << 20, -(1 << 21)]), 10),
             Some(std::vec![1024.0, -2048.0])
+        );
+    }
+
+    #[test]
+    fn lift_times_conjugate_matches_the_full_product() {
+        let p = to_big(&[3, -1, 4, 1]);
+        let q = to_big(&[2, 7, -1, 8, 2, -8, 1, 8]);
+        assert_eq!(
+            lift_times_conjugate(&p, &q),
+            negacyclic_mul_big(&lift(p), &conjugate(&q))
         );
     }
 

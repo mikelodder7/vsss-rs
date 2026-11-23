@@ -3,14 +3,13 @@
     SPDX-License-Identifier: Apache-2.0
 */
 //! NTRU trapdoor generation (the IBE `KeyGen`, App. B.3 of ePrint 2026/813).
-use super::fft::fft;
+use super::fft::{fft_of, pair_norm_sq};
 use super::gaussian::sample_poly;
 use super::ring::{PolyQ, PolyZ};
-use super::{GS_NORM_BOUND, Q, SIGMA_F, lattice_error, ntru};
-use crate::VsssResult;
+use super::{GS_NORM_BOUND, Q, SIGMA_F, ntru};
+use crate::{Error, VsssResult};
 use core::fmt::{self, Debug, Formatter};
 use rand_core::CryptoRng;
-use std::vec::Vec;
 
 /// Candidate `(f, g)` pairs tried before key generation gives up. In a
 /// 200-candidate measurement, 49% had `f(1)` odd, 7.5% met the norm bound,
@@ -88,15 +87,9 @@ impl MasterPublicKey {
 /// `q·√(Σ_j 1/(|f(ζ_j)|² + |g(ζ_j)|²) / N)`.
 pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
     let first = (f.norm_sq() + g.norm_sq()) as f64;
-    let to_fft = |p: &PolyZ| {
-        fft(&p.coeffs().iter().map(|&c| c as f64).collect::<Vec<_>>())
-            .ok_or(lattice_error("lattice: FFT length must be a power of two"))
-    };
-    let (ff, gf) = (to_fft(f)?, to_fft(g)?);
-    let inv_sum: f64 = ff
+    let inv_sum: f64 = pair_norm_sq(&fft_of(f)?, &fft_of(g)?)
         .iter()
-        .zip(&gf)
-        .map(|(a, b)| 1.0 / (a.norm_sq() + b.norm_sq()))
+        .map(|d| 1.0 / d)
         .sum();
     let q = f64::from(Q);
     let second = q * q * inv_sum / f.coeffs().len() as f64;
@@ -104,7 +97,7 @@ pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
     if norm.is_finite() {
         Ok(norm)
     } else {
-        Err(lattice_error("lattice: degenerate trapdoor"))
+        Err(Error::Lattice("degenerate trapdoor"))
     }
 }
 
@@ -113,6 +106,11 @@ pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
 /// Samples `f, g ← D_{N,σ_f}` and rejects until `f(1)` is odd (so `f` is
 /// invertible mod `q`), `‖B̃_{f,g}‖ ≤ 1.17·√q`, and `gcd(R_f, R_g) = 1`;
 /// then solves `f·G − g·F = q` and sets `h = g·f⁻¹ mod q`.
+///
+/// # Security
+///
+/// About 110-bit classical security, below 128; see the
+/// [module docs](crate::lattice#security-level).
 pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPublicKey)> {
     for _ in 0..MAX_KEYGEN_ATTEMPTS {
         let f = sample_poly(SIGMA_F, &mut rng)?;
@@ -137,14 +135,12 @@ pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPub
             .checked_mul(&msk.big_g)?
             .checked_sub(&msk.g.checked_mul(&msk.big_f)?)?;
         if residual != PolyZ::constant(i64::from(Q))? {
-            return Err(lattice_error("lattice: NTRU solution failed verification"));
+            return Err(Error::Lattice("NTRU solution failed verification"));
         }
         let mpk = msk.public_key()?;
         return Ok((msk, mpk));
     }
-    Err(lattice_error(
-        "lattice: key generation exhausted its attempts",
-    ))
+    Err(Error::Lattice("key generation exhausted its attempts"))
 }
 
 #[cfg(test)]

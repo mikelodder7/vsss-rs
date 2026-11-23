@@ -35,9 +35,10 @@
 //! Every hash is domain separated and binds the receiver index.
 use super::{
     Ciphertext, IdentitySecretKey, MasterPublicKey, MasterSecretKey, decrypt as ibe_decrypt,
-    encrypt, extract, hash::expand, lattice_error, verify_key, wipe,
+    encrypt, extract, hash::expand, verify_key,
 };
-use crate::pi_la::{coefficient, evaluate, field_message};
+use crate::pi_la::index_identifier;
+use crate::secret::Secret;
 use crate::*;
 use digest::Digest;
 use elliptic_curve::PrimeField;
@@ -154,6 +155,11 @@ pub enum Decrypted<F: PrimeField> {
 
 /// `Share(s, n, t)`: deal `secret` to one receiver per public key, with
 /// `threshold` openings needed to reconstruct.
+///
+/// # Security
+///
+/// About 110-bit classical security, below 128; see the
+/// [module docs](crate::lattice#security-level).
 pub fn share<D, F>(
     dealer: &[u8],
     threshold: usize,
@@ -169,60 +175,36 @@ where
     check_params(threshold, receivers.len())?;
     // `f` holds the secret, `r` the commitment randomness, and `B` masks
     // `f` in `W`: wipe all three on every exit.
-    let mut f = ZeroizingPolynomial::<PrimeFieldShare<F>, Vec<_>>::create(threshold);
-    f.fill(secret, &mut rng, threshold)?;
-    let mut r = ZeroizingPolynomial::<PrimeFieldShare<F>, Vec<_>>::create(threshold);
-    r.fill(&IdentifierPrimeField::random(&mut rng), &mut rng, threshold)?;
-    let mut b = ZeroizingPolynomial::<PrimeFieldShare<F>, Vec<_>>::create(threshold);
-    b.fill(&IdentifierPrimeField::random(&mut rng), &mut rng, threshold)?;
+    type Guarded<F> = ZeroizingPolynomial<PrimeFieldShare<F>, Vec<PrimeFieldShare<F>>>;
+    let f = Guarded::random(secret, &mut rng, threshold)?;
+    let r = Guarded::random(&IdentifierPrimeField::random(&mut rng), &mut rng, threshold)?;
+    let b = Guarded::random(&IdentifierPrimeField::random(&mut rng), &mut rng, threshold)?;
 
     let mut openings = Vec::with_capacity(receivers.len());
     let mut commitments = Vec::with_capacity(receivers.len());
     for index in 1..=receivers.len() {
-        let x = index_identifier::<F>(index);
-        let mut pad = [0u8; PAD_BYTES];
-        rng.fill_bytes(&mut pad);
+        let x = index_identifier(index);
+        let mut pad = Secret::new([0u8; PAD_BYTES]);
+        rng.fill_bytes(&mut *pad);
         let opening = PvssOpening {
             index,
             share: f.evaluate(&x, threshold),
             randomness: r.evaluate(&x, threshold),
-            pad,
+            pad: *pad,
         };
-        wipe(&mut pad);
-        commitments.push(PvssCommitment {
-            share: HashCommitment::commit_with_randomness::<D>(
-                SHARE_COMMITMENT_DST,
-                &field_message(&index_bytes(index), &opening.share),
-                opening.randomness.0.to_repr().as_ref(),
-            ),
-            padding: HashCommitment::commit_with_randomness::<D>(
-                PADDING_COMMITMENT_DST,
-                &field_message(&index_bytes(index), &b.evaluate(&x, threshold)),
-                &opening.pad,
-            ),
-        });
+        commitments.push(commit_opening::<D, F>(&opening, &b.evaluate(&x, threshold)));
         openings.push(opening);
     }
 
     let ch = challenge::<D, F>(dealer, threshold, &commitments);
-    let w = b
-        .coefficients()
-        .iter()
-        .zip(f.coefficients())
-        .enumerate()
-        .map(|(k, (b_k, f_k))| {
-            IdentifierPrimeField(coefficient(b_k, k).0 - ch * coefficient(f_k, k).0)
-        })
-        .collect();
+    let w = mask_plus_scaled(b.coefficients(), -ch, f.coefficients());
 
     let ciphertexts = openings
         .iter()
         .zip(receivers)
         .map(|(opening, mpk)| {
-            let mut plaintext = encode_opening(opening);
-            let ct = encrypt::<D>(mpk, &identity(dealer, opening.index), &plaintext, &mut rng);
-            wipe(&mut plaintext);
-            ct
+            let plaintext = Secret::new(encode_opening(opening));
+            encrypt::<D>(mpk, &identity(dealer, opening.index), &plaintext, &mut rng)
         })
         .collect::<VsssResult<Vec<_>>>()?;
 
@@ -256,10 +238,7 @@ where
     if deal.proof.commitments.len() != receivers {
         return Err(Error::InvalidShare);
     }
-    let ciphertext = index
-        .checked_sub(1)
-        .and_then(|slot| deal.ciphertexts.get(slot))
-        .ok_or(Error::SharingInvalidIdentifier)?;
+    let ciphertext = slot(&deal.ciphertexts, index).ok_or(Error::SharingInvalidIdentifier)?;
     let key = extract::<D>(msk, mpk, &identity(&deal.dealer, index), rng)?;
     let ch = challenge::<D, F>(&deal.dealer, threshold, &deal.proof.commitments);
     match open::<D, F>(&key, ciphertext, index).filter(|o| opening_is_valid::<D, F>(deal, &ch, o)) {
@@ -292,10 +271,8 @@ where
     }
     let ch = challenge::<D, F>(&deal.dealer, threshold, &deal.proof.commitments);
     let valid_complaint = |c: &Complaint| {
-        let Some((mpk, ciphertext)) = c
-            .index
-            .checked_sub(1)
-            .and_then(|slot| receivers.get(slot).zip(deal.ciphertexts.get(slot)))
+        let Some((mpk, ciphertext)) =
+            slot(receivers, c.index).zip(slot(&deal.ciphertexts, c.index))
         else {
             return false;
         };
@@ -342,8 +319,8 @@ fn check_field_bits(bits: u32) -> VsssResult<()> {
     if bits >= MIN_FIELD_BITS {
         Ok(())
     } else {
-        Err(lattice_error(
-            "lattice: PVSS field must have more than 2^128 elements",
+        Err(Error::Lattice(
+            "PVSS field must have more than 2^128 elements",
         ))
     }
 }
@@ -370,28 +347,46 @@ fn opening_is_valid<D: Digest, F: PrimeField>(
     ch: &F,
     opening: &PvssOpening<F>,
 ) -> bool {
-    let Some(commitment) = opening
-        .index
-        .checked_sub(1)
-        .and_then(|slot| deal.proof.commitments.get(slot))
-    else {
+    let Some(commitment) = slot(&deal.proof.commitments, opening.index) else {
         return false;
     };
-    let x = index_identifier::<F>(opening.index);
+    let x = index_identifier(opening.index);
     let b_i = IdentifierPrimeField(evaluate(&deal.proof.w, &x) + *ch * opening.share.0);
+    let expected = commit_opening::<D, F>(opening, &b_i);
+    // Compare both before combining, so the time does not reveal which
+    // failed.
+    let share_ok = expected.share.as_bytes().ct_eq(commitment.share.as_bytes());
+    let padding_ok = expected
+        .padding
+        .as_bytes()
+        .ct_eq(commitment.padding.as_bytes());
+    bool::from(share_ok & padding_ok)
+}
+
+/// `(csh_i, cpt_i)`: the commitments to `i ‖ ⟦s⟧_i` with randomness
+/// `⟦r⟧_i` and to `i ‖ B(i)` with randomness `q_i`.
+fn commit_opening<D: Digest, F: PrimeField>(
+    opening: &PvssOpening<F>,
+    b_i: &IdentifierPrimeField<F>,
+) -> PvssCommitment {
     let prefix = index_bytes(opening.index);
-    let share_ok = commitment.share.verify_with_randomness::<D>(
-        SHARE_COMMITMENT_DST,
-        &field_message(&prefix, &opening.share),
-        opening.randomness.0.to_repr().as_ref(),
-    );
-    let padding_ok = commitment.padding.verify_with_randomness::<D>(
-        PADDING_COMMITMENT_DST,
-        &field_message(&prefix, &b_i),
-        &opening.pad,
-    );
-    // Check both before combining, so the time does not reveal which failed.
-    share_ok.is_ok() & padding_ok.is_ok()
+    PvssCommitment {
+        share: HashCommitment::commit_parts::<D>(
+            SHARE_COMMITMENT_DST,
+            &[&prefix, opening.share.0.to_repr().as_ref()],
+            opening.randomness.0.to_repr().as_ref(),
+        ),
+        padding: HashCommitment::commit_parts::<D>(
+            PADDING_COMMITMENT_DST,
+            &[&prefix, b_i.0.to_repr().as_ref()],
+            &opening.pad,
+        ),
+    }
+}
+
+/// The entry of receiver `index` (1-based) in a per-receiver list.
+fn slot<T>(xs: &[T], index: usize) -> Option<&T> {
+    index.checked_sub(1).and_then(|i| xs.get(i))
 }
 
 /// Decrypt `ciphertext` and parse it as receiver `index`'s opening.
@@ -400,10 +395,8 @@ fn open<D: Digest, F: PrimeField>(
     ciphertext: &Ciphertext,
     index: usize,
 ) -> Option<PvssOpening<F>> {
-    let mut plaintext = ibe_decrypt::<D>(key, ciphertext);
-    let opening = decode_opening(index, &plaintext);
-    wipe(&mut plaintext);
-    opening
+    let plaintext = Secret::new(ibe_decrypt::<D>(key, ciphertext));
+    decode_opening(index, &plaintext)
 }
 
 /// `⟦s⟧_i ‖ ⟦r⟧_i ‖ q_i`, the field elements in their canonical encoding.
@@ -421,11 +414,7 @@ fn decode_opening<F: PrimeField>(index: usize, bytes: &[u8]) -> Option<PvssOpeni
     let len = repr_len::<F>();
     let (share, rest) = bytes.split_at_checked(len)?;
     let (randomness, pad) = rest.split_at_checked(len)?;
-    let field = |b: &[u8]| {
-        let mut repr = F::Repr::default();
-        repr.as_mut().copy_from_slice(b);
-        Option::<F>::from(F::from_repr(repr)).map(IdentifierPrimeField)
-    };
+    let field = |b: &[u8]| IdentifierPrimeField::<F>::from_slice(b).ok();
     Some(PvssOpening {
         index,
         share: field(share)?,
@@ -447,11 +436,6 @@ fn identity(dealer: &[u8], index: usize) -> Vec<u8> {
     id.extend_from_slice(dealer);
     id.extend_from_slice(&(index as u64).to_le_bytes());
     id
-}
-
-/// Receiver `index` as a field element, the Shamir evaluation point.
-fn index_identifier<F: PrimeField>(index: usize) -> IdentifierPrimeField<F> {
-    IdentifierPrimeField(F::from(index as u64))
 }
 
 /// Receiver `index` as the `u64` little-endian prefix of its commitment
@@ -778,20 +762,10 @@ mod tests {
 
         assert_ne!(identity(b"ab", 1), identity(b"a", 1));
         assert_ne!(identity(b"a", 1), identity(b"a", 2));
-        assert_eq!(index_identifier::<Scalar>(3).0, Scalar::from(3u64));
-        let w = [
-            IdentifierPrimeField(Scalar::from(1u64)),
-            IdentifierPrimeField(Scalar::from(2u64)),
-            IdentifierPrimeField(Scalar::from(3u64)),
-        ];
-        // 1 + 2·5 + 3·25 = 86.
-        assert_eq!(evaluate(&w, &index_identifier(5)), Scalar::from(86u64));
-        let poly = [
-            PrimeFieldShare::with_identifier_and_value(w[0], w[1]),
-            PrimeFieldShare::with_identifier_and_value(w[2], w[0]),
-        ];
-        assert_eq!(coefficient(&poly[0], 0).0, Scalar::from(2u64));
-        assert_eq!(coefficient(&poly[1], 1).0, Scalar::from(3u64));
+        assert_eq!(slot(&[10, 20], 1), Some(&10));
+        assert_eq!(slot(&[10, 20], 2), Some(&20));
+        assert_eq!(slot(&[10, 20], 0), None);
+        assert_eq!(slot(&[10, 20], 3), None);
 
         let commitments = std::vec![PvssCommitment {
             share: HashCommitment::from_bytes(&[1u8; 32]).expect("non-empty"),
@@ -803,19 +777,34 @@ mod tests {
             ch,
             challenge::<Sha256, Scalar>(b"dealer-8", 2, &commitments)
         );
-        // The two commitments are domain separated.
-        let message = field_message(&index_bytes(2), &o.share);
+        // commit_opening is the two documented commitments, and they are
+        // domain separated.
+        let mut message = index_bytes(2).to_vec();
+        message.extend_from_slice(o.share.0.to_repr().as_ref());
+        let both = commit_opening::<Sha256, Scalar>(&o, &o.share);
+        assert_eq!(
+            both.share,
+            HashCommitment::commit_with_randomness::<Sha256>(
+                SHARE_COMMITMENT_DST,
+                &message,
+                o.randomness.0.to_repr().as_ref()
+            )
+        );
+        assert_eq!(
+            both.padding,
+            HashCommitment::commit_with_randomness::<Sha256>(
+                PADDING_COMMITMENT_DST,
+                &message,
+                &o.pad
+            )
+        );
         assert_ne!(
             HashCommitment::commit_with_randomness::<Sha256>(
                 SHARE_COMMITMENT_DST,
                 &message,
                 &o.pad
             ),
-            HashCommitment::commit_with_randomness::<Sha256>(
-                PADDING_COMMITMENT_DST,
-                &message,
-                &o.pad
-            )
+            both.padding
         );
         assert_eq!(index_bytes(2), 2u64.to_le_bytes());
     }

@@ -70,12 +70,26 @@ impl HashCommitment {
         message: &[u8],
         randomness: &[u8],
     ) -> Self {
+        Self::commit_parts::<D>(domain, &[message], randomness)
+    }
+
+    /// Commit to the message `parts[0] ‖ parts[1] ‖ …` without building it:
+    /// the bytes hashed are exactly those of [`Self::commit_with_randomness`]
+    /// on the concatenation, so secret parts are never copied into a buffer.
+    pub(crate) fn commit_parts<D: Digest>(
+        domain: &[u8],
+        parts: &[&[u8]],
+        randomness: &[u8],
+    ) -> Self {
+        let message_len: usize = parts.iter().map(|p| p.len()).sum();
+        let hasher = D::new()
+            .chain_update((domain.len() as u64).to_le_bytes())
+            .chain_update(domain)
+            .chain_update((message_len as u64).to_le_bytes());
         Self(
-            D::new()
-                .chain_update((domain.len() as u64).to_le_bytes())
-                .chain_update(domain)
-                .chain_update((message.len() as u64).to_le_bytes())
-                .chain_update(message)
+            parts
+                .iter()
+                .fold(hasher, |h, part| h.chain_update(part))
                 .chain_update(randomness)
                 .finalize()
                 .to_vec(),
@@ -102,7 +116,19 @@ impl HashCommitment {
         message: &[u8],
         randomness: &[u8],
     ) -> VsssResult<()> {
-        let expected = Self::commit_with_randomness::<D>(domain, message, randomness);
+        self.verify_parts::<D>(domain, &[message], randomness)
+    }
+
+    /// Check, in constant time, that this is [`Self::commit_parts`] of
+    /// `parts` under `domain` with `randomness`. Fails with
+    /// [`Error::InvalidShare`] on any mismatch.
+    pub(crate) fn verify_parts<D: Digest>(
+        &self,
+        domain: &[u8],
+        parts: &[&[u8]],
+        randomness: &[u8],
+    ) -> VsssResult<()> {
+        let expected = Self::commit_parts::<D>(domain, parts, randomness);
         if bool::from(expected.0.as_slice().ct_eq(self.0.as_slice())) {
             Ok(())
         } else {
@@ -260,6 +286,21 @@ mod tests {
         );
         assert_eq!(
             c.verify_with_randomness::<Sha256>(b"dt", b"msg", b"rne"),
+            Err(Error::InvalidShare)
+        );
+    }
+
+    #[test]
+    fn parts_hash_like_their_concatenation() {
+        let whole = HashCommitment::commit_with_randomness::<Sha256>(b"dt", b"message", b"rnd");
+        let parts = HashCommitment::commit_parts::<Sha256>(b"dt", &[b"mes", b"", b"sage"], b"rnd");
+        assert_eq!(parts, whole);
+        assert_eq!(
+            whole.verify_parts::<Sha256>(b"dt", &[b"me", b"ssage"], b"rnd"),
+            Ok(())
+        );
+        assert_eq!(
+            whole.verify_parts::<Sha256>(b"dt", &[b"me", b"ssagE"], b"rnd"),
             Err(Error::InvalidShare)
         );
     }

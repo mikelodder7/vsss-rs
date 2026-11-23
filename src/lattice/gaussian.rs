@@ -8,9 +8,9 @@
 //! proportional to `exp(−(z − c)² / (2σ²))`. Sampling is by rejection from a
 //! uniform proposal on `[c − τσ, c + τσ]` with `τ = 13`, so the tail cut
 //! loses less than `2^-120` of the mass. Not constant-time.
+use super::N;
 use super::ring::PolyZ;
-use super::{N, lattice_error};
-use crate::VsssResult;
+use crate::{Error, VsssResult};
 use rand_core::CryptoRng;
 use std::vec::Vec;
 
@@ -34,7 +34,7 @@ pub fn sample_z<R: CryptoRng + ?Sized>(sigma: f64, center: f64, rng: &mut R) -> 
     if !(sigma.is_finite() && sigma > 0.0 && center.is_finite())
         || center.abs() + tail + 1.0 >= MAX_MAGNITUDE
     {
-        return Err(lattice_error("lattice: invalid Gaussian parameters"));
+        return Err(Error::Lattice("invalid Gaussian parameters"));
     }
     let lo = (center - tail).floor() as i64;
     let hi = (center + tail).ceil() as i64;
@@ -55,9 +55,7 @@ pub fn sample_z<R: CryptoRng + ?Sized>(sigma: f64, center: f64, rng: &mut R) -> 
             return Ok(z);
         }
     }
-    Err(lattice_error(
-        "lattice: Gaussian sampler exhausted its attempts",
-    ))
+    Err(Error::Lattice("Gaussian sampler exhausted its attempts"))
 }
 
 /// Sample a polynomial from `D_{N,σ}`: every coefficient independently from

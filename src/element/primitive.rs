@@ -342,116 +342,27 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn primitive_identifier_serde_round_trips_common_formats() {
-        let identifier = IdentifierU16::from(0x1234);
-
-        let json = serde_json::to_string(&identifier).unwrap();
-        assert_eq!(
-            serde_json::from_str::<IdentifierU16>(&json).unwrap(),
-            identifier
-        );
-
-        let postcard = postcard::to_stdvec(&identifier).unwrap();
-        assert_eq!(
-            postcard::from_bytes::<IdentifierU16>(&postcard).unwrap(),
-            identifier
-        );
-
-        let cbor = serde_cbor_2::to_vec(&identifier).unwrap();
-        assert_eq!(
-            serde_cbor_2::from_slice::<IdentifierU16>(&cbor).unwrap(),
-            identifier
-        );
-
-        let bare = serde_bare::to_vec(&identifier).unwrap();
-        assert_eq!(
-            serde_bare::from_slice::<IdentifierU16>(&bare).unwrap(),
-            identifier
-        );
+        crate::tests::utils::assert_serde_round_trip(&IdentifierU16::from(0x1234));
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn primitive_identifier_serde_round_trips_aliases() {
-        assert_eq!(
-            serde_json::from_str::<IdentifierU8>(
-                &serde_json::to_string(&IdentifierU8::from(1)).unwrap()
-            )
-            .unwrap(),
-            IdentifierU8::from(1)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierU32>(
-                &serde_json::to_string(&IdentifierU32::from(2)).unwrap()
-            )
-            .unwrap(),
-            IdentifierU32::from(2)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierU64>(
-                &serde_json::to_string(&IdentifierU64::from(3)).unwrap()
-            )
-            .unwrap(),
-            IdentifierU64::from(3)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierUsize>(
-                &serde_json::to_string(&IdentifierUsize::from(4)).unwrap()
-            )
-            .unwrap(),
-            IdentifierUsize::from(4)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierI8>(
-                &serde_json::to_string(&IdentifierI8::from(-1)).unwrap()
-            )
-            .unwrap(),
-            IdentifierI8::from(-1)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierI16>(
-                &serde_json::to_string(&IdentifierI16::from(-2)).unwrap()
-            )
-            .unwrap(),
-            IdentifierI16::from(-2)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierI32>(
-                &serde_json::to_string(&IdentifierI32::from(-3)).unwrap()
-            )
-            .unwrap(),
-            IdentifierI32::from(-3)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierI64>(
-                &serde_json::to_string(&IdentifierI64::from(-4)).unwrap()
-            )
-            .unwrap(),
-            IdentifierI64::from(-4)
-        );
-        assert_eq!(
-            serde_json::from_str::<IdentifierIsize>(
-                &serde_json::to_string(&IdentifierIsize::from(-5)).unwrap()
-            )
-            .unwrap(),
-            IdentifierIsize::from(-5)
-        );
+        use crate::tests::utils::assert_serde_round_trip;
+        assert_serde_round_trip(&IdentifierU8::from(1));
+        assert_serde_round_trip(&IdentifierU32::from(2));
+        assert_serde_round_trip(&IdentifierU64::from(3));
+        assert_serde_round_trip(&IdentifierUsize::from(4));
+        assert_serde_round_trip(&IdentifierI8::from(-1));
+        assert_serde_round_trip(&IdentifierI16::from(-2));
+        assert_serde_round_trip(&IdentifierI32::from(-3));
+        assert_serde_round_trip(&IdentifierI64::from(-4));
+        assert_serde_round_trip(&IdentifierIsize::from(-5));
 
         #[cfg(target_pointer_width = "64")]
         {
-            assert_eq!(
-                serde_json::from_str::<IdentifierU128>(
-                    &serde_json::to_string(&IdentifierU128::from(6)).unwrap()
-                )
-                .unwrap(),
-                IdentifierU128::from(6)
-            );
-            assert_eq!(
-                serde_json::from_str::<IdentifierI128>(
-                    &serde_json::to_string(&IdentifierI128::from(-6)).unwrap()
-                )
-                .unwrap(),
-                IdentifierI128::from(-6)
-            );
+            assert_serde_round_trip(&IdentifierU128::from(6));
+            assert_serde_round_trip(&IdentifierI128::from(-6));
         }
     }
 }

@@ -213,6 +213,8 @@ mod polynomial;
 mod primitive;
 #[cfg(feature = "bigint")]
 mod saturating;
+#[cfg(feature = "lattice-pvss")]
+mod secret;
 mod set;
 pub mod shamir;
 mod share;

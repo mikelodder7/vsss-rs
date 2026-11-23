@@ -14,185 +14,212 @@
 //! tree last row first, drawing each integer coordinate with width
 //! `σ / ‖b̃_i‖` around its updated center, exactly as Klein's sampler does,
 //! in `O(N log N)` time.
-use super::fft::{Complex, fft, ifft, merge_fft, split_fft};
+use super::Q;
+use super::fft::{
+    Complex, fft_of, integer_poly, merge_fft, pair_norm_sq, roots_for, split_fft, split_roots,
+};
 use super::gaussian::sample_z;
 use super::keygen::MasterSecretKey;
 use super::ring::{PolyQ, PolyZ};
-use super::{Q, lattice_error, wipe};
-use crate::VsssResult;
+use crate::secret::Secret;
+use crate::{Error, VsssResult};
 use rand_core::CryptoRng;
+use std::boxed::Box;
 use std::vec::Vec;
 
-/// One node of the ffLDL tree of a `2×2` Gram matrix over `R[x]/(x^n + 1)`,
-/// stored in the FFT domain.
+/// The ffLDL tree of a `2×2` Gram matrix over `R[x]/(x^n + 1)`, stored in
+/// the FFT domain.
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
-struct LdlTree {
-    /// `L10 = G10 / G00`.
-    l10: Vec<Complex>,
-    /// At a leaf (`n = 1`), `σ / ‖b̃‖` for the first and second coordinate.
-    sigma: [f64; 2],
-    /// Below an inner node, the trees of `D00` and `D11`.
-    children: Vec<LdlTree>,
+enum LdlTree {
+    /// The `n = 1` base case.
+    Leaf {
+        /// `L10 = G10 / G00`.
+        l10: Complex,
+        /// `σ / ‖b̃‖` for the first and second coordinate.
+        sigma: [f64; 2],
+    },
+    /// An inner node.
+    Node {
+        /// `L10 = G10 / G00`.
+        l10: Vec<Complex>,
+        /// The trees of `D00` and `D11`. Each wipes itself on drop.
+        #[cfg_attr(feature = "zeroize", zeroize(skip))]
+        children: Box<[LdlTree; 2]>,
+    },
 }
 
 impl LdlTree {
     /// Factor the self-adjoint Gram matrix `[[g00, g01], [g01*, g11]]`
     /// (`g00` and `g11` are real in the FFT domain) for width `sigma`.
-    fn new(g00: &[f64], g01: &[Complex], g11: &[f64], sigma: f64) -> VsssResult<Self> {
-        let l10: Vec<Complex> = g01
-            .iter()
-            .zip(g00)
-            .map(|(c, &d)| c.conj().scale(1.0 / d))
-            .collect();
+    /// `roots` is a [`split_roots`] table for the splits below.
+    fn new(
+        g00: &[f64],
+        g01: &[Complex],
+        g11: &[f64],
+        sigma: f64,
+        roots: &[Complex],
+    ) -> VsssResult<Self> {
         // D11 = G11 − G10·G00⁻¹·G01 = G11 − |G01|² / G00.
-        let mut d11: Vec<f64> = g11
+        let d11 = Secret::new(
+            g11.iter()
+                .zip(g01.iter().zip(g00))
+                .map(|(&a, (c, &d))| a - c.norm_sq() / d)
+                .collect::<Vec<f64>>(),
+        );
+        if g00
             .iter()
-            .zip(g01.iter().zip(g00))
-            .map(|(&a, (c, &d))| a - c.norm_sq() / d)
-            .collect();
-        if g00.iter().chain(&d11).any(|&d| !(d.is_finite() && d > 0.0)) {
-            return Err(lattice_error("lattice: degenerate trapdoor"));
+            .chain(d11.iter())
+            .any(|&d| !(d.is_finite() && d > 0.0))
+        {
+            return Err(Error::Lattice("degenerate trapdoor"));
         }
-        let tree = match (g00, d11.as_slice()) {
-            ([d00], [d11]) => Self {
-                l10,
+        let l10 = |c: &Complex, d: f64| c.conj().scale(1.0 / d);
+        Ok(match (g00, g01, d11.as_slice()) {
+            ([d00], [g01], [d11]) => Self::Leaf {
+                l10: l10(g01, *d00),
                 sigma: [sigma / d00.sqrt(), sigma / d11.sqrt()],
-                children: Vec::new(),
             },
-            _ => Self {
-                l10,
-                sigma: [0.0; 2],
-                children: std::vec![Self::split(g00, sigma)?, Self::split(&d11, sigma)?],
+            _ => Self::Node {
+                l10: g01.iter().zip(g00).map(|(c, &d)| l10(c, d)).collect(),
+                children: Box::new([
+                    Self::split(g00, sigma, roots)?,
+                    Self::split(&d11, sigma, roots)?,
+                ]),
             },
-        };
-        wipe(&mut d11);
-        Ok(tree)
+        })
     }
 
     /// The tree of a self-adjoint `d` viewed over the half-size ring, where
     /// it becomes the Gram matrix `[[d0, d1], [d1*, d0]]` with
     /// `d = d0(x²) + x·d1(x²)`.
-    fn split(d: &[f64], sigma: f64) -> VsssResult<Self> {
-        let mut full: Vec<Complex> = d.iter().map(|&re| Complex { re, im: 0.0 }).collect();
-        let (mut d0, mut d1) = split_fft(&full);
-        let mut d0_re: Vec<f64> = d0.iter().map(|c| c.re).collect();
-        let tree = Self::new(&d0_re, &d1, &d0_re, sigma);
-        wipe(&mut full);
-        wipe(&mut d0);
-        wipe(&mut d1);
-        wipe(&mut d0_re);
-        tree
+    fn split(d: &[f64], sigma: f64, roots: &[Complex]) -> VsssResult<Self> {
+        let full = Secret::new(
+            d.iter()
+                .map(|&re| Complex { re, im: 0.0 })
+                .collect::<Vec<_>>(),
+        );
+        let mut halves = Secret::new(std::vec![Complex::default(); d.len()]);
+        let (d0, d1) = halves.split_at_mut(d.len() / 2);
+        split_fft(&full, roots_for(roots, d.len()), d0, d1);
+        let d0_re = Secret::new(d0.iter().map(|c| c.re).collect::<Vec<f64>>());
+        Self::new(&d0_re, d1, &d0_re, sigma, roots)
     }
 
     /// Sample `(z0, z1)`, integer polynomials in the FFT domain, from the
-    /// discrete Gaussian of this tree's lattice around `(t0, t1)`.
+    /// discrete Gaussian of this tree's lattice around `(t0, t1)`. `t0` is
+    /// used as working space, and `work` needs `4·n` scratch slots.
     fn sample<R: CryptoRng + ?Sized>(
         &self,
-        t0: &[Complex],
-        t1: &[Complex],
+        (t0, t1): (&mut [Complex], &[Complex]),
+        (z0, z1): (&mut [Complex], &mut [Complex]),
+        work: &mut Workspace<'_>,
         rng: &mut R,
-    ) -> VsssResult<(Vec<Complex>, Vec<Complex>)> {
-        let [child0, child1] = self.children.as_slice() else {
-            return self.sample_leaf(t0, t1, rng);
-        };
-        let z1 = child1.sample_split(t1, rng)?;
-        // Klein's update: move the remaining center by (t1 − z1)·L10.
-        let mut t0_new: Vec<Complex> = t0
-            .iter()
-            .zip(t1.iter().zip(&z1))
-            .zip(&self.l10)
-            .map(|((&a, (&b, &z)), &l)| a.plus(b.minus(z).times(l)))
-            .collect();
-        let z0 = child0.sample_split(&t0_new, rng)?;
-        wipe(&mut t0_new);
-        Ok((z0, z1))
+    ) -> VsssResult<()> {
+        match self {
+            // The `n = 1` base case: two one-dimensional Gaussians, second
+            // first.
+            Self::Leaf { l10, sigma } => {
+                for ((z0, z1), (c0, c1)) in z0.iter_mut().zip(z1.iter_mut()).zip(t0.iter().zip(t1))
+                {
+                    let s1 = sample_z(sigma[1], c1.re, rng)? as f64;
+                    let s0 = sample_z(sigma[0], c0.re + (c1.re - s1) * l10.re, rng)? as f64;
+                    *z0 = Complex { re: s0, im: 0.0 };
+                    *z1 = Complex { re: s1, im: 0.0 };
+                }
+                Ok(())
+            }
+            Self::Node { l10, children } => {
+                let [child0, child1] = &**children;
+                child1.sample_split(t1, z1, work, rng)?;
+                // Klein's update: move the remaining center by (t1 − z1)·L10.
+                for ((a, (&b, &z)), &l) in t0.iter_mut().zip(t1.iter().zip(z1.iter())).zip(l10) {
+                    *a = *a + (b - z) * l;
+                }
+                child0.sample_split(t0, z0, work, rng)
+            }
+        }
     }
 
-    /// Sample around `t` by splitting it over the half-size ring.
+    /// Sample around `t` into `z` by splitting it over the half-size ring.
     fn sample_split<R: CryptoRng + ?Sized>(
         &self,
         t: &[Complex],
+        z: &mut [Complex],
+        work: &mut Workspace<'_>,
         rng: &mut R,
-    ) -> VsssResult<Vec<Complex>> {
-        let (a, b) = split_fft(t);
-        let (za, zb) = self.sample(&a, &b, rng)?;
-        Ok(merge_fft(&za, &zb))
-    }
-
-    /// The `n = 1` base case: two one-dimensional Gaussians, second first.
-    fn sample_leaf<R: CryptoRng + ?Sized>(
-        &self,
-        t0: &[Complex],
-        t1: &[Complex],
-        rng: &mut R,
-    ) -> VsssResult<(Vec<Complex>, Vec<Complex>)> {
-        let ([c0], [c1], [l]) = (t0, t1, self.l10.as_slice()) else {
-            return Err(lattice_error("lattice: sampler input has the wrong length"));
+    ) -> VsssResult<()> {
+        let n = t.len();
+        let roots = roots_for(work.roots, n);
+        let (halves, rest) = work
+            .scratch
+            .split_at_mut_checked(2 * n)
+            .ok_or(Error::Lattice("sampler workspace is too small"))?;
+        let (t_half, z_half) = halves.split_at_mut(n);
+        let (a, b) = t_half.split_at_mut(n / 2);
+        split_fft(t, roots, a, b);
+        let (za, zb) = z_half.split_at_mut(n / 2);
+        let mut inner = Workspace {
+            roots: work.roots,
+            scratch: rest,
         };
-        let z1 = sample_z(self.sigma[1], c1.re, rng)? as f64;
-        let z0 = sample_z(self.sigma[0], c0.re + (c1.re - z1) * l.re, rng)? as f64;
-        let real = |re| std::vec![Complex { re, im: 0.0 }];
-        Ok((real(z0), real(z1)))
+        self.sample((a, b), (za, zb), &mut inner, rng)?;
+        merge_fft(za, zb, roots, z);
+        Ok(())
     }
 
     /// Every leaf width `σ / ‖b̃_i‖`, in row order.
     #[cfg(test)]
     fn leaf_sigmas(&self) -> Vec<f64> {
-        if self.children.is_empty() {
-            self.sigma.to_vec()
-        } else {
-            self.children.iter().flat_map(Self::leaf_sigmas).collect()
+        match self {
+            Self::Leaf { sigma, .. } => sigma.to_vec(),
+            Self::Node { children, .. } => children.iter().flat_map(Self::leaf_sigmas).collect(),
         }
     }
 }
 
-/// Klein/GPV sampling for one master secret key, with the ffLDL tree and
-/// the FFT images of the trapdoor precomputed. Everything derived from the
-/// key is wiped on drop.
-#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
+/// What one sampling pass works in: the split roots and the scratch space
+/// still free at this depth.
+struct Workspace<'a> {
+    roots: &'a [Complex],
+    scratch: &'a mut [Complex],
+}
+
+/// Klein/GPV sampling for one master secret key, with the ffLDL tree, the
+/// split roots, and the FFT images of the trapdoor precomputed. Everything
+/// derived from the key is wiped on drop.
 pub(crate) struct TrapdoorSampler<'a> {
-    #[cfg_attr(feature = "zeroize", zeroize(skip))]
     msk: &'a MasterSecretKey,
-    f: Vec<Complex>,
-    big_f: Vec<Complex>,
+    f: Secret<Vec<Complex>>,
+    big_f: Secret<Vec<Complex>>,
+    roots: Vec<Complex>,
     tree: LdlTree,
 }
 
 impl<'a> TrapdoorSampler<'a> {
     /// Precompute sampling at width `sigma` for `msk`.
     pub(crate) fn new(msk: &'a MasterSecretKey, sigma: f64) -> VsssResult<Self> {
-        let mut g = fft_of(msk.g())?;
-        let f = fft_of(msk.f())?;
-        let mut big_g = fft_of(msk.big_g())?;
-        let big_f = fft_of(msk.big_f())?;
+        let g = Secret::new(fft_of(msk.g())?);
+        let f = Secret::new(fft_of(msk.f())?);
+        let big_g = Secret::new(fft_of(msk.big_g())?);
+        let big_f = Secret::new(fft_of(msk.big_f())?);
+        let roots = split_roots(f.len());
         // Gram matrix of the rows (g, −f) and (G, −F).
-        let mut g00: Vec<f64> = g
-            .iter()
-            .zip(&f)
-            .map(|(a, b)| a.norm_sq() + b.norm_sq())
-            .collect();
-        let mut g01: Vec<Complex> = g
-            .iter()
-            .zip(&big_g)
-            .zip(f.iter().zip(&big_f))
-            .map(|((&a, &bg), (&b, &bf))| a.times(bg.conj()).plus(b.times(bf.conj())))
-            .collect();
-        let mut g11: Vec<f64> = big_g
-            .iter()
-            .zip(&big_f)
-            .map(|(a, b)| a.norm_sq() + b.norm_sq())
-            .collect();
-        let tree = LdlTree::new(&g00, &g01, &g11, sigma);
-        wipe(&mut g);
-        wipe(&mut big_g);
-        wipe(&mut g00);
-        wipe(&mut g01);
-        wipe(&mut g11);
+        let g00 = Secret::new(pair_norm_sq(&g, &f));
+        let g01 = Secret::new(
+            g.iter()
+                .zip(big_g.iter())
+                .zip(f.iter().zip(big_f.iter()))
+                .map(|((&a, &bg), (&b, &bf))| a * bg.conj() + b * bf.conj())
+                .collect::<Vec<_>>(),
+        );
+        let g11 = Secret::new(pair_norm_sq(&big_g, &big_f));
+        let tree = LdlTree::new(&g00, &g01, &g11, sigma, &roots)?;
         Ok(Self {
             msk,
             f,
             big_f,
-            tree: tree?,
+            roots,
+            tree,
         })
     }
 
@@ -205,52 +232,40 @@ impl<'a> TrapdoorSampler<'a> {
         rng: &mut R,
     ) -> VsssResult<PolyZ> {
         let t_fft = fft_of(&PolyZ::from_coeffs(t.centered())?)?;
+        let n = t_fft.len();
         // (τ0, τ1) = (t, 0)·B⁻¹ = (−t·F/q, t·f/q).
         let inv_q = 1.0 / f64::from(Q);
-        let tau0: Vec<Complex> = t_fft
-            .iter()
-            .zip(&self.big_f)
-            .map(|(a, b)| a.times(*b).scale(-inv_q))
-            .collect();
-        let tau1: Vec<Complex> = t_fft
-            .iter()
-            .zip(&self.f)
-            .map(|(a, b)| a.times(*b).scale(inv_q))
-            .collect();
-        let (mut z0_fft, mut z1_fft) = self.tree.sample(&tau0, &tau1, rng)?;
-        let mut z0 = integer_poly(&z0_fft)?;
-        let mut z1 = integer_poly(&z1_fft)?;
-        wipe(&mut z0_fft);
-        wipe(&mut z1_fft);
+        let mut tau0 = Secret::new(
+            t_fft
+                .iter()
+                .zip(self.big_f.iter())
+                .map(|(&a, &b)| (a * b).scale(-inv_q))
+                .collect::<Vec<_>>(),
+        );
+        let tau1 = Secret::new(
+            t_fft
+                .iter()
+                .zip(self.f.iter())
+                .map(|(&a, &b)| (a * b).scale(inv_q))
+                .collect::<Vec<_>>(),
+        );
+        // One buffer for the sample and every level's splits.
+        let mut buffer = Secret::new(std::vec![Complex::default(); 6 * n]);
+        let (z, scratch) = buffer.split_at_mut(2 * n);
+        let (z0, z1) = z.split_at_mut(n);
+        let mut work = Workspace {
+            roots: &self.roots,
+            scratch,
+        };
+        self.tree
+            .sample((&mut tau0, &tau1), (z0, z1), &mut work, rng)?;
+        let z0 = Secret::new(integer_poly(z0)?);
+        let z1 = Secret::new(integer_poly(z1)?);
         // v = z0·(g, −f) + z1·(G, −F), so −v2 = z0·f + z1·F.
-        let s2 = z0
-            .checked_mul(self.msk.f())
-            .and_then(|x| x.checked_add(&z1.checked_mul(self.msk.big_f())?));
-        wipe(&mut z0);
-        wipe(&mut z1);
-        s2
+        let z0_f = Secret::new(z0.checked_mul(self.msk.f())?);
+        let z1_big_f = Secret::new(z1.checked_mul(self.msk.big_f())?);
+        z0_f.checked_add(&z1_big_f)
     }
-}
-
-/// The FFT image of an integer polynomial.
-fn fft_of(p: &PolyZ) -> VsssResult<Vec<Complex>> {
-    let coeffs: Vec<f64> = p.coeffs().iter().map(|&c| c as f64).collect();
-    fft(&coeffs).ok_or(lattice_error("lattice: FFT length must be a power of two"))
-}
-
-/// Round an FFT image of an integer polynomial back to its coefficients.
-fn integer_poly(p: &[Complex]) -> VsssResult<PolyZ> {
-    let coeffs = ifft(p)
-        .ok_or(lattice_error("lattice: FFT length must be a power of two"))?
-        .into_iter()
-        .map(|c| {
-            let r = c.round();
-            (r.is_finite() && r.abs() < (1u64 << 52) as f64)
-                .then_some(r as i64)
-                .ok_or(lattice_error("lattice: sampled coefficient out of range"))
-        })
-        .collect::<VsssResult<Vec<_>>>()?;
-    PolyZ::from_coeffs(coeffs)
 }
 
 #[cfg(test)]
@@ -305,27 +320,50 @@ mod tests {
     }
 
     #[test]
-    fn degenerate_gram_matrices_and_bad_inputs_are_rejected() {
+    fn degenerate_gram_matrices_are_rejected_and_leaves_sample() {
         let zero = Complex::default();
-        assert!(LdlTree::new(&[0.0], &[zero], &[1.0], 1.0).is_err());
+        assert!(LdlTree::new(&[0.0], &[zero], &[1.0], 1.0, &[]).is_err());
         // G11 − |G01|²/G00 = 1 − 4 < 0.
         let big = Complex { re: 2.0, im: 0.0 };
-        assert!(LdlTree::new(&[1.0], &[big], &[1.0], 1.0).is_err());
-        let leaf = LdlTree::new(&[4.0], &[zero], &[9.0], 6.0).expect("valid");
-        assert_eq!(leaf.sigma, [3.0, 2.0]);
+        assert!(LdlTree::new(&[1.0], &[big], &[1.0], 1.0, &[]).is_err());
+        let leaf = LdlTree::new(&[4.0], &[zero], &[9.0], 6.0, &[]).expect("valid");
+        let LdlTree::Leaf { sigma, .. } = &leaf else {
+            panic!("n = 1 is a leaf");
+        };
+        assert_eq!(*sigma, [3.0, 2.0]);
         let mut rng = StdRng::from_seed([62u8; 32]);
-        assert!(leaf.sample(&[zero, zero], &[zero], &mut rng).is_err());
-        let (z0, z1) = leaf
-            .sample(&[Complex { re: 1e6, im: 0.0 }], &[zero], &mut rng)
-            .expect("valid");
+        let (mut z0, mut z1) = ([zero], [zero]);
+        let mut work = Workspace {
+            roots: &[],
+            scratch: &mut [],
+        };
+        leaf.sample(
+            (&mut [Complex { re: 1e6, im: 0.0 }], &[zero]),
+            (&mut z0, &mut z1),
+            &mut work,
+            &mut rng,
+        )
+        .expect("valid");
         assert!((z0[0].re - 1e6).abs() < 100.0 && z1[0].re.abs() < 100.0);
-        assert!(
-            integer_poly(&[Complex {
-                re: f64::NAN,
-                im: 0.0
-            }])
-            .is_err()
+    }
+
+    #[test]
+    fn a_short_workspace_is_an_error() {
+        let (msk, _) = &keys()[0];
+        let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT).expect("sampler");
+        let t = std::vec![Complex::default(); N];
+        let mut z = std::vec![Complex::default(); N];
+        let mut work = Workspace {
+            roots: &sampler.roots,
+            scratch: &mut [],
+        };
+        let mut rng = StdRng::from_seed([63u8; 32]);
+        let LdlTree::Node { children, .. } = &sampler.tree else {
+            panic!("the root is a node");
+        };
+        assert_eq!(
+            children[1].sample_split(&t, &mut z, &mut work, &mut rng),
+            Err(Error::Lattice("sampler workspace is too small"))
         );
-        assert!(fft_of(&PolyZ::constant(1).expect("in range")).is_ok());
     }
 }

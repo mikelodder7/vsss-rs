@@ -5,10 +5,16 @@
 //! Lattice building blocks for a post-quantum publicly verifiable secret
 //! sharing scheme.
 //!
+//! # Security level
+//!
+//! **About 110-bit classical security, below the 128-bit level of the rest
+//! of this crate.** The parameters `N = 1024`, `q = 2^29` are the paper's;
+//! its Table 5 (ePrint 2026/813, App. B.3) estimates the cheapest attack,
+//! BDD, at `2^110.1` classical operations with the lattice estimator.
+//! Quantum security is lower and is not estimated.
+//!
 //! **Experimental and unaudited. Not constant-time. Do not use to protect
-//! real secrets.** The concrete identity-based encryption parameters give
-//! roughly 110 bits of classical security according to the lattice
-//! estimator (Table 5 of the paper), not 128.
+//! real secrets.**
 //!
 //! This module follows Kate, Mukherjee, Saleem, Sarkar, and Sinha,
 //! "Practical Post-Quantum Secure Publicly Verifiable Secret Sharing and
@@ -31,9 +37,9 @@
 //!
 //! Secret-dependent branches, rejection loops, and floating-point arithmetic
 //! all leak timing. Intermediate big integers in the NTRU solver are not
-//! wiped because `num-bigint` has no zeroize support, and neither are the
-//! transient floating-point buffers inside one sampling pass; the sampling
-//! tree, the identity keys, and the PVSS secrets are.
+//! wiped because `num-bigint` has no zeroize support; the sampling tree and
+//! workspace, the encryption randomness, the identity keys, and the PVSS
+//! secrets are.
 mod fft;
 mod gaussian;
 mod hash;
@@ -50,8 +56,6 @@ pub use hash::{hash_to_mask, hash_to_ring};
 pub use ibe::{Ciphertext, IdentitySecretKey, decrypt, encrypt, extract, verify_key};
 pub use keygen::{MasterPublicKey, MasterSecretKey, gram_schmidt_norm, keygen};
 pub use ring::{PolyQ, PolyZ};
-
-use crate::Error;
 
 /// Ring degree `N`; the ring is `Z_q[x]/(x^N + 1)`.
 pub const N: usize = 1024;
@@ -74,21 +78,6 @@ pub const B_X: usize = 40;
 /// Low bits dropped from `v` by encryption, `ℓ`; `v` is rounded to a
 /// multiple of `2^ℓ`.
 pub const ROUNDING_BITS: u32 = 24;
-
-/// The error every lattice failure maps to, tagged with what went wrong.
-pub(crate) const fn lattice_error(reason: &'static str) -> Error {
-    Error::Lattice(reason)
-}
-
-/// Wipe `value` when the `zeroize` feature is on.
-#[cfg(feature = "zeroize")]
-pub(crate) fn wipe<Z: zeroize::Zeroize>(value: &mut Z) {
-    value.zeroize();
-}
-
-/// Without the `zeroize` feature there is nothing to wipe with.
-#[cfg(not(feature = "zeroize"))]
-pub(crate) fn wipe<Z>(_value: &mut Z) {}
 
 /// Fixtures shared by the lattice tests.
 #[cfg(test)]
@@ -141,20 +130,5 @@ mod tests {
         assert!(GAMMA_KEY as f64 > SIGMA_EXTRACT * (2.0 * n).sqrt());
         assert_eq!(B_X * B_X, 1600);
         assert_eq!(ROUNDING_BITS, 24);
-    }
-
-    #[test]
-    fn wipe_clears_when_zeroize_is_enabled() {
-        let mut secret = std::vec![7u8; 4];
-        wipe(&mut secret);
-        #[cfg(feature = "zeroize")]
-        assert!(secret.is_empty());
-        #[cfg(not(feature = "zeroize"))]
-        assert_eq!(secret, std::vec![7u8; 4]);
-    }
-
-    #[test]
-    fn lattice_error_carries_its_reason() {
-        assert_eq!(lattice_error("why"), Error::Lattice("why"));
     }
 }

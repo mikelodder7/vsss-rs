@@ -531,15 +531,7 @@ where
 }
 
 #[cfg(feature = "zeroize")]
-impl<G: Group + GroupEncoding + Default> zeroize::Zeroize for ValueGroup<G> {
-    /// `G` is not required to implement `Zeroize`, so this stores the
-    /// identity and passes it through `black_box` so the store cannot be
-    /// elided.
-    fn zeroize(&mut self) {
-        self.0 = G::identity();
-        core::hint::black_box(&self.0);
-    }
-}
+impl<G: Group + GroupEncoding + Default> zeroize::DefaultIsZeroes for ValueGroup<G> {}
 
 impl<G: Group + GroupEncoding + Default> ValueGroup<G> {
     /// Create the additive identity element.

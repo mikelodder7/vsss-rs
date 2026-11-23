@@ -30,10 +30,7 @@ pub(crate) fn expand<D: Digest>(dst: &[u8], input: &[u8], out: &mut [u8]) {
             .chain_update(out_len.to_le_bytes())
             .chain_update((block as u64).to_le_bytes())
             .finalize();
-        chunk
-            .iter_mut()
-            .zip(bytes.iter())
-            .for_each(|(o, b)| *o = *b);
+        chunk.copy_from_slice(&bytes[..chunk.len()]);
     }
 }
 

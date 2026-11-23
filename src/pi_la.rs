@@ -105,12 +105,7 @@ where
     F: PrimeField,
     S: Share<Identifier = IdentifierPrimeField<F>, Value = IdentifierPrimeField<F>>,
 {
-    let mut id = IdentifierPrimeField::<F>::zero();
-    let one = IdentifierPrimeField::<F>::one();
-    let ids = (0..limit).map(|_| {
-        id.inc(&one);
-        id
-    });
+    let ids = (1..=limit).map(index_identifier);
     split_secret_with_participant_ids::<D, S, F>(threshold, secret, rng, ids)
 }
 
@@ -135,11 +130,9 @@ where
 
     // Both polynomials reveal the secret: `f` directly, and `r` through
     // `z = r + d·f`. Keep them in guards that wipe them on every exit.
-    let mut f = ZeroizingPolynomial::<S, Vec<S>>::create(threshold);
-    f.fill(secret, &mut rng, threshold)?;
+    let f = ZeroizingPolynomial::<S, Vec<S>>::random(secret, &mut rng, threshold)?;
     let mask = IdentifierPrimeField::<F>::random(&mut rng);
-    let mut r = ZeroizingPolynomial::<S, Vec<S>>::create(threshold);
-    r.fill(&mask, &mut rng, threshold)?;
+    let r = ZeroizingPolynomial::<S, Vec<S>>::random(&mask, &mut rng, threshold)?;
 
     let mut shares = Vec::with_capacity(ids.len());
     let mut commitments = Vec::with_capacity(ids.len());
@@ -148,9 +141,9 @@ where
         let r_i = r.evaluate(&id, threshold);
         commitments.push(PiLaCommitment {
             identifier: id,
-            digest: HashCommitment::commit_with_randomness::<D>(
+            digest: HashCommitment::commit_parts::<D>(
                 COMMITMENT_DST,
-                &field_message(id.0.to_repr().as_ref(), &f_i),
+                &[id.0.to_repr().as_ref(), f_i.0.to_repr().as_ref()],
                 r_i.0.to_repr().as_ref(),
             ),
         });
@@ -158,15 +151,7 @@ where
     }
 
     let d = challenge::<D, F>(threshold, &commitments)?;
-    let z = f
-        .coefficients()
-        .iter()
-        .zip(r.coefficients())
-        .enumerate()
-        .map(|(k, (f_k, r_k))| {
-            IdentifierPrimeField(coefficient(r_k, k).0 + d.0 * coefficient(f_k, k).0)
-        })
-        .collect();
+    let z = mask_plus_scaled(r.coefficients(), d.0, f.coefficients());
 
     Ok(PiLaResult {
         shares,
@@ -207,72 +192,21 @@ impl<F: PrimeField> PiLaProof<F> {
         let d = challenge::<D, F>(threshold, &self.commitments)?;
         let f_i = share.value();
         let r_i = IdentifierPrimeField(evaluate(&self.z, share.identifier()) - d.0 * f_i.0);
-        commitment.digest.verify_with_randomness::<D>(
+        commitment.digest.verify_parts::<D>(
             COMMITMENT_DST,
-            &field_message(share.identifier().0.to_repr().as_ref(), f_i),
+            &[
+                share.identifier().0.to_repr().as_ref(),
+                f_i.0.to_repr().as_ref(),
+            ],
             r_i.0.to_repr().as_ref(),
         )
     }
 }
 
-/// The `k`-th coefficient of a polynomial stored the crate's way: the
-/// constant term in the value, every other coefficient in the identifier.
-pub(crate) fn coefficient<S, F>(share: &S, k: usize) -> &IdentifierPrimeField<F>
-where
-    F: PrimeField,
-    S: Share<Identifier = IdentifierPrimeField<F>, Value = IdentifierPrimeField<F>>,
-{
-    if k == 0 {
-        share.value()
-    } else {
-        share.identifier()
-    }
-}
-
-/// Evaluate `z` at `x` with Horner's method.
-pub(crate) fn evaluate<F: PrimeField>(
-    z: &[IdentifierPrimeField<F>],
-    x: &IdentifierPrimeField<F>,
-) -> F {
-    z.iter().rev().fold(F::ZERO, |acc, c| acc * x.0 + c.0)
-}
-
-/// Reject zero identifiers, which would expose the secret, and duplicates.
-fn validate_identifiers<'a, F: PrimeField + 'a>(
-    ids: impl Iterator<Item = &'a IdentifierPrimeField<F>> + Clone,
-) -> VsssResult<()> {
-    for (i, id) in ids.clone().enumerate() {
-        if bool::from(id.is_zero()) {
-            return Err(Error::SharingInvalidIdentifier);
-        }
-        if ids.clone().skip(i + 1).any(|other| other == id) {
-            return Err(Error::SharingDuplicateIdentifier);
-        }
-    }
-    Ok(())
-}
-
-/// A commitment message holding secret field elements, wiped on drop under
-/// the `zeroize` feature.
-#[cfg(feature = "zeroize")]
-pub(crate) type FieldMessage = zeroize::Zeroizing<Vec<u8>>;
-/// A commitment message holding secret field elements.
-#[cfg(not(feature = "zeroize"))]
-pub(crate) type FieldMessage = Vec<u8>;
-
-/// The commitment message `prefix ‖ value`, with `value` in its canonical
-/// encoding.
-pub(crate) fn field_message<F: PrimeField>(
-    prefix: &[u8],
-    value: &IdentifierPrimeField<F>,
-) -> FieldMessage {
-    let repr = value.0.to_repr();
-    let mut message = FieldMessage::default();
-    // Reserve up front so no reallocation leaves an unwiped copy behind.
-    message.reserve_exact(prefix.len() + repr.as_ref().len());
-    message.extend_from_slice(prefix);
-    message.extend_from_slice(repr.as_ref());
-    message
+/// Participant `index` as a field element, the sequential identifier
+/// [`split_secret`] assigns and the PVSS evaluation point.
+pub(crate) fn index_identifier<F: PrimeField>(index: usize) -> IdentifierPrimeField<F> {
+    IdentifierPrimeField(F::from(index as u64))
 }
 
 /// Derive the non-zero challenge `d` from the threshold and every
@@ -573,7 +507,8 @@ mod tests {
         };
         let d = challenge::<Sha256, _>(3, &result.proof.commitments).unwrap();
         for (share, c) in result.shares.iter().zip(&result.proof.commitments) {
-            let message = field_message(share.identifier().0.to_repr().as_ref(), share.value());
+            let mut message = share.identifier().0.to_repr().to_vec();
+            message.extend_from_slice(share.value().0.to_repr().as_ref());
             let expected = HashCommitment::commit_with_randomness::<Sha256>(
                 COMMITMENT_DST,
                 &message,
@@ -584,32 +519,14 @@ mod tests {
     }
 
     #[test]
-    fn field_message_is_prefix_then_canonical_value() {
-        let value = IdentifierPrimeField(k256::Scalar::from(0x0A0Bu64));
-        let message = field_message(b"pre", &value);
-        assert_eq!(&message[..3], b"pre");
-        assert_eq!(&message[3..], value.0.to_repr().as_slice());
-        assert_eq!(message.len(), 3 + 32);
-    }
-
-    #[test]
-    fn coefficient_and_evaluate_match_their_definitions() {
-        let s = |id: u64, v: u64| {
-            K256Share::with_identifier_and_value(
-                IdentifierPrimeField(k256::Scalar::from(id)),
-                IdentifierPrimeField(k256::Scalar::from(v)),
-            )
-        };
-        // Constant term lives in the value, the rest in the identifier.
-        let poly = [s(9, 2), s(3, 9), s(5, 9)];
-        assert_eq!(coefficient(&poly[0], 0).0, k256::Scalar::from(2u64));
-        assert_eq!(coefficient(&poly[1], 1).0, k256::Scalar::from(3u64));
-        assert_eq!(coefficient(&poly[2], 2).0, k256::Scalar::from(5u64));
-
-        // z(x) = 2 + 3x + 5x^2 at x = 4 is 2 + 12 + 80 = 94.
-        let z = [2u64, 3, 5].map(|c| IdentifierPrimeField(k256::Scalar::from(c)));
-        let x = IdentifierPrimeField(k256::Scalar::from(4u64));
-        assert_eq!(evaluate(&z, &x), k256::Scalar::from(94u64));
-        assert_eq!(evaluate::<k256::Scalar>(&[], &x), k256::Scalar::ZERO);
+    fn split_secret_numbers_participants_from_one() {
+        let (_, result) = deal(13);
+        for (i, share) in (1u64..).zip(&result.shares) {
+            assert_eq!(share.identifier().0, k256::Scalar::from(i));
+        }
+        assert_eq!(
+            index_identifier::<k256::Scalar>(3).0,
+            k256::Scalar::from(3u64)
+        );
     }
 }

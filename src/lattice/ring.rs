@@ -3,9 +3,9 @@
     SPDX-License-Identifier: Apache-2.0
 */
 //! The rings `R_q = Z_q[x]/(x^N + 1)` and `R = Z[x]/(x^N + 1)`.
-use super::poly::{bits_i128, fits_i128, negacyclic_mul};
-use super::{LOG_Q, N, Q, lattice_error};
-use crate::VsssResult;
+use super::poly::{checked_mul_i128, negacyclic_mul};
+use super::{LOG_Q, N, Q};
+use crate::{Error, VsssResult};
 use core::num::Wrapping;
 use core::ops::{Add, Mul, Neg, Sub};
 use std::vec::Vec;
@@ -62,7 +62,7 @@ impl PolyQ {
     pub fn from_canonical(coeffs: Vec<u32>) -> VsssResult<Self> {
         Self::check_len(coeffs.len())?;
         if coeffs.iter().any(|&c| c >= Q) {
-            return Err(lattice_error("lattice: coefficient out of range"));
+            return Err(Error::Lattice("coefficient out of range"));
         }
         Ok(Self::from_reduced(coeffs))
     }
@@ -77,8 +77,8 @@ impl PolyQ {
     pub fn from_bytes(bytes: &[u8]) -> VsssResult<Self> {
         let (words, rest) = bytes.as_chunks::<4>();
         if !rest.is_empty() {
-            return Err(lattice_error(
-                "lattice: a ring element needs exactly N coefficients",
+            return Err(Error::Lattice(
+                "a ring element needs exactly N coefficients",
             ));
         }
         Self::from_canonical(words.iter().map(|w| u32::from_le_bytes(*w)).collect())
@@ -93,8 +93,8 @@ impl PolyQ {
         if len == N {
             Ok(())
         } else {
-            Err(lattice_error(
-                "lattice: a ring element needs exactly N coefficients",
+            Err(Error::Lattice(
+                "a ring element needs exactly N coefficients",
             ))
         }
     }
@@ -123,11 +123,7 @@ impl PolyQ {
     /// The multiplicative inverse modulo `q`. It exists exactly when `a(1)`
     /// is odd; otherwise this returns an error.
     pub fn inverse(&self) -> VsssResult<Self> {
-        let two = {
-            let mut p = Self::zero();
-            p.coeffs[0] = 2;
-            p
-        };
+        let two = &Self::one() + &Self::one();
         let mut inv = Self::one();
         for _ in 0..NEWTON_STEPS {
             inv = &inv * &(&two - &(self * &inv));
@@ -135,9 +131,7 @@ impl PolyQ {
         if self * &inv == Self::one() {
             Ok(inv)
         } else {
-            Err(lattice_error(
-                "lattice: ring element is not invertible mod q",
-            ))
+            Err(Error::Lattice("ring element is not invertible mod q"))
         }
     }
 
@@ -232,7 +226,7 @@ impl PolyZ {
     pub fn from_coeffs(coeffs: Vec<i64>) -> VsssResult<Self> {
         PolyQ::check_len(coeffs.len())?;
         if coeffs.contains(&i64::MIN) {
-            return Err(lattice_error("lattice: coefficient out of range"));
+            return Err(Error::Lattice("coefficient out of range"));
         }
         Ok(Self { coeffs })
     }
@@ -281,14 +275,10 @@ impl PolyZ {
     /// for exact `i128` accumulation or a result coefficient leaves `i64`.
     pub fn checked_mul(&self, other: &Self) -> VsssResult<Self> {
         let wide = |p: &Self| p.coeffs.iter().map(|&c| i128::from(c)).collect::<Vec<_>>();
-        let (a, b) = (wide(self), wide(other));
-        let max_bits = |p: &[i128]| p.iter().map(|&c| bits_i128(c)).max().unwrap_or(0);
-        if !fits_i128(max_bits(&a), max_bits(&b), N) {
-            return Err(lattice_error("lattice: operands too large to multiply"));
-        }
-        let coeffs = negacyclic_mul(&a, &b)
+        let coeffs = checked_mul_i128(&wide(self), &wide(other))
+            .ok_or(Error::Lattice("operands too large to multiply"))?
             .into_iter()
-            .map(|c| i64::try_from(c).map_err(|_| lattice_error("lattice: product overflow")))
+            .map(|c| i64::try_from(c).map_err(|_| Error::Lattice("product overflow")))
             .collect::<VsssResult<Vec<_>>>()?;
         Self::from_coeffs(coeffs)
     }
@@ -298,7 +288,7 @@ impl PolyZ {
             .coeffs
             .iter()
             .zip(&other.coeffs)
-            .map(|(&a, &b)| op(a, b).ok_or(lattice_error("lattice: integer overflow")))
+            .map(|(&a, &b)| op(a, b).ok_or(Error::Lattice("integer overflow")))
             .collect::<VsssResult<Vec<_>>>()?;
         Self::from_coeffs(coeffs)
     }

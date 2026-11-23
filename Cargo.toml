@@ -27,6 +27,7 @@ zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 legacy-curve-tests = []
 hash-commitment = ["alloc", "dep:digest"]
 pi-la = ["alloc", "curve", "hash-commitment"]
+# Experimental and unaudited: ~110-bit classical security (below 128).
 lattice-pvss = ["std", "bigint", "pi-la"]
 
 [dependencies]

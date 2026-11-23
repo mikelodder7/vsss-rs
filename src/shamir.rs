@@ -59,8 +59,8 @@ where
         participant_generators: &[ParticipantIdGenerator<S::Identifier>],
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
-        let mut polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
-        polynomial.fill(secret, rng, threshold)?;
+        let polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::random(secret, rng, threshold)?;
         let ss = create_shares_with_participant_generators(
             &polynomial,
             threshold,
@@ -79,8 +79,8 @@ where
         out: &mut [S],
     ) -> VsssResult<()> {
         check_params(threshold, out.len())?;
-        let mut polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
-        polynomial.fill(secret, rng, threshold)?;
+        let polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::random(secret, rng, threshold)?;
         create_shares_from_polynomial_with_participant_generators_in_place(
             &polynomial,
             threshold,
@@ -116,8 +116,8 @@ where
         participant_ids: impl IntoIterator<Item = S::Identifier>,
     ) -> VsssResult<Self::ShareSet> {
         check_params(threshold, limit)?;
-        let mut polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
-        polynomial.fill(secret, rng, threshold)?;
+        let polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::random(secret, rng, threshold)?;
         create_shares_with_participant_ids_iter(&polynomial, threshold, limit, participant_ids)
     }
 
@@ -159,8 +159,8 @@ where
         out: &mut [S],
     ) -> VsssResult<()> {
         check_params(threshold, out.len())?;
-        let mut polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
-        polynomial.fill(secret, rng, threshold)?;
+        let polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::random(secret, rng, threshold)?;
         create_shares_from_polynomial_in_place(&polynomial, threshold, participant_ids, out)
     }
 
@@ -676,8 +676,7 @@ where
     S::Identifier: 'a,
 {
     check_params(threshold, limit)?;
-    let mut polynomial = <Vec<S> as Polynomial<S>>::create(threshold);
-    polynomial.fill(secret, rng, threshold)?;
+    let polynomial = ZeroizingPolynomial::<S, Vec<S>>::random(secret, rng, threshold)?;
     create_shares_with_participant_generators_iter(
         &polynomial,
         threshold,
