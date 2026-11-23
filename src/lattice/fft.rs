@@ -7,6 +7,25 @@
 //! [`fft`] evaluates a real polynomial at the `n` roots `ω^(2j+1)` of
 //! `x^n + 1`, where `ω = e^(iπ/n)`. Multiplication becomes pointwise, and the
 //! adjoint `a*` becomes complex conjugation.
+//!
+//! # Timing
+//!
+//! On secret data these routines only add, subtract, and multiply `f64`s,
+//! round ([`integer_poly`]), and compare against fixed bounds whose outcome
+//! is the same for every honest input. Reciprocals (`1/n`, `0.5`) and the
+//! twiddles (`cos`/`sin` of public angles) never depend on a secret. The
+//! residual assumption is that `f64` add, mul, and round are constant-time
+//! for normal operands, which holds on x86-64 (SSE2) and aarch64.
+//!
+//! Subnormals, the usual exception, cannot occur: inputs are integers of
+//! magnitude at most `2^52` and twiddle components are zero or at least
+//! `2^-54` in magnitude (`|sin(π/2^11)| > 2^-11`, and `cos` near `π/2`
+//! bottoms out at `6·10^-17`). Through the ten butterfly stages and the
+//! splits and merges of the sampler, every value is a sum or difference of
+//! such terms, or a product of at most three of them; a difference of two
+//! doubles of magnitude in `[2^-54, 2^60]` is zero or at least `2^-106`,
+//! and a product of three such is at least `2^-318`, far above the
+//! subnormal threshold `2^-1022`.
 use super::ring::PolyZ;
 use crate::{Error, VsssResult};
 use core::f64::consts::PI;

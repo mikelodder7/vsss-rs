@@ -13,8 +13,8 @@
 //! BDD, at `2^110.1` classical operations with the lattice estimator.
 //! Quantum security is lower and is not estimated.
 //!
-//! **Experimental and unaudited. Not constant-time. Do not use to protect
-//! real secrets.**
+//! **Experimental and unaudited. Do not use to protect real secrets.** See
+//! [Timing](#timing) for what is and is not constant-time.
 //!
 //! This module follows Kate, Mukherjee, Saleem, Sarkar, and Sinha,
 //! "Practical Post-Quantum Secure Publicly Verifiable Secret Sharing and
@@ -25,8 +25,8 @@
 //!   `q = 2^29`, and [`PolyZ`], the integer ring `Z[x]/(x^N + 1)`;
 //! - [`hash_to_ring`] and [`hash_to_mask`], the hashes `H` and `H'`, generic
 //!   over any [`digest::Digest`];
-//! - [`sample_z`] and [`sample_poly`], discrete Gaussian samplers over the
-//!   integers;
+//! - [`SamplerZ`] and [`sample_poly`], isochronous discrete Gaussian
+//!   samplers over the integers for the extraction leaves and for `f, g`;
 //! - [`keygen`], which produces a [`MasterSecretKey`] (the NTRU trapdoor
 //!   `f, g, F, G` with `f·G − g·F = q`) and a [`MasterPublicKey`]
 //!   (`h = g·f⁻¹ mod q`);
@@ -35,11 +35,42 @@
 //!   [`encrypt`], and [`decrypt`];
 //! - [`pvss`], the publicly verifiable secret sharing scheme of Sec. 5.
 //!
-//! Secret-dependent branches, rejection loops, and floating-point arithmetic
-//! all leak timing. Intermediate big integers in the NTRU solver are not
-//! wiped because `num-bigint` has no zeroize support; the sampling tree and
-//! workspace, the encryption randomness, the identity keys, and the PVSS
-//! secrets are.
+//! # Timing
+//!
+//! The Gaussian samplers are isochronous (Howe–Prest–Ricosset–Rossi, the
+//! Falcon design): the extraction leaves and key generation's `f, g` run in
+//! time independent of the trapdoor, the centers, and the values drawn, with
+//! fixed table scans, masked compares, and a fixed-point `exp`. Their
+//! rejection loops exit on coins whose law does not depend on secrets. The
+//! per-sample floating point in the sampler and FFT paths is add, multiply,
+//! compare, and round only; divisions, square roots, and transcendental
+//! functions run once per trapdoor or on public data. What remains assumed
+//! or variable-time:
+//!
+//! - `f64` add, mul, compare, `floor`/`round`, `min`/`max`, and `f64 → u64`
+//!   conversion are taken to be constant-time for normal operands, as on
+//!   x86-64 (SSE2) and aarch64; subnormals cannot arise (the `fft` module
+//!   docs and [`SamplerZ`] give the magnitude bounds). `u64 × u64
+//!   → u128` multiplication and variable `u128` shifts are taken to be
+//!   constant-time, as they are on 64-bit targets. Mask-based selection
+//!   relies on the compiler not reintroducing branches; `black_box` hints
+//!   discourage it but do not guarantee it.
+//! - Key generation's candidate rejection (parity, Gram–Schmidt norm,
+//!   `gcd`) is variable-time, but depends only on candidates that are
+//!   discarded and independent of the key returned.
+//! - The NTRU solver's big-integer arithmetic (`num-bigint`) is
+//!   variable-time and its intermediates are not wiped, pending the
+//!   solver's own constant-time rework.
+//! - Encryption and decryption ([`encrypt`], [`decrypt`]) have their own
+//!   accounting.
+//!
+//! The sampling tree and workspace, the encryption randomness, the identity
+//! keys, and the PVSS secrets are wiped on drop.
+//!
+//! The one-dimensional samplers are within a relative `2^-43` of the ideal
+//! distribution, which supports about `2^53` extractions at a loss under one
+//! bit by the Rényi-divergence argument; [`SamplerZ`] gives the derivation
+//! and explains why the paper's `2^-97` figure assumes an exact sampler.
 mod fft;
 mod gaussian;
 mod hash;
@@ -51,7 +82,7 @@ pub mod pvss;
 mod ring;
 mod sampler;
 
-pub use gaussian::{sample_poly, sample_z};
+pub use gaussian::{SIGMA_MAX, SIGMA_MIN, SamplerZ, sample_keygen_z, sample_poly};
 pub use hash::{hash_to_mask, hash_to_ring};
 pub use ibe::{Ciphertext, IdentitySecretKey, decrypt, encrypt, extract, verify_key};
 pub use keygen::{MasterPublicKey, MasterSecretKey, gram_schmidt_norm, keygen};

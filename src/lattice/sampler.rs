@@ -14,11 +14,22 @@
 //! tree last row first, drawing each integer coordinate with width
 //! `σ / ‖b̃_i‖` around its updated center, exactly as Klein's sampler does,
 //! in `O(N log N)` time.
+//!
+//! # Timing
+//!
+//! Every leaf holds a precomputed [`SamplerZ`], the isochronous sampler of
+//! [`super::gaussian`], so the per-sample work is that sampler plus `f64`
+//! adds and multiplies in the splits, merges, and Klein updates. Divisions
+//! and square roots happen once per trapdoor, in [`LdlTree::new`] and the
+//! reciprocal `1/q` of [`TrapdoorSampler::sample_key`]; [`LdlTree::new`]
+//! also rejects any leaf width outside `[σ_min, σ_max]`, so the sampler's
+//! precondition holds whenever a tree exists. See
+//! [`super::fft`](super::fft#timing) for the floating-point assumptions.
 use super::Q;
 use super::fft::{
     Complex, fft_of, integer_poly, merge_fft, pair_norm_sq, roots_for, split_fft, split_roots,
 };
-use super::gaussian::sample_z;
+use super::gaussian::SamplerZ;
 use super::keygen::MasterSecretKey;
 use super::ring::{PolyQ, PolyZ};
 use crate::secret::Secret;
@@ -35,8 +46,8 @@ enum LdlTree {
     Leaf {
         /// `L10 = G10 / G00`.
         l10: Complex,
-        /// `σ / ‖b̃‖` for the first and second coordinate.
-        sigma: [f64; 2],
+        /// Samplers of width `σ / ‖b̃‖` for the first and second coordinate.
+        widths: [SamplerZ; 2],
     },
     /// An inner node.
     Node {
@@ -51,7 +62,9 @@ enum LdlTree {
 impl LdlTree {
     /// Factor the self-adjoint Gram matrix `[[g00, g01], [g01*, g11]]`
     /// (`g00` and `g11` are real in the FFT domain) for width `sigma`.
-    /// `roots` is a [`split_roots`] table for the splits below.
+    /// `roots` is a [`split_roots`] table for the splits below. Fails if the
+    /// matrix is not positive definite or a leaf width `σ/‖b̃_i‖` leaves
+    /// `[σ_min, σ_max]`.
     fn new(
         g00: &[f64],
         g01: &[Complex],
@@ -77,7 +90,10 @@ impl LdlTree {
         Ok(match (g00, g01, d11.as_slice()) {
             ([d00], [g01], [d11]) => Self::Leaf {
                 l10: l10(g01, *d00),
-                sigma: [sigma / d00.sqrt(), sigma / d11.sqrt()],
+                widths: [
+                    SamplerZ::new(sigma / d00.sqrt())?,
+                    SamplerZ::new(sigma / d11.sqrt())?,
+                ],
             },
             _ => Self::Node {
                 l10: g01.iter().zip(g00).map(|(c, &d)| l10(c, d)).collect(),
@@ -118,11 +134,11 @@ impl LdlTree {
         match self {
             // The `n = 1` base case: two one-dimensional Gaussians, second
             // first.
-            Self::Leaf { l10, sigma } => {
+            Self::Leaf { l10, widths } => {
                 for ((z0, z1), (c0, c1)) in z0.iter_mut().zip(z1.iter_mut()).zip(t0.iter().zip(t1))
                 {
-                    let s1 = sample_z(sigma[1], c1.re, rng)? as f64;
-                    let s0 = sample_z(sigma[0], c0.re + (c1.re - s1) * l10.re, rng)? as f64;
+                    let s1 = widths[1].sample(c1.re, rng)? as f64;
+                    let s0 = widths[0].sample(c0.re + (c1.re - s1) * l10.re, rng)? as f64;
                     *z0 = Complex { re: s0, im: 0.0 };
                     *z1 = Complex { re: s1, im: 0.0 };
                 }
@@ -171,7 +187,7 @@ impl LdlTree {
     #[cfg(test)]
     fn leaf_sigmas(&self) -> Vec<f64> {
         match self {
-            Self::Leaf { sigma, .. } => sigma.to_vec(),
+            Self::Leaf { widths, .. } => widths.iter().map(SamplerZ::sigma).collect(),
             Self::Node { children, .. } => children.iter().flat_map(Self::leaf_sigmas).collect(),
         }
     }
@@ -196,7 +212,8 @@ pub(crate) struct TrapdoorSampler<'a> {
 }
 
 impl<'a> TrapdoorSampler<'a> {
-    /// Precompute sampling at width `sigma` for `msk`.
+    /// Precompute sampling at width `sigma` for `msk`. Fails if the
+    /// trapdoor is degenerate or a leaf width leaves `[σ_min, σ_max]`.
     pub(crate) fn new(msk: &'a MasterSecretKey, sigma: f64) -> VsssResult<Self> {
         let g = Secret::new(fft_of(msk.g())?);
         let f = Secret::new(fft_of(msk.f())?);
@@ -271,6 +288,7 @@ impl<'a> TrapdoorSampler<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lattice::gaussian::{SIGMA_MAX, SIGMA_MIN};
     use crate::lattice::test_support::keys;
     use crate::lattice::{GS_NORM_BOUND, N, SIGMA_EXTRACT, hash_to_ring};
     use rand::{SeedableRng, rngs::StdRng};
@@ -278,19 +296,42 @@ mod tests {
 
     #[test]
     fn tree_leaves_are_the_gram_schmidt_norms_of_the_basis() {
+        for (msk, _) in keys() {
+            let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT).expect("sampler");
+            let sigmas = sampler.tree.leaf_sigmas();
+            assert_eq!(sigmas.len(), 2 * N);
+            // The leaves are σ/‖b̃_i‖, and Π‖b̃_i‖ = det B = q^N.
+            let log_det: f64 = sigmas.iter().map(|s| (SIGMA_EXTRACT / s).ln()).sum();
+            let expected = N as f64 * f64::from(Q).ln();
+            assert!(
+                (log_det - expected).abs() < 1e-6 * expected,
+                "log det {log_det}, expected {expected}"
+            );
+            let max_norm = sigmas.iter().map(|s| SIGMA_EXTRACT / s).fold(0.0, f64::max);
+            assert!(max_norm <= GS_NORM_BOUND * (1.0 + 1e-9), "max {max_norm}");
+            // Every leaf width sits in the sampler's range, and by
+            // ‖b̃_i‖·‖b̃_{2N−1−i}‖ = q the largest is at most 2·1.17².
+            let (lo, hi) = sigmas
+                .iter()
+                .fold((f64::MAX, 0.0f64), |(lo, hi), &s| (lo.min(s), hi.max(s)));
+            assert!(
+                lo >= SIGMA_MIN && hi <= SIGMA_MAX,
+                "leaf widths in [{lo}, {hi}]"
+            );
+            assert!(
+                hi <= 2.0 * 1.17 * 1.17 * (1.0 + 1e-9),
+                "max leaf width {hi}"
+            );
+        }
+    }
+
+    #[test]
+    fn leaf_widths_outside_the_sampler_range_are_rejected() {
         let (msk, _) = &keys()[0];
-        let sampler = TrapdoorSampler::new(msk, 1.0).expect("sampler");
-        let sigmas = sampler.tree.leaf_sigmas();
-        assert_eq!(sigmas.len(), 2 * N);
-        // With σ = 1 the leaves are 1/‖b̃_i‖, and Π‖b̃_i‖ = det B = q^N.
-        let log_det: f64 = sigmas.iter().map(|s| -s.ln()).sum();
-        let expected = N as f64 * f64::from(Q).ln();
-        assert!(
-            (log_det - expected).abs() < 1e-6 * expected,
-            "log det {log_det}, expected {expected}"
-        );
-        let max_norm = sigmas.iter().map(|s| 1.0 / s).fold(0.0, f64::max);
-        assert!(max_norm <= GS_NORM_BOUND * (1.0 + 1e-9), "max {max_norm}");
+        // Scaling σ scales every leaf width with it.
+        assert!(TrapdoorSampler::new(msk, 1.0).is_err());
+        assert!(TrapdoorSampler::new(msk, SIGMA_EXTRACT * 1.5).is_err());
+        assert!(TrapdoorSampler::new(msk, SIGMA_EXTRACT).is_ok());
     }
 
     #[test]
@@ -326,11 +367,14 @@ mod tests {
         // G11 − |G01|²/G00 = 1 − 4 < 0.
         let big = Complex { re: 2.0, im: 0.0 };
         assert!(LdlTree::new(&[1.0], &[big], &[1.0], 1.0, &[]).is_err());
-        let leaf = LdlTree::new(&[4.0], &[zero], &[9.0], 6.0, &[]).expect("valid");
-        let LdlTree::Leaf { sigma, .. } = &leaf else {
+        // Leaf widths σ/√D00 = 2.5 and σ/√D11 = 2.
+        let leaf = LdlTree::new(&[1.0], &[zero], &[1.5625], 2.5, &[]).expect("valid");
+        let LdlTree::Leaf { widths, .. } = &leaf else {
             panic!("n = 1 is a leaf");
         };
-        assert_eq!(*sigma, [3.0, 2.0]);
+        assert_eq!(widths.map(|w| w.sigma()), [2.5, 2.0]);
+        // A leaf width outside [σ_min, σ_max] is an error.
+        assert!(LdlTree::new(&[1.0], &[zero], &[1.0], 3.0, &[]).is_err());
         let mut rng = StdRng::from_seed([62u8; 32]);
         let (mut z0, mut z1) = ([zero], [zero]);
         let mut work = Workspace {
@@ -345,6 +389,50 @@ mod tests {
         )
         .expect("valid");
         assert!((z0[0].re - 1e6).abs() < 100.0 && z1[0].re.abs() < 100.0);
+    }
+
+    /// Release-mode timings of key generation, extraction, and decryption,
+    /// plus the leaf-width range over several keys. Ignored because it is
+    /// a report, not a check; run with `--release --ignored --nocapture`.
+    #[test]
+    #[ignore = "timing report; run in release with --ignored"]
+    fn report_timings_and_leaf_width_range() {
+        use crate::lattice::{decrypt, encrypt, extract, keygen};
+        use std::time::Instant;
+        let n_keys = 24;
+        let (mut lo, mut hi) = (f64::MAX, 0.0f64);
+        let mut keygen_total = 0.0;
+        let mut first = None;
+        for i in 0..n_keys {
+            let start = Instant::now();
+            let (msk, mpk) = keygen(StdRng::from_seed([i as u8; 32])).expect("keygen");
+            keygen_total += start.elapsed().as_secs_f64();
+            let sampler = TrapdoorSampler::new(&msk, SIGMA_EXTRACT).expect("sampler");
+            for s in sampler.tree.leaf_sigmas() {
+                lo = lo.min(s);
+                hi = hi.max(s);
+            }
+            first.get_or_insert((msk, mpk));
+        }
+        let (msk, mpk) = first.expect("one key");
+        let mut rng = StdRng::from_seed([9u8; 32]);
+        let reps = 20u8;
+        let start = Instant::now();
+        let keys: Vec<_> = (0..reps)
+            .map(|i| extract::<Sha256>(&msk, &mpk, &[i], &mut rng).expect("extract"))
+            .collect();
+        let extract_ms = start.elapsed().as_secs_f64() * 1e3 / f64::from(reps);
+        let message = [7u8; 64];
+        let ct = encrypt::<Sha256>(&mpk, &[0], &message, &mut rng).expect("encrypt");
+        let start = Instant::now();
+        for _ in 0..reps {
+            assert_eq!(decrypt::<Sha256>(&keys[0], &ct), message);
+        }
+        let decrypt_ms = start.elapsed().as_secs_f64() * 1e3 / f64::from(reps);
+        std::println!(
+            "leaf widths over {n_keys} keys: [{lo}, {hi}]; keygen {:.3} s, extract {extract_ms:.3} ms, decrypt {decrypt_ms:.3} ms",
+            keygen_total / f64::from(n_keys)
+        );
     }
 
     #[test]

@@ -6,7 +6,8 @@
 use super::fft::{fft_of, pair_norm_sq};
 use super::gaussian::sample_poly;
 use super::ring::{PolyQ, PolyZ};
-use super::{GS_NORM_BOUND, Q, SIGMA_F, ntru};
+use super::sampler::TrapdoorSampler;
+use super::{GS_NORM_BOUND, Q, SIGMA_EXTRACT, ntru};
 use crate::{Error, VsssResult};
 use core::fmt::{self, Debug, Formatter};
 use rand_core::CryptoRng;
@@ -105,7 +106,20 @@ pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
 ///
 /// Samples `f, g ← D_{N,σ_f}` and rejects until `f(1)` is odd (so `f` is
 /// invertible mod `q`), `‖B̃_{f,g}‖ ≤ 1.17·√q`, and `gcd(R_f, R_g) = 1`;
-/// then solves `f·G − g·F = q` and sets `h = g·f⁻¹ mod q`.
+/// then solves `f·G − g·F = q` and sets `h = g·f⁻¹ mod q`. As Falcon does,
+/// it also builds the extraction sampler's tree and rejects the trapdoor
+/// unless every leaf width `σ/‖b̃_i‖` lies in `[σ_min, σ_max]`; the norm
+/// bound implies this in exact arithmetic, and the check pins it down in
+/// floating point so [`extract`](super::extract) never meets a width the
+/// sampler's tables do not cover.
+///
+/// # Timing
+///
+/// `f` and `g` come from the isochronous [`sample_poly`](super::sample_poly).
+/// The candidate count, `f(1)`'s parity, the Gram–Schmidt norm, and the
+/// NTRU solver are variable-time; the first three depend only on rejected
+/// candidates, which are independent of the key returned, and the solver's
+/// big-integer arithmetic is tracked separately.
 ///
 /// # Security
 ///
@@ -113,8 +127,8 @@ pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
 /// [module docs](crate::lattice#security-level).
 pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPublicKey)> {
     for _ in 0..MAX_KEYGEN_ATTEMPTS {
-        let f = sample_poly(SIGMA_F, &mut rng)?;
-        let g = sample_poly(SIGMA_F, &mut rng)?;
+        let f = sample_poly(&mut rng)?;
+        let g = sample_poly(&mut rng)?;
         // gcd(R_f, 2^29) = 1 ⇔ R_f odd ⇔ f(1) odd. Checked first because it
         // is the cheapest test; the order of rejection tests does not change
         // the output distribution.
@@ -136,6 +150,9 @@ pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPub
             .checked_sub(&msk.g.checked_mul(&msk.big_f)?)?;
         if residual != PolyZ::constant(i64::from(Q))? {
             return Err(Error::Lattice("NTRU solution failed verification"));
+        }
+        if TrapdoorSampler::new(&msk, SIGMA_EXTRACT).is_err() {
+            continue;
         }
         let mpk = msk.public_key()?;
         return Ok((msk, mpk));
@@ -163,10 +180,11 @@ mod tests {
         // h·f == g mod q.
         assert_eq!(mpk.h() * &PolyQ::from(msk.f()), PolyQ::from(msk.g()));
 
-        // Gram–Schmidt norm bound and f(1) odd.
+        // Gram–Schmidt norm bound, f(1) odd, and leaf widths in range.
         let norm = gram_schmidt_norm(msk.f(), msk.g()).expect("finite");
         assert!(norm <= GS_NORM_BOUND, "norm {norm}");
         assert_eq!(msk.f().eval_at_one().rem_euclid(2), 1);
+        assert!(TrapdoorSampler::new(&msk, SIGMA_EXTRACT).is_ok());
 
         // F, G are size-reduced: comparable to the Gram–Schmidt bound, far
         // below q.
