@@ -200,6 +200,8 @@ mod gf16;
 #[allow(clippy::suspicious_arithmetic_impl)]
 #[allow(clippy::suspicious_op_assign_impl)]
 mod gf256;
+#[cfg(feature = "hash-commitment")]
+pub mod hash_commitment;
 #[cfg(feature = "lattice-pvss")]
 pub mod lattice;
 mod numbering;
@@ -226,6 +228,8 @@ pub use feldman::Feldman;
 pub use fixed_array::*;
 pub use gf16::*;
 pub use gf256::*;
+#[cfg(feature = "hash-commitment")]
+pub use hash_commitment::{HASH_OPENING_BYTES, HashCommitment, HashOpening};
 pub use numbering::*;
 pub use pedersen::{Pedersen, PedersenResult};
 pub use polynomial::*;

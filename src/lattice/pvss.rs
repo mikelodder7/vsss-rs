@@ -37,7 +37,7 @@ use super::{
     Ciphertext, IdentitySecretKey, MasterPublicKey, MasterSecretKey, decrypt as ibe_decrypt,
     encrypt, extract, hash::expand, lattice_error, verify_key, wipe,
 };
-use crate::pi_la::{coefficient, evaluate};
+use crate::pi_la::{coefficient, evaluate, field_message};
 use crate::*;
 use digest::Digest;
 use elliptic_curve::PrimeField;
@@ -66,10 +66,10 @@ const CHALLENGE_EXTRA_BYTES: usize = 16;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PvssCommitment {
-    /// `csh_i = H(i ‖ ⟦s⟧_i ‖ ⟦r⟧_i)`.
-    pub share: Vec<u8>,
-    /// `cpt_i = H(i ‖ B(i) ‖ q_i)`.
-    pub padding: Vec<u8>,
+    /// `csh_i`, a commitment to `i ‖ ⟦s⟧_i` with randomness `⟦r⟧_i`.
+    pub share: HashCommitment,
+    /// `cpt_i`, a commitment to `i ‖ B(i)` with randomness `q_i`.
+    pub padding: HashCommitment,
 }
 
 /// The public proof `π = (W, {csh_i, cpt_i})`.
@@ -190,8 +190,16 @@ where
         };
         wipe(&mut pad);
         commitments.push(PvssCommitment {
-            share: share_commitment::<D, F>(&opening),
-            padding: padding_commitment::<D, F>(index, &b.evaluate(&x, threshold), &opening.pad),
+            share: HashCommitment::commit_with_randomness::<D>(
+                SHARE_COMMITMENT_DST,
+                &field_message(&index_bytes(index), &opening.share),
+                opening.randomness.0.to_repr().as_ref(),
+            ),
+            padding: HashCommitment::commit_with_randomness::<D>(
+                PADDING_COMMITMENT_DST,
+                &field_message(&index_bytes(index), &b.evaluate(&x, threshold)),
+                &opening.pad,
+            ),
         });
         openings.push(opening);
     }
@@ -351,11 +359,9 @@ fn is_well_formed<D: Digest, F: PrimeField>(
     deal.proof.w.len() == threshold
         && deal.ciphertexts.len() == n
         && deal.proof.commitments.len() == n
-        && deal
-            .proof
-            .commitments
-            .iter()
-            .all(|c| c.share.len() == digest_len && c.padding.len() == digest_len)
+        && deal.proof.commitments.iter().all(|c| {
+            c.share.as_bytes().len() == digest_len && c.padding.as_bytes().len() == digest_len
+        })
 }
 
 /// Both commitment checks for `opening` against `deal`.
@@ -373,10 +379,19 @@ fn opening_is_valid<D: Digest, F: PrimeField>(
     };
     let x = index_identifier::<F>(opening.index);
     let b_i = IdentifierPrimeField(evaluate(&deal.proof.w, &x) + *ch * opening.share.0);
-    let share_ok = share_commitment::<D, F>(opening).ct_eq(&commitment.share);
-    let padding_ok =
-        padding_commitment::<D, F>(opening.index, &b_i, &opening.pad).ct_eq(&commitment.padding);
-    bool::from(share_ok & padding_ok)
+    let prefix = index_bytes(opening.index);
+    let share_ok = commitment.share.verify_with_randomness::<D>(
+        SHARE_COMMITMENT_DST,
+        &field_message(&prefix, &opening.share),
+        opening.randomness.0.to_repr().as_ref(),
+    );
+    let padding_ok = commitment.padding.verify_with_randomness::<D>(
+        PADDING_COMMITMENT_DST,
+        &field_message(&prefix, &b_i),
+        &opening.pad,
+    );
+    // Check both before combining, so the time does not reveal which failed.
+    share_ok.is_ok() & padding_ok.is_ok()
 }
 
 /// Decrypt `ciphertext` and parse it as receiver `index`'s opening.
@@ -439,30 +454,10 @@ fn index_identifier<F: PrimeField>(index: usize) -> IdentifierPrimeField<F> {
     IdentifierPrimeField(F::from(index as u64))
 }
 
-/// `csh_i = H(DST ‖ i ‖ ⟦s⟧_i ‖ ⟦r⟧_i)`.
-fn share_commitment<D: Digest, F: PrimeField>(opening: &PvssOpening<F>) -> Vec<u8> {
-    D::new()
-        .chain_update(SHARE_COMMITMENT_DST)
-        .chain_update((opening.index as u64).to_le_bytes())
-        .chain_update(opening.share.0.to_repr())
-        .chain_update(opening.randomness.0.to_repr())
-        .finalize()
-        .to_vec()
-}
-
-/// `cpt_i = H(DST ‖ i ‖ B(i) ‖ q_i)`.
-fn padding_commitment<D: Digest, F: PrimeField>(
-    index: usize,
-    b_i: &IdentifierPrimeField<F>,
-    pad: &[u8; PAD_BYTES],
-) -> Vec<u8> {
-    D::new()
-        .chain_update(PADDING_COMMITMENT_DST)
-        .chain_update((index as u64).to_le_bytes())
-        .chain_update(b_i.0.to_repr())
-        .chain_update(pad)
-        .finalize()
-        .to_vec()
+/// Receiver `index` as the `u64` little-endian prefix of its commitment
+/// messages.
+fn index_bytes(index: usize) -> [u8; 8] {
+    (index as u64).to_le_bytes()
 }
 
 /// `ch = H(DST ‖ dealer ‖ threshold ‖ n ‖ {csh_i, cpt_i})`, expanded and
@@ -481,7 +476,10 @@ fn challenge<D: Digest, F: PrimeField>(
                 .chain_update(dealer)
                 .chain_update((threshold as u64).to_le_bytes())
                 .chain_update((commitments.len() as u64).to_le_bytes()),
-            |h, c| h.chain_update(&c.share).chain_update(&c.padding),
+            |h, c| {
+                h.chain_update(c.share.as_bytes())
+                    .chain_update(c.padding.as_bytes())
+            },
         )
         .finalize();
     let mut wide = std::vec![0u8; repr_len::<F>() + CHALLENGE_EXTRA_BYTES];
@@ -682,7 +680,9 @@ mod tests {
             Ok(false)
         );
         let mut truncated = deal.clone();
-        truncated.proof.commitments[0].share.pop();
+        let bytes = truncated.proof.commitments[0].share.as_bytes();
+        truncated.proof.commitments[0].share =
+            HashCommitment::from_bytes(&bytes[..bytes.len() - 1]).expect("non-empty");
         assert_eq!(
             verify::<Sha256, Scalar>(&truncated, THRESHOLD, &mpks, &[]),
             Ok(false)
@@ -794,8 +794,8 @@ mod tests {
         assert_eq!(coefficient(&poly[1], 1).0, Scalar::from(3u64));
 
         let commitments = std::vec![PvssCommitment {
-            share: std::vec![1u8; 32],
-            padding: std::vec![2u8; 32],
+            share: HashCommitment::from_bytes(&[1u8; 32]).expect("non-empty"),
+            padding: HashCommitment::from_bytes(&[2u8; 32]).expect("non-empty"),
         }];
         let ch = challenge::<Sha256, Scalar>(DEALER, 2, &commitments);
         assert_ne!(ch, challenge::<Sha256, Scalar>(DEALER, 3, &commitments));
@@ -803,10 +803,21 @@ mod tests {
             ch,
             challenge::<Sha256, Scalar>(b"dealer-8", 2, &commitments)
         );
+        // The two commitments are domain separated.
+        let message = field_message(&index_bytes(2), &o.share);
         assert_ne!(
-            share_commitment::<Sha256, Scalar>(&o),
-            padding_commitment::<Sha256, Scalar>(2, &o.share, &o.pad)
+            HashCommitment::commit_with_randomness::<Sha256>(
+                SHARE_COMMITMENT_DST,
+                &message,
+                &o.pad
+            ),
+            HashCommitment::commit_with_randomness::<Sha256>(
+                PADDING_COMMITMENT_DST,
+                &message,
+                &o.pad
+            )
         );
+        assert_eq!(index_bytes(2), 2u64.to_le_bytes());
     }
 
     #[cfg(feature = "serde")]

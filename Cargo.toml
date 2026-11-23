@@ -25,7 +25,8 @@ std = ["alloc", "num-bigint?/std", "num-traits?/std", "rand/std", "hex/std", "se
 stream = ["alloc", "dep:futures-core"]
 zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 legacy-curve-tests = []
-pi-la = ["alloc", "curve", "dep:digest"]
+hash-commitment = ["alloc", "dep:digest"]
+pi-la = ["alloc", "curve", "hash-commitment"]
 lattice-pvss = ["std", "bigint", "pi-la"]
 
 [dependencies]

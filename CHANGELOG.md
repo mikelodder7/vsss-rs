@@ -3,6 +3,7 @@
 ## 7.0.0 - 2026-11-23
 
 - Added the `pi-la` feature: Π_LA hash-based verifiable secret sharing (Baghery, PKC 2025). It is post-quantum, needs no group, and works with any `digest::Digest` (SHA-2, SHA-3, BLAKE2, BLAKE3 via `traits-preview`). The only new dependency is `digest`.
+- Added the `hash-commitment` feature: public `HashCommitment` and `HashOpening`, a length-prefixed, domain-separated hash commitment over any `digest::Digest` with constant-time verification. Π_LA and the lattice PVSS build their commitments on it.
 - Added the `lattice-pvss` feature, **experimental and unaudited**: the post-quantum publicly verifiable secret sharing scheme of Kate, Mukherjee, Saleem, Sarkar, and Sinha (ePrint 2026/813, Sec. 5), built on an NTRU-lattice identity-based encryption (key generation, Klein/GPV extraction in Falcon's fast-Fourier form, encryption, decryption) with about 110 bits of classical security. It is not constant-time and adds no dependencies.
 - `Error` now derives `thiserror::Error`, so it implements `core::error::Error`. Display messages are unchanged.
 - Split polynomials are now wiped on drop under the `zeroize` feature in every split path: Shamir, Feldman, Pedersen, GF(256), and GF(16) ([#26](https://github.com/mikelodder7/vsss-rs/issues/26), [#27](https://github.com/mikelodder7/vsss-rs/pull/27)).

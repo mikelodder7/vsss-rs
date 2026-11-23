@@ -97,7 +97,7 @@ impl TryRng for MockRng {
 
 /// Wraps a value so TOML, which needs a table at the top level, can
 /// serialize any type.
-#[cfg(all(feature = "serde", feature = "pi-la"))]
+#[cfg(all(feature = "serde", feature = "hash-commitment"))]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound(
     serialize = "T: serde::Serialize",
@@ -109,7 +109,7 @@ struct TomlTable<T> {
 
 /// Round-trip `value` through every serde format the crate tests: json,
 /// postcard, cbor, bare, toml, and yaml.
-#[cfg(all(feature = "serde", feature = "pi-la"))]
+#[cfg(all(feature = "serde", feature = "hash-commitment"))]
 pub fn assert_serde_round_trip<T>(value: &T)
 where
     T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + core::fmt::Debug,

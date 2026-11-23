@@ -156,7 +156,8 @@ vsss-rs = { version = "7", default-features = false, features = ["alloc"] }
 | `curve-serde` | Yes | `curve`, Serde, and curve serialization helpers |
 | `random-participant-ids` | Yes | SHAKE-based random participant identifiers |
 | `serde` | Through `curve-serde` | Serialization for supported types |
-| `pi-la` | No | Π_LA hash-based, post-quantum verifiable secret sharing over any `digest::Digest`; implies `alloc` and `curve` |
+| `hash-commitment` | No | Post-quantum hiding and binding hash commitments (`HashCommitment`, `HashOpening`) over any `digest::Digest`; implies `alloc` |
+| `pi-la` | No | Π_LA hash-based, post-quantum verifiable secret sharing over any `digest::Digest`; implies `alloc`, `curve`, and `hash-commitment` |
 | `lattice-pvss` | No | **Experimental and unaudited.** Post-quantum publicly verifiable secret sharing (Kate et al., ePrint 2026/813, Sec. 5) over an NTRU lattice IBE with about 110-bit classical security; not constant-time; implies `std`, `bigint`, and `pi-la` |
 | `stream` | No | Async identifier splitting and exact-count share combination; implies `alloc` |
 | `zeroize` | Yes | Zeroization for supported share elements |

@@ -14,12 +14,13 @@
 //! The dealer shares the secret with a polynomial `f`, samples a masking
 //! polynomial `r` of the same degree, and publishes:
 //!
-//! - one hash commitment `c_i = H(id_i ‖ f(id_i) ‖ r(id_i))` per participant,
+//! - one [`HashCommitment`] `c_i` to `id_i ‖ f(id_i)` with randomness
+//!   `r(id_i)` per participant,
 //! - the polynomial `z = r + d·f`, where the challenge `d` is a hash of every
 //!   commitment.
 //!
 //! A participant holding `f(id_i)` checks that `z` has the agreed degree and
-//! that `H(id_i ‖ f(id_i) ‖ z(id_i) − d·f(id_i))` equals `c_i`.
+//! that `c_i` opens to `id_i ‖ f(id_i)` with randomness `z(id_i) − d·f(id_i)`.
 //!
 //! The hash is any [`digest::Digest`], such as SHA-2, SHA-3, BLAKE2, or BLAKE3
 //! (with its `traits-preview` feature). Pick an output of at least 256 bits.
@@ -61,8 +62,8 @@ const MAX_CHALLENGE_ATTEMPTS: u32 = 128;
 pub struct PiLaCommitment<F: PrimeField> {
     /// The participant identifier the commitment belongs to.
     pub identifier: IdentifierPrimeField<F>,
-    /// The digest `H(id ‖ f(id) ‖ r(id))`.
-    pub digest: Vec<u8>,
+    /// The commitment to `id ‖ f(id)` with randomness `r(id)`.
+    pub digest: HashCommitment,
 }
 
 /// The public proof a dealer broadcasts alongside the shares.
@@ -147,7 +148,11 @@ where
         let r_i = r.evaluate(&id, threshold);
         commitments.push(PiLaCommitment {
             identifier: id,
-            digest: commit::<D, F>(&id, &f_i, &r_i),
+            digest: HashCommitment::commit_with_randomness::<D>(
+                COMMITMENT_DST,
+                &field_message(id.0.to_repr().as_ref(), &f_i),
+                r_i.0.to_repr().as_ref(),
+            ),
         });
         shares.push(S::with_identifier_and_value(id, f_i));
     }
@@ -188,7 +193,7 @@ impl<F: PrimeField> PiLaProof<F> {
         if self
             .commitments
             .iter()
-            .any(|c| c.digest.len() != digest_len)
+            .any(|c| c.digest.as_bytes().len() != digest_len)
         {
             return Err(Error::InvalidShare);
         }
@@ -202,12 +207,11 @@ impl<F: PrimeField> PiLaProof<F> {
         let d = challenge::<D, F>(threshold, &self.commitments)?;
         let f_i = share.value();
         let r_i = IdentifierPrimeField(evaluate(&self.z, share.identifier()) - d.0 * f_i.0);
-        let expected = commit::<D, F>(share.identifier(), f_i, &r_i);
-        if bool::from(expected.as_slice().ct_eq(commitment.digest.as_slice())) {
-            Ok(())
-        } else {
-            Err(Error::InvalidShare)
-        }
+        commitment.digest.verify_with_randomness::<D>(
+            COMMITMENT_DST,
+            &field_message(share.identifier().0.to_repr().as_ref(), f_i),
+            r_i.0.to_repr().as_ref(),
+        )
     }
 }
 
@@ -248,19 +252,27 @@ fn validate_identifiers<'a, F: PrimeField + 'a>(
     Ok(())
 }
 
-/// `H(DST ‖ id ‖ f(id) ‖ r(id))`.
-fn commit<D: Digest, F: PrimeField>(
-    id: &IdentifierPrimeField<F>,
-    f_i: &IdentifierPrimeField<F>,
-    r_i: &IdentifierPrimeField<F>,
-) -> Vec<u8> {
-    D::new()
-        .chain_update(COMMITMENT_DST)
-        .chain_update(id.0.to_repr())
-        .chain_update(f_i.0.to_repr())
-        .chain_update(r_i.0.to_repr())
-        .finalize()
-        .to_vec()
+/// A commitment message holding secret field elements, wiped on drop under
+/// the `zeroize` feature.
+#[cfg(feature = "zeroize")]
+pub(crate) type FieldMessage = zeroize::Zeroizing<Vec<u8>>;
+/// A commitment message holding secret field elements.
+#[cfg(not(feature = "zeroize"))]
+pub(crate) type FieldMessage = Vec<u8>;
+
+/// The commitment message `prefix ‖ value`, with `value` in its canonical
+/// encoding.
+pub(crate) fn field_message<F: PrimeField>(
+    prefix: &[u8],
+    value: &IdentifierPrimeField<F>,
+) -> FieldMessage {
+    let repr = value.0.to_repr();
+    let mut message = FieldMessage::default();
+    // Reserve up front so no reallocation leaves an unwiped copy behind.
+    message.reserve_exact(prefix.len() + repr.as_ref().len());
+    message.extend_from_slice(prefix);
+    message.extend_from_slice(repr.as_ref());
+    message
 }
 
 /// Derive the non-zero challenge `d` from the threshold and every
@@ -278,7 +290,7 @@ fn challenge<D: Digest, F: PrimeField>(
                 .chain_update((commitments.len() as u64).to_le_bytes()),
             |h, c| {
                 h.chain_update(c.identifier.0.to_repr())
-                    .chain_update(&c.digest)
+                    .chain_update(c.digest.as_bytes())
             },
         )
         .finalize();
@@ -418,7 +430,9 @@ mod tests {
     #[test]
     fn tampered_commitment_is_rejected() {
         let (_, mut result) = deal(5);
-        result.proof.commitments[2].digest[0] ^= 1;
+        let mut bytes = result.proof.commitments[2].digest.as_bytes().to_vec();
+        bytes[0] ^= 1;
+        result.proof.commitments[2].digest = HashCommitment::from_bytes(&bytes).unwrap();
         // Every share fails: the challenge binds all commitments.
         for share in &result.shares {
             assert_eq!(
@@ -474,7 +488,9 @@ mod tests {
         );
 
         let mut short = result.proof.clone();
-        short.commitments[0].digest.pop();
+        let bytes = short.commitments[0].digest.as_bytes();
+        short.commitments[0].digest =
+            HashCommitment::from_bytes(&bytes[..bytes.len() - 1]).unwrap();
         assert_eq!(
             short.verify_share::<Sha256, _>(3, &result.shares[0]),
             Err(Error::InvalidShare)
@@ -547,6 +563,33 @@ mod tests {
         let proof = result.proof;
         crate::tests::utils::assert_serde_round_trip(&proof);
         crate::tests::utils::assert_serde_round_trip(&proof.commitments[0]);
+    }
+
+    #[test]
+    fn commitments_open_to_identifier_and_share() {
+        let (_, result) = deal(12);
+        let r_i = |share: &K256Share, d: &IdentifierPrimeField<k256::Scalar>| {
+            evaluate(&result.proof.z, share.identifier()) - d.0 * share.value().0
+        };
+        let d = challenge::<Sha256, _>(3, &result.proof.commitments).unwrap();
+        for (share, c) in result.shares.iter().zip(&result.proof.commitments) {
+            let message = field_message(share.identifier().0.to_repr().as_ref(), share.value());
+            let expected = HashCommitment::commit_with_randomness::<Sha256>(
+                COMMITMENT_DST,
+                &message,
+                r_i(share, &d).to_repr().as_ref(),
+            );
+            assert_eq!(c.digest, expected);
+        }
+    }
+
+    #[test]
+    fn field_message_is_prefix_then_canonical_value() {
+        let value = IdentifierPrimeField(k256::Scalar::from(0x0A0Bu64));
+        let message = field_message(b"pre", &value);
+        assert_eq!(&message[..3], b"pre");
+        assert_eq!(&message[3..], value.0.to_repr().as_slice());
+        assert_eq!(message.len(), 3 + 32);
     }
 
     #[test]
