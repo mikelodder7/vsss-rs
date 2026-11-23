@@ -211,11 +211,12 @@ impl MulAssign<&Gf16> for Gf16 {
     }
 }
 
+/// Division by zero yields zero; use [`Field::invert`] to detect a zero divisor.
 impl Div for Gf16 {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
-        self * rhs.invert().expect("no division by zero")
+        self * rhs.inverse_or_zero()
     }
 }
 
@@ -245,13 +246,13 @@ impl Div<&Gf16> for &Gf16 {
 
 impl DivAssign for Gf16 {
     fn div_assign(&mut self, rhs: Self) {
-        *self *= rhs.invert().expect("no division by zero");
+        *self *= rhs.inverse_or_zero();
     }
 }
 
 impl DivAssign<&Gf16> for Gf16 {
     fn div_assign(&mut self, rhs: &Gf16) {
-        *self *= rhs.invert().expect("no division by zero");
+        *self *= rhs.inverse_or_zero();
     }
 }
 
@@ -428,54 +429,15 @@ impl Field for Gf16 {
     }
 
     fn invert(&self) -> CtOption<Self> {
-        // Compute a^(2^4 - 2) = a^14 = a^(-1) in GF(2^4).
-        // Loop pattern: after k iterations, z = a^(2^(k+1) - 1).
-        // After 2 iterations: z = a^7. Final square: a^14.
-        let mut z = self.0;
-        for _ in 0..2 {
-            z = gf16_mul(z, z);
-            z = gf16_mul(z, self.0);
-        }
-        CtOption::new(Self(gf16_mul(z, z)), self.0.ct_is_not_zero().into())
+        CtOption::new(self.inverse_or_zero(), self.0.ct_is_not_zero().into())
     }
 
+    /// Every element of GF(2^4) is a square, with `sqrt(x) = x^8`.
     fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
-        let p = 0xfu8; // |GF(16)*| = 15
-        let pm1d2 = (p - 1) >> 1; // 7
-        let pp2d4 = (p + 2) >> 2; // 4
-
-        // z = 2 (x) is a primitive root: gf16_pow(2, 7) = 11 != 1
-        let z = (2..=p).find(|z| gf16_pow(*z, pm1d2) != 1).unwrap();
-
-        let a = gf16_mul(num.0, div.0);
-        let mut c = gf16_pow(a, pp2d4);
-        let mut t = gf16_pow(a, pm1d2);
-        let mut r = gf16_pow(z, pm1d2);
-
-        let mut m = t;
-        let mut i = 1usize;
-        while m != 1 && m != 0 {
-            let mut temp = m;
-            for _ in 1..i {
-                temp = gf16_mul(temp, temp);
-            }
-            let mut j = 0usize;
-            while temp != 1 && temp != 0 && j < 4 {
-                temp = gf16_mul(temp, temp);
-                j += 1;
-            }
-            if i <= j {
-                break;
-            }
-            let b = gf16_pow(r, 1u8 << (i - j - 1));
-            c = gf16_mul(c, b);
-            r = gf16_mul(b, b);
-            t = gf16_mul(t, r);
-            m = t;
-            i = j;
-        }
-        let is_square = gf16_pow(c, 2).ct_eq(&c).into();
-        (is_square, Self(c))
+        let ratio = *num * div.inverse_or_zero();
+        let root = Self(gf16_pow(ratio.0, 8));
+        let defined = num.0.ct_eq(&0) | div.0.ct_ne(&0);
+        (defined.into(), root)
     }
 }
 
@@ -571,6 +533,17 @@ impl PrimeField for Gf16 {
 }
 
 impl Gf16 {
+    /// The multiplicative inverse, or zero for zero (`a^14`). Runs in
+    /// constant time; [`Field::invert`] reports the zero case.
+    fn inverse_or_zero(self) -> Self {
+        let mut z = self.0;
+        for _ in 0..2 {
+            z = gf16_mul(z, z);
+            z = gf16_mul(z, self.0);
+        }
+        Self(gf16_mul(z, z))
+    }
+
     /// Raise the element to the power of `exp` in GF(2^4).
     pub fn pow(&self, exp: u8) -> Self {
         Self(gf16_pow(self.0, exp))
@@ -929,14 +902,13 @@ fn gf16_mul(a: u8, b: u8) -> u8 {
 fn gf16_pow(base: u8, exp: u8) -> u8 {
     let mut result = 1u8;
     let base = base & 0x0f;
-    // Process bits from MSB (bit 3) down to LSB (bit 0).
-    for i in (0..4).rev() {
+    // Square-and-multiply over all 8 exponent bits, MSB first, in constant time.
+    for i in (0..8).rev() {
         result = gf16_mul(result, result);
         let tmp = gf16_mul(result, base);
         let allow = ((exp >> i) & 1).ct_eq(&1);
         result.ct_assign(&tmp, allow);
     }
-    result.ct_assign(&1u8, exp.ct_eq(&0));
     result
 }
 
@@ -1087,6 +1059,51 @@ mod tests {
     use crate::shamir;
     use crate::{ParticipantIdGenerator, ParticipantIdGeneratorCollection};
     use rand::{RngExt, SeedableRng};
+
+    #[test]
+    fn pow_matches_repeated_multiplication() {
+        for base in 0..=15u8 {
+            let mut expected = 1u8;
+            for exp in 0..=255u8 {
+                assert_eq!(gf16_pow(base, exp), expected, "{base}^{exp}");
+                expected = gf16_mul(expected, base);
+            }
+        }
+    }
+
+    #[test]
+    fn sqrt_ratio_follows_the_ff_contract() {
+        for a in 0..=15u8 {
+            let x = Gf16(a);
+            let (is_square, root) = <Gf16 as Field>::sqrt_ratio(&x, &Gf16(1));
+            assert!(bool::from(is_square));
+            assert_eq!(root * root, x);
+        }
+        let (ok, root) = <Gf16 as Field>::sqrt_ratio(&Gf16(0), &Gf16(0));
+        assert!(bool::from(ok));
+        assert_eq!(root, Gf16(0));
+        let (ok, root) = <Gf16 as Field>::sqrt_ratio(&Gf16(3), &Gf16(0));
+        assert!(!bool::from(ok));
+        assert_eq!(root, Gf16(0));
+        let (ok, root) = <Gf16 as Field>::sqrt_ratio(&Gf16(3), &Gf16(5));
+        assert!(bool::from(ok));
+        assert_eq!(root * root * Gf16(5), Gf16(3));
+    }
+
+    #[test]
+    fn division_by_zero_yields_zero_and_inverses_round_trip() {
+        for a in 1..=15u8 {
+            let x = Gf16(a);
+            assert_eq!(x / x, Gf16(1));
+            assert_eq!(x * x.inverse_or_zero(), Gf16(1));
+        }
+        assert_eq!(Gf16(0).inverse_or_zero(), Gf16(0));
+        assert_eq!(Gf16(7) / Gf16(0), Gf16(0));
+        let mut y = Gf16(7);
+        y /= Gf16(0);
+        assert_eq!(y, Gf16(0));
+        assert!(bool::from(Field::invert(&Gf16(0)).is_none()));
+    }
     use rand_chacha::ChaCha8Rng;
     use std::collections::HashSet;
     use std::prelude::v1::Vec;

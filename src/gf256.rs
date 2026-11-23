@@ -209,11 +209,12 @@ impl MulAssign<&Gf256> for Gf256 {
     }
 }
 
+/// Division by zero yields zero; use [`Field::invert`] to detect a zero divisor.
 impl Div for Gf256 {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
-        self * rhs.invert().expect("no division by zero")
+        self * rhs.inverse_or_zero()
     }
 }
 
@@ -243,13 +244,13 @@ impl Div<&Gf256> for &Gf256 {
 
 impl DivAssign for Gf256 {
     fn div_assign(&mut self, rhs: Self) {
-        *self *= rhs.invert().expect("no division by zero");
+        *self *= rhs.inverse_or_zero();
     }
 }
 
 impl DivAssign<&Gf256> for Gf256 {
     fn div_assign(&mut self, rhs: &Gf256) {
-        *self *= rhs.invert().expect("no division by zero");
+        *self *= rhs.inverse_or_zero();
     }
 }
 
@@ -426,49 +427,15 @@ impl Field for Gf256 {
     }
 
     fn invert(&self) -> CtOption<Self> {
-        let mut z = self.0;
-        for _ in 0..6 {
-            z = gf256_mul(z, z);
-            z = gf256_mul(z, self.0);
-        }
-        CtOption::new(Self(gf256_mul(z, z)), self.0.ct_is_not_zero().into())
+        CtOption::new(self.inverse_or_zero(), self.0.ct_is_not_zero().into())
     }
 
+    /// Every element of GF(2^8) is a square, with `sqrt(x) = x^128`.
     fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
-        let p = 0x1bu8; // Prime field characteristic for GF(256)
-        let pm1d2 = (p - 1) >> 1;
-        let pp2d4 = (p + 2) >> 2;
-        let z = (2..=p).find(|z| gf256_pow(*z, pm1d2) != 1).unwrap(); // Find a non-quadratic residue
-
-        let a = gf256_mul(num.0, div.0);
-        let mut c = gf256_pow(a, pp2d4);
-        let mut t = gf256_pow(a, pm1d2);
-        let mut r = gf256_pow(z, pm1d2);
-
-        let mut m = t;
-
-        let mut i = 1;
-        while m != 1 {
-            let mut temp = m;
-            for _ in 1..i {
-                temp = gf256_mul(temp, temp);
-                temp %= p;
-            }
-            let mut j = 0;
-            while temp != 1 {
-                temp = gf256_mul(temp, temp);
-                temp %= p;
-                j += 1;
-            }
-            let b = gf256_pow(r, 1 << (i - j - 1));
-            c = gf256_mul(c, b);
-            r = gf256_mul(b, b);
-            t = gf256_mul(t, r);
-            m = t;
-            i = j;
-        }
-        let is_square = gf256_pow(c, 2).ct_eq(&c).into();
-        (is_square, Self(c))
+        let ratio = *num * div.inverse_or_zero();
+        let root = Self(gf256_pow(ratio.0, 128));
+        let defined = num.0.ct_eq(&0) | div.0.ct_ne(&0);
+        (defined.into(), root)
     }
 }
 
@@ -559,6 +526,17 @@ impl PrimeField for Gf256 {
 }
 
 impl Gf256 {
+    /// The multiplicative inverse, or zero for zero (`a^254`). Runs in
+    /// constant time; [`Field::invert`] reports the zero case.
+    fn inverse_or_zero(self) -> Self {
+        let mut z = self.0;
+        for _ in 0..6 {
+            z = gf256_mul(z, z);
+            z = gf256_mul(z, self.0);
+        }
+        Self(gf256_mul(z, z))
+    }
+
     /// Raise the element to the power of `exp`.
     pub fn pow(&self, exp: u8) -> Self {
         Self(gf256_pow(self.0, exp))
@@ -856,15 +834,14 @@ fn lagrange_coefficients(shares: &[Vec<u8>]) -> VsssResult<Vec<IdentifierGf256>>
 }
 
 fn gf256_pow(base: u8, exp: u8) -> u8 {
-    let mut result = 1;
-    for i in 0..8 {
-        result *= result;
-        let mut tmp = result;
-        tmp *= base;
+    let mut result = 1u8;
+    // Square-and-multiply from the most significant bit, in constant time.
+    for i in (0..8).rev() {
+        result = gf256_mul(result, result);
+        let tmp = gf256_mul(result, base);
         let allow = ((exp >> i) & 1).ct_eq(&1);
         result.ct_assign(&tmp, allow);
     }
-    result.ct_assign(&1, exp.ct_eq(&0));
     result
 }
 
@@ -1028,6 +1005,51 @@ mod tests {
     use crate::shamir;
     use crate::{ParticipantIdGenerator, ParticipantIdGeneratorCollection};
     use rand::{RngExt, SeedableRng};
+
+    #[test]
+    fn pow_matches_repeated_multiplication() {
+        for base in 0..=255u8 {
+            let mut expected = 1u8;
+            for exp in 0..=255u8 {
+                assert_eq!(gf256_pow(base, exp), expected, "{base}^{exp}");
+                expected = gf256_mul(expected, base);
+            }
+        }
+    }
+
+    #[test]
+    fn sqrt_ratio_follows_the_ff_contract() {
+        for a in 0..=255u8 {
+            let x = Gf256(a);
+            let (is_square, root) = <Gf256 as Field>::sqrt_ratio(&x, &Gf256(1));
+            assert!(bool::from(is_square));
+            assert_eq!(root * root, x);
+        }
+        let (ok, root) = <Gf256 as Field>::sqrt_ratio(&Gf256(0), &Gf256(0));
+        assert!(bool::from(ok));
+        assert_eq!(root, Gf256(0));
+        let (ok, root) = <Gf256 as Field>::sqrt_ratio(&Gf256(3), &Gf256(0));
+        assert!(!bool::from(ok));
+        assert_eq!(root, Gf256(0));
+        let (ok, root) = <Gf256 as Field>::sqrt_ratio(&Gf256(3), &Gf256(5));
+        assert!(bool::from(ok));
+        assert_eq!(root * root * Gf256(5), Gf256(3));
+    }
+
+    #[test]
+    fn division_by_zero_yields_zero_and_inverses_round_trip() {
+        for a in 1..=255u8 {
+            let x = Gf256(a);
+            assert_eq!(x / x, Gf256(1));
+            assert_eq!(x * x.inverse_or_zero(), Gf256(1));
+        }
+        assert_eq!(Gf256(0).inverse_or_zero(), Gf256(0));
+        assert_eq!(Gf256(7) / Gf256(0), Gf256(0));
+        let mut y = Gf256(7);
+        y /= Gf256(0);
+        assert_eq!(y, Gf256(0));
+        assert!(bool::from(Field::invert(&Gf256(0)).is_none()));
+    }
     use rand_chacha::ChaCha8Rng;
     use std::collections::HashSet;
     use std::prelude::v1::Vec;
