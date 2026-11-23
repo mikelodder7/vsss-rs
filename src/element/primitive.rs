@@ -2,8 +2,8 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
+use ctutils::Choice;
 use rand_core::CryptoRng;
-use subtle::Choice;
 #[cfg(feature = "zeroize")]
 use zeroize::*;
 
@@ -300,8 +300,8 @@ mod tests {
             IdentifierU16::from_slice(&[0x12]),
             Err(Error::InvalidShareElement)
         );
-        assert_eq!(IdentifierU16::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(IdentifierU16::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierU16::zero().is_zero().to_u8(), 1);
+        assert_eq!(IdentifierU16::one().is_zero().to_u8(), 0);
         assert_eq!(IdentifierU16::ZERO, IdentifierU16::zero());
         assert_eq!(IdentifierU16::ONE, IdentifierU16::one());
     }

@@ -38,8 +38,8 @@ use core::{
     fmt::Debug,
     ops::{Add, AddAssign, Deref, DerefMut, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use ctutils::Choice;
 use rand_core::CryptoRng;
-use subtle::Choice;
 
 /// A value used to represent a share element for secret shares.
 /// A share element can either be the share identifier or the share value.

@@ -40,6 +40,7 @@ use super::{
 use crate::pi_la::index_identifier;
 use crate::secret::Secret;
 use crate::*;
+use ctutils::CtEq;
 use digest::Digest;
 use elliptic_curve::PrimeField;
 use rand_core::CryptoRng;

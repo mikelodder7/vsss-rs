@@ -25,8 +25,8 @@ use crypto_bigint::{
     Encoding, RandomMod, Uint,
     modular::{ConstMontyForm, ConstMontyParams, FixedMontyForm, FixedMontyParams},
 };
+use ctutils::{Choice, CtEq};
 use rand_core::CryptoRng;
-use subtle::{Choice, ConstantTimeEq};
 
 use super::*;
 use crate::*;
@@ -218,7 +218,7 @@ where
     }
 
     fn is_zero(&self) -> Choice {
-        ConstantTimeEq::ct_eq(&self.0, &ConstMontyForm::<MOD, LIMBS>::ZERO)
+        CtEq::ct_eq(&self.0, &ConstMontyForm::<MOD, LIMBS>::ZERO)
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -481,8 +481,8 @@ mod tests {
         );
         assert_eq!(ConstId::ZERO, ConstId::zero());
         assert_eq!(ConstId::ONE, ConstId::one());
-        assert_eq!(ConstId::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(ConstId::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(ConstId::zero().is_zero().to_u8(), 1);
+        assert_eq!(ConstId::one().is_zero().to_u8(), 0);
     }
 
     #[test]

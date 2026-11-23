@@ -6,12 +6,12 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
 };
+use ctutils::Choice;
 use num_bigint::BigUint;
 use num_traits::{CheckedDiv, One, Zero};
 use rand_core::CryptoRng;
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec};
-use subtle::Choice;
 
 /// A share identifier represented as a big unsigned number
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -193,8 +193,8 @@ mod tests {
         assert_eq!(IdentifierBigUint::deserialize(&bytes), Ok(from_vec.clone()));
         assert_eq!(IdentifierBigUint::from_slice(&bytes), Ok(from_vec.clone()));
         assert_eq!(from_vec.to_vec(), bytes);
-        assert_eq!(IdentifierBigUint::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(IdentifierBigUint::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierBigUint::zero().is_zero().to_u8(), 1);
+        assert_eq!(IdentifierBigUint::one().is_zero().to_u8(), 0);
 
         let inner: BigUint = from_vec.clone().into();
         assert_eq!(inner, BigUint::from_bytes_be(&bytes));

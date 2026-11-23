@@ -7,6 +7,7 @@ use core::{
 };
 #[cfg(feature = "bigint")]
 use crypto_bigint::{Encoding, modular::ConstMontyParams};
+use ctutils::Choice;
 use elliptic_curve::{Group, group::GroupEncoding};
 #[cfg(feature = "bigint")]
 use elliptic_curve::{
@@ -120,7 +121,7 @@ impl<G: Group + GroupEncoding + Default> ShareElement for ValueGroup<G> {
     }
 
     fn is_zero(&self) -> Choice {
-        G::is_identity(self)
+        G::is_identity(self).into()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -594,10 +595,7 @@ mod tests {
             ValueGroup::<ProjectivePoint>::from_slice(&[1, 2]),
             Err(Error::InvalidShareElement)
         );
-        assert_eq!(
-            ValueGroup::<ProjectivePoint>::zero().is_zero().unwrap_u8(),
-            1
-        );
+        assert_eq!(ValueGroup::<ProjectivePoint>::zero().is_zero().to_u8(), 1);
         assert_eq!(ValueGroup::<ProjectivePoint>::one(), point);
         assert_eq!(
             ValueGroup::<ProjectivePoint>::identity(),

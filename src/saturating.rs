@@ -2,12 +2,10 @@ use core::{
     fmt::{self, Binary, Display, Formatter, LowerHex, Octal, UpperHex},
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
 };
-use crypto_bigint::{
-    ArrayEncoding, Choice as BigintChoice, CtEq as BigintCtEq, Random, Uint, Zero,
-};
+use crypto_bigint::{ArrayEncoding, Random, Uint, Zero};
+use ctutils::{Choice, CtEq, CtSelect};
 use num_traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
 use rand_core::{Rng, TryRng};
-use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
 /// Provides intentionally saturating arithmetic on `T`.
 ///
@@ -30,12 +28,12 @@ where
     }
 }
 
-impl<const LIMBS: usize> BigintCtEq for Saturating<LIMBS>
+impl<const LIMBS: usize> CtEq for Saturating<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
-    fn ct_eq(&self, other: &Self) -> BigintChoice {
-        BigintCtEq::ct_eq(&self.0, &other.0)
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
     }
 }
 
@@ -84,21 +82,12 @@ where
     }
 }
 
-impl<const LIMBS: usize> ConditionallySelectable for Saturating<LIMBS>
+impl<const LIMBS: usize> CtSelect for Saturating<LIMBS>
 where
     Uint<LIMBS>: ArrayEncoding,
 {
-    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Self(Uint::<LIMBS>::conditional_select(&a.0, &b.0, choice))
-    }
-}
-
-impl<const LIMBS: usize> ConstantTimeEq for Saturating<LIMBS>
-where
-    Uint<LIMBS>: ArrayEncoding,
-{
-    fn ct_eq(&self, other: &Self) -> Choice {
-        ConstantTimeEq::ct_eq(&self.0, &other.0)
+    fn ct_select(&self, other: &Self, choice: Choice) -> Self {
+        Self(self.0.ct_select(&other.0, choice))
     }
 }
 
@@ -316,10 +305,10 @@ where
 mod tests {
     use super::Saturating;
     use core::ops::{Add, Div, Mul, Rem, Sub};
+    use ctutils::{Choice, CtEq, CtSelect};
     use elliptic_curve::bigint::{Uint, Zero};
     use num_traits::{SaturatingAdd, SaturatingMul, SaturatingSub};
     use std::{format, string::ToString};
-    use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
     fn n(value: u8) -> Saturating<1> {
         Saturating(Uint::<1>::from_be_slice(&[0, 0, 0, 0, 0, 0, 0, value]))
@@ -334,12 +323,10 @@ mod tests {
         assert_eq!(format!("{one:b}"), format!("{:b}", one.0));
         assert_eq!(format!("{one:x}"), format!("{:x}", one.0));
         assert_eq!(format!("{one:X}"), format!("{:X}", one.0));
-        assert_eq!(ConstantTimeEq::ct_eq(&one, &one).unwrap_u8(), 1);
-        assert_eq!(ConstantTimeEq::ct_eq(&one, &zero).unwrap_u8(), 0);
-        assert_eq!(
-            Saturating::conditional_select(&zero, &one, Choice::from(1u8)),
-            one
-        );
+        assert_eq!(one.ct_eq(&one).to_u8(), 1);
+        assert_eq!(one.ct_eq(&zero).to_u8(), 0);
+        assert_eq!(zero.ct_select(&one, Choice::TRUE), one);
+        assert_eq!(zero.ct_select(&one, Choice::FALSE), zero);
     }
 
     #[test]

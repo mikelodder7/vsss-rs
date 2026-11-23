@@ -221,8 +221,6 @@ mod share;
 mod util;
 
 use shamir::check_params;
-#[allow(unused_imports)]
-use subtle::*;
 
 pub use element::*;
 pub use error::*;
@@ -252,6 +250,7 @@ pub use elliptic_curve;
 #[cfg(feature = "curve")]
 use elliptic_curve::Group;
 
+pub use ctutils;
 pub use subtle;
 
 pub(crate) const USIZE_BYTES: usize = size_of::<usize>();

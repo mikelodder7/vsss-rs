@@ -25,6 +25,7 @@
 //! Both properties rely only on the hash, so the scheme is post-quantum.
 //! The commitments are not homomorphic.
 use crate::*;
+use ctutils::{Choice, CtEq};
 use digest::Digest;
 use rand_core::CryptoRng;
 
@@ -174,7 +175,7 @@ impl HashOpening {
     }
 }
 
-impl ConstantTimeEq for HashOpening {
+impl CtEq for HashOpening {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0.ct_eq(&other.0)
     }

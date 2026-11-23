@@ -5,6 +5,7 @@
 
 #[cfg(feature = "stream")]
 use crate::{Error, Vec, VsssResult};
+use ctutils::{Choice, CtEq};
 #[cfg(feature = "stream")]
 use futures_core::Stream;
 
@@ -57,241 +58,74 @@ pub(crate) fn field_bounded_add(a: u8, b: u8, field_size: u16) -> u8 {
 
 /// A trait for indicating in constant time whether a value is zero.
 pub trait CtIsZero {
-    /// Returns a `subtle::Choice` indicating if the value is zero.
+    /// Returns a [`Choice`] indicating if the value is zero.
     /// Returns 1 if the value is zero, otherwise 0.
-    fn ct_is_zero(&self) -> subtle::Choice;
+    fn ct_is_zero(&self) -> Choice;
 }
 
 /// A trait for indicating in constant time whether a value is nonzero.
 pub trait CtIsNotZero {
-    /// Returns a `subtle::Choice` indicating if the value is not zero.
+    /// Returns a [`Choice`] indicating if the value is not zero.
     /// Returns 1 if the value is not zero, otherwise 0.
-    fn ct_is_not_zero(&self) -> subtle::Choice;
+    fn ct_is_not_zero(&self) -> Choice;
+}
+
+/// OR of every byte, zero exactly when every byte is zero.
+fn or_bytes(bytes: &[u8]) -> u8 {
+    bytes.iter().fold(0, |acc, b| acc | b)
 }
 
 impl CtIsZero for &[u8] {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let mut t = 0i8;
-        for b in *self {
-            t |= *b as i8;
-        }
-        t.ct_is_zero()
+    fn ct_is_zero(&self) -> Choice {
+        or_bytes(self).ct_is_zero()
     }
 }
 
 impl CtIsZero for [u8] {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let mut t = 0i8;
-        for b in self {
-            t |= *b as i8;
-        }
-        t.ct_is_zero()
-    }
-}
-
-impl CtIsZero for u8 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self as i8;
-        let a = ((t | t.wrapping_neg()) >> 7) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for i8 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 7) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for u16 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self as i16;
-        let a = ((t | t.wrapping_neg()) >> 15) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for i16 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 15) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for u32 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self as i32;
-        let a = ((t | t.wrapping_neg()) >> 31) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for i32 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 31) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for u64 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self as i64;
-        let a = ((t | t.wrapping_neg()) >> 63) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for i64 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 63) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-#[cfg(target_pointer_width = "64")]
-impl CtIsZero for u128 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self as i128;
-        let a = ((t | t.wrapping_neg()) >> 127) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-#[cfg(target_pointer_width = "64")]
-impl CtIsZero for i128 {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 127) + 1;
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsZero for usize {
-    fn ct_is_zero(&self) -> subtle::Choice {
-        let t = *self as isize;
-        let a = ((t | t.wrapping_neg()) >> (usize::BITS - 1)) + 1;
-        subtle::Choice::from(a as u8)
+    fn ct_is_zero(&self) -> Choice {
+        or_bytes(self).ct_is_zero()
     }
 }
 
 impl CtIsNotZero for &[u8] {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let mut t = 0i8;
-        for b in *self {
-            t |= *b as i8;
-        }
-        t.ct_is_not_zero()
+    fn ct_is_not_zero(&self) -> Choice {
+        or_bytes(self).ct_is_not_zero()
     }
 }
 
 impl CtIsNotZero for [u8] {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let mut t = 0i8;
-        for b in self {
-            t |= *b as i8;
-        }
-        t.ct_is_not_zero()
+    fn ct_is_not_zero(&self) -> Choice {
+        or_bytes(self).ct_is_not_zero()
     }
 }
 
-impl CtIsNotZero for u8 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self as i8;
-        let a = ((t | t.wrapping_neg()) >> 7).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
+/// Implement [`CtIsZero`] and [`CtIsNotZero`] for integers by a
+/// constant-time comparison with zero.
+macro_rules! impl_ct_is_zero_for_integers {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl CtIsZero for $ty {
+                fn ct_is_zero(&self) -> Choice {
+                    self.ct_eq(&0)
+                }
+            }
+
+            impl CtIsNotZero for $ty {
+                fn ct_is_not_zero(&self) -> Choice {
+                    self.ct_ne(&0)
+                }
+            }
+        )+
+    };
 }
 
-impl CtIsNotZero for i8 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 7).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for u16 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self as i16;
-        let a = ((t | t.wrapping_neg()) >> 15).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for i16 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 15).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for u32 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self as i32;
-        let a = ((t | t.wrapping_neg()) >> 31).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for i32 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 31).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for u64 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self as i64;
-        let a = ((t | t.wrapping_neg()) >> 63).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for i64 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 63).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
+impl_ct_is_zero_for_integers!(u8, i8, u16, i16, u32, i32, u64, i64, usize);
 #[cfg(target_pointer_width = "64")]
-impl CtIsNotZero for u128 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self as i128;
-        let a = ((t | t.wrapping_neg()) >> 127).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-#[cfg(target_pointer_width = "64")]
-impl CtIsNotZero for i128 {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self;
-        let a = ((t | t.wrapping_neg()) >> 127).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
-
-impl CtIsNotZero for usize {
-    fn ct_is_not_zero(&self) -> subtle::Choice {
-        let t = *self as isize;
-        let a = ((t | t.wrapping_neg()) >> (usize::BITS - 1)).wrapping_neg();
-        subtle::Choice::from(a as u8)
-    }
-}
+impl_ct_is_zero_for_integers!(u128, i128);
 
 #[cfg(test)]
 mod tests {
-    use super::{CtIsNotZero, CtIsZero, field_bounded_add, uniform_nonzero_u8};
+    use super::{CtIsNotZero, CtIsZero, field_bounded_add, or_bytes, uniform_nonzero_u8};
 
     #[test]
     fn uniform_nonzero_u8_maps_into_one_through_modulus() {
@@ -310,15 +144,22 @@ mod tests {
     }
 
     #[test]
+    fn or_bytes_is_zero_only_for_all_zero_input() {
+        assert_eq!(or_bytes(&[]), 0);
+        assert_eq!(or_bytes(&[0, 0, 0]), 0);
+        assert_eq!(or_bytes(&[0, 0x80, 0x01]), 0x81);
+    }
+
+    #[test]
     fn byte_slices_report_zero_and_nonzero_in_constant_time_form() {
         let zeros = [0u8; 4];
         let nonzeros = [0u8, 0, 7, 0];
-        assert_eq!(zeros.as_slice().ct_is_zero().unwrap_u8(), 1);
-        assert_eq!(zeros.as_slice().ct_is_not_zero().unwrap_u8(), 0);
-        assert_eq!(nonzeros.as_slice().ct_is_zero().unwrap_u8(), 0);
-        assert_eq!(nonzeros.as_slice().ct_is_not_zero().unwrap_u8(), 1);
-        assert_eq!(zeros[..].ct_is_zero().unwrap_u8(), 1);
-        assert_eq!(nonzeros[..].ct_is_not_zero().unwrap_u8(), 1);
+        assert_eq!(zeros.as_slice().ct_is_zero().to_u8(), 1);
+        assert_eq!(zeros.as_slice().ct_is_not_zero().to_u8(), 0);
+        assert_eq!(nonzeros.as_slice().ct_is_zero().to_u8(), 0);
+        assert_eq!(nonzeros.as_slice().ct_is_not_zero().to_u8(), 1);
+        assert_eq!(zeros[..].ct_is_zero().to_u8(), 1);
+        assert_eq!(nonzeros[..].ct_is_not_zero().to_u8(), 1);
     }
 
     #[test]
@@ -328,10 +169,10 @@ mod tests {
                 $(
                     let zero: $ty = 0;
                     let nonzero: $ty = $nonzero;
-                    assert_eq!(zero.ct_is_zero().unwrap_u8(), 1);
-                    assert_eq!(zero.ct_is_not_zero().unwrap_u8(), 0);
-                    assert_eq!(nonzero.ct_is_zero().unwrap_u8(), 0);
-                    assert_eq!(nonzero.ct_is_not_zero().unwrap_u8(), 1);
+                    assert_eq!(zero.ct_is_zero().to_u8(), 1);
+                    assert_eq!(zero.ct_is_not_zero().to_u8(), 0);
+                    assert_eq!(nonzero.ct_is_zero().to_u8(), 0);
+                    assert_eq!(nonzero.ct_is_not_zero().to_u8(), 1);
                 )+
             };
         }

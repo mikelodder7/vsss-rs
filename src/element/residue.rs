@@ -183,7 +183,7 @@ where
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.is_zero().into()
+        self.0.is_zero()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -272,8 +272,8 @@ mod tests {
         );
         assert_eq!(TestResidue::ZERO, TestResidue::zero());
         assert_eq!(TestResidue::ONE, TestResidue::one());
-        assert_eq!(TestResidue::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(TestResidue::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(TestResidue::zero().is_zero().to_u8(), 1);
+        assert_eq!(TestResidue::one().is_zero().to_u8(), 0);
     }
 
     #[test]

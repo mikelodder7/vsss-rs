@@ -8,6 +8,7 @@ use super::{LOG_Q, N, Q};
 use crate::{Error, VsssResult};
 use core::num::Wrapping;
 use core::ops::{Add, Mul, Neg, Sub};
+use ctutils::{CtGt, CtSelect};
 use std::vec::Vec;
 
 /// Mask selecting the low `log2(q)` bits.
@@ -310,14 +311,10 @@ fn reduce(c: i64) -> u32 {
     (c as u64 & u64::from(Q_MASK)) as u32
 }
 
-/// Map `[0, q)` to `(−q/2, q/2]`.
+/// Map `[0, q)` to `(−q/2, q/2]` without branching on `c`.
 fn center(c: u32) -> i64 {
-    let c = i64::from(c);
-    if c > i64::from(Q >> 1) {
-        c - (1i64 << LOG_Q)
-    } else {
-        c
-    }
+    let wide = i64::from(c);
+    wide.ct_select(&(wide - (1i64 << LOG_Q)), c.ct_gt(&(Q >> 1)))
 }
 
 /// `out_0 = c_0`, `out_i = −c_{N−i}`.
@@ -479,6 +476,16 @@ mod tests {
         assert_eq!(p.norm_sq(), 9 + 16 + 144);
         let big = PolyZ::constant(i64::MAX).expect("in range");
         assert_eq!(big.norm_sq(), u128::from(i64::MAX.unsigned_abs()).pow(2));
+    }
+
+    #[test]
+    fn center_lifts_exactly_the_upper_half() {
+        let half = Q / 2;
+        assert_eq!(center(0), 0);
+        assert_eq!(center(half - 1), i64::from(half - 1));
+        assert_eq!(center(half), i64::from(half));
+        assert_eq!(center(half + 1), -i64::from(half - 1));
+        assert_eq!(center(Q - 1), -1);
     }
 
     #[test]

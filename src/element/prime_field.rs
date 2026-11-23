@@ -247,7 +247,7 @@ impl<F: PrimeField> ShareElement for IdentifierPrimeField<F> {
     }
 
     fn is_zero(&self) -> Choice {
-        F::is_zero(self)
+        F::is_zero(self).into()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -346,14 +346,8 @@ mod tests {
             IdentifierPrimeField::<Scalar>::ONE,
             IdentifierPrimeField::one()
         );
-        assert_eq!(
-            IdentifierPrimeField::<Scalar>::zero().is_zero().unwrap_u8(),
-            1
-        );
-        assert_eq!(
-            IdentifierPrimeField::<Scalar>::one().is_zero().unwrap_u8(),
-            0
-        );
+        assert_eq!(IdentifierPrimeField::<Scalar>::zero().is_zero().to_u8(), 1);
+        assert_eq!(IdentifierPrimeField::<Scalar>::one().is_zero().to_u8(), 0);
     }
 
     #[test]

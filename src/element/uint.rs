@@ -6,8 +6,8 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use crypto_bigint::{Encoding, Random, Uint};
+use ctutils::Choice;
 use rand_core::CryptoRng;
-use subtle::Choice;
 
 use super::*;
 use crate::*;
@@ -116,7 +116,7 @@ where
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.is_zero().into()
+        self.0.is_zero()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -204,8 +204,8 @@ mod tests {
         );
         assert_eq!(IdentifierUint::<1>::ZERO, IdentifierUint::<1>::zero());
         assert_eq!(IdentifierUint::<1>::ONE, IdentifierUint::<1>::one());
-        assert_eq!(IdentifierUint::<1>::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(IdentifierUint::<1>::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierUint::<1>::zero().is_zero().to_u8(), 1);
+        assert_eq!(IdentifierUint::<1>::one().is_zero().to_u8(), 0);
 
         let inner: Uint<1> = identifier.into();
         assert_eq!(

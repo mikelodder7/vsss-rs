@@ -18,9 +18,10 @@ use core::{
         DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
     },
 };
+use ctutils::{CtAssign, CtEq, CtSelect};
 use ff::{Field, PrimeField};
 use rand_core::TryRng;
-use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
+use subtle::{Choice, CtOption};
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 use crate::ParticipantIdGenerator;
@@ -64,15 +65,15 @@ impl Binary for Gf256 {
     }
 }
 
-impl ConditionallySelectable for Gf256 {
+impl subtle::ConditionallySelectable for Gf256 {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Gf256(u8::conditional_select(&a.0, &b.0, choice))
+        Gf256(a.0.ct_select(&b.0, choice.into()))
     }
 }
 
-impl ConstantTimeEq for Gf256 {
+impl subtle::ConstantTimeEq for Gf256 {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0.ct_eq(&other.0)
+        CtEq::ct_eq(&self.0, &other.0).into()
     }
 }
 
@@ -430,7 +431,7 @@ impl Field for Gf256 {
             z = gf256_mul(z, z);
             z = gf256_mul(z, self.0);
         }
-        CtOption::new(Self(gf256_mul(z, z)), self.0.ct_is_not_zero())
+        CtOption::new(Self(gf256_mul(z, z)), self.0.ct_is_not_zero().into())
     }
 
     fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
@@ -466,7 +467,7 @@ impl Field for Gf256 {
             m = t;
             i = j;
         }
-        let is_square = gf256_pow(c, 2).ct_eq(&c);
+        let is_square = gf256_pow(c, 2).ct_eq(&c).into();
         (is_square, Self(c))
     }
 }
@@ -543,7 +544,7 @@ impl PrimeField for Gf256 {
     }
 
     fn is_odd(&self) -> Choice {
-        (self.0 & 1).ct_eq(&1)
+        (self.0 & 1).ct_eq(&1).into()
     }
 
     const MODULUS: &'static str = "";
@@ -861,9 +862,9 @@ fn gf256_pow(base: u8, exp: u8) -> u8 {
         let mut tmp = result;
         tmp *= base;
         let allow = ((exp >> i) & 1).ct_eq(&1);
-        result.conditional_assign(&tmp, allow);
+        result.ct_assign(&tmp, allow);
     }
-    result.conditional_assign(&1, exp.ct_eq(&0));
+    result.ct_assign(&1, exp.ct_eq(&0));
     result
 }
 
@@ -965,8 +966,8 @@ impl ShareElement for IdentifierGf256 {
         Self(Gf256::ONE)
     }
 
-    fn is_zero(&self) -> Choice {
-        self.0.is_zero()
+    fn is_zero(&self) -> ctutils::Choice {
+        self.0.is_zero().into()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -1521,8 +1522,8 @@ mod tests {
             Err(Error::InvalidShareElement)
         );
         assert_eq!(identifier.to_vec(), vec![7]);
-        assert_eq!(IdentifierGf256::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(IdentifierGf256::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(IdentifierGf256::zero().is_zero().to_u8(), 1);
+        assert_eq!(IdentifierGf256::one().is_zero().to_u8(), 0);
         assert_eq!(IdentifierGf256::one().invert(), Ok(IdentifierGf256::one()));
         assert_eq!(
             IdentifierGf256::zero().invert(),

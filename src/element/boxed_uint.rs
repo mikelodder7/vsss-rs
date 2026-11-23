@@ -8,8 +8,8 @@ use core::{
 };
 
 use crypto_bigint::{BoxedUint, NonZero, RandomBits, Resize};
+use ctutils::Choice;
 use rand_core::CryptoRng;
-use subtle::Choice;
 
 use super::*;
 use crate::*;
@@ -104,7 +104,7 @@ impl<const BITS: u32> ShareElement for IdentifierBoxedUint<BITS> {
     }
 
     fn is_zero(&self) -> Choice {
-        self.0.is_zero().into()
+        self.0.is_zero()
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -176,8 +176,8 @@ mod tests {
             Err(Error::InvalidShareElement)
         );
         assert_eq!(Identifier::default(), Identifier::zero());
-        assert_eq!(Identifier::zero().is_zero().unwrap_u8(), 1);
-        assert_eq!(Identifier::one().is_zero().unwrap_u8(), 0);
+        assert_eq!(Identifier::zero().is_zero().to_u8(), 1);
+        assert_eq!(Identifier::one().is_zero().to_u8(), 0);
 
         let inner: BoxedUint = identifier.clone().into();
         assert_eq!(Identifier::from(inner), identifier);

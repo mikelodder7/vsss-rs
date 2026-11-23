@@ -16,6 +16,7 @@ use super::{B_X, GAMMA_KEY, N, Q, ROUNDING_BITS, SIGMA_EXTRACT};
 use crate::secret::Secret;
 use crate::{Error, VsssResult};
 use core::fmt::{self, Debug, Formatter};
+use ctutils::{Choice, CtEq, CtGt, CtLt};
 use digest::Digest;
 use rand_core::CryptoRng;
 use std::vec::Vec;
@@ -160,7 +161,8 @@ pub fn verify_key<D: Digest>(mpk: &MasterPublicKey, id: &[u8], key: &IdentitySec
 /// is below `2^68`, so their sum cannot overflow.
 fn verify_key_with_t(mpk: &MasterPublicKey, t: &PolyQ, key: &IdentitySecretKey) -> bool {
     let s1 = t - &(key.s2() * mpk.h());
-    s1.centered_norm_sq() + key.s2().centered_norm_sq() <= u128::from(GAMMA_KEY).pow(2)
+    let norm_sq = s1.centered_norm_sq() + key.s2().centered_norm_sq();
+    (!norm_sq.ct_gt(&u128::from(GAMMA_KEY).pow(2))).to_bool()
 }
 
 /// `Enc(h, ID, m)` for a message `m` of any length.
@@ -204,15 +206,13 @@ pub fn encrypt<D: Digest>(
 /// this point: [`Ciphertext::from_bytes`] and deserialization reject it.
 pub fn decrypt<D: Digest>(key: &IdentitySecretKey, ciphertext: &Ciphertext) -> Vec<u8> {
     let w = Secret::new(ciphertext.v() - &(ciphertext.u() * key.s2()));
-    let quarter = i64::from(Q / 4);
-    let centered = Secret::new(w.centered());
     let k = Secret::new(
-        centered
+        w.coeffs()
             .chunks(8)
             .map(|bits| {
-                bits.iter().enumerate().fold(0u8, |byte, (j, c)| {
-                    byte | (u8::from(c.abs() >= quarter) << j)
-                })
+                bits.iter()
+                    .enumerate()
+                    .fold(0u8, |byte, (j, &c)| byte | (key_bit(c).to_u8() << j))
             })
             .collect::<Vec<u8>>(),
     );
@@ -220,6 +220,15 @@ pub fn decrypt<D: Digest>(key: &IdentitySecretKey, ciphertext: &Ciphertext) -> V
         ciphertext.masked(),
         &hash_to_mask::<D>(&k, ciphertext.masked().len() * 8),
     )
+}
+
+/// The key bit `|[w]_q| ≥ q/4` for a coefficient `w ∈ [0, q)`.
+///
+/// With `q = 2^29` that is `q/4 ≤ w ≤ 3q/4`, decided by two constant-time
+/// comparisons so the time does not depend on the secret `w`.
+fn key_bit(w: u32) -> Choice {
+    const QUARTER: u32 = Q / 4;
+    !(w.ct_lt(&QUARTER) | w.ct_gt(&(Q - QUARTER)))
 }
 
 /// `N` coefficients drawn uniformly from `{−1, 0, 1}`, two random bits at a
@@ -235,7 +244,7 @@ fn ternary<R: CryptoRng + ?Sized>(rng: &mut R) -> Vec<i64> {
 
 /// `wt(x)`, the number of non-zero coefficients.
 fn weight(x: &[i64]) -> usize {
-    x.iter().filter(|&&c| c != 0).count()
+    x.iter().map(|c| usize::from(c.ct_ne(&0).to_u8())).sum()
 }
 
 /// The `N` bits of the packed key, least-significant bit first.
@@ -392,6 +401,39 @@ mod tests {
         c[3] = Q - 1; // wraps to 0
         let rounded = round_low_bits(&PolyQ::from_coeffs(&c).expect("length N"));
         assert_eq!(&rounded.coeffs()[..4], &[1 << 24, 0, 1 << 24, 0]);
+    }
+
+    #[test]
+    fn key_bit_matches_the_centered_definition_at_the_boundaries() {
+        // The definition `decrypt` used before: center `w` into
+        // `(−q/2, q/2]` with a branch and compare `|w| ≥ q/4`.
+        let reference = |w: u32| {
+            let w = i64::from(w);
+            let half = i64::from(Q / 2);
+            let centered = if w > half { w - i64::from(Q) } else { w };
+            u8::from(centered.abs() >= i64::from(Q / 4))
+        };
+        let quarter = i64::from(Q / 4);
+        let half = i64::from(Q / 2);
+        let cases = [
+            (quarter - 1, 0),
+            (quarter, 1),
+            (-quarter, 1),
+            (-quarter + 1, 0),
+            (0, 0),
+            (half, 1),
+            (-half, 1),
+        ];
+        for (centered, bit) in cases {
+            let w = PolyQ::from_signed(&[centered; N])
+                .expect("length N")
+                .coeffs()[0];
+            assert_eq!(key_bit(w).to_u8(), bit, "{centered}");
+            assert_eq!(key_bit(w).to_u8(), reference(w), "{centered}");
+        }
+        for w in (0..Q).step_by(4093).chain([1, Q - 1, 3 * (Q / 4) + 1]) {
+            assert_eq!(key_bit(w).to_u8(), reference(w), "{w}");
+        }
     }
 
     #[cfg(feature = "serde")]
