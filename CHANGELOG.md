@@ -5,6 +5,9 @@
 - Added the `pi-la` feature: Π_LA hash-based verifiable secret sharing (Baghery, PKC 2025). It is post-quantum, needs no group, and works with any `digest::Digest` (SHA-2, SHA-3, BLAKE2, BLAKE3 via `traits-preview`). The only new dependency is `digest`.
 - Added the `hash-commitment` feature: public `HashCommitment` and `HashOpening`, a length-prefixed, domain-separated hash commitment over any `digest::Digest` with constant-time verification. Π_LA and the lattice PVSS build their commitments on it.
 - Added the `lattice-pvss` feature, **experimental and unaudited**: the post-quantum publicly verifiable secret sharing scheme of Kate, Mukherjee, Saleem, Sarkar, and Sinha (ePrint 2026/813, Sec. 5), built on an NTRU-lattice identity-based encryption (key generation, Klein/GPV extraction in Falcon's fast-Fourier form, encryption, decryption) with ~110-bit classical security (below 128). It is not constant-time and adds no dependencies.
+- **Breaking:** `Error` has a new `Lattice(&'static str)` variant for lattice PVSS failures. Exhaustive matches on `Error` need a new arm.
+- Share identifier validation checks for zero identifiers before duplicates, and finds duplicates in O(n log n) when an allocator is available. A set holding both a zero and a duplicated identifier now reports `SharingInvalidIdentifier`.
+- `crypto-bigint` now requires 0.7.11 or later.
 - `Error` now derives `thiserror::Error`, so it implements `core::error::Error`. Display messages are unchanged.
 - Split polynomials are now wiped on drop under the `zeroize` feature in every split path: Shamir, Feldman, Pedersen, GF(256), and GF(16) ([#26](https://github.com/mikelodder7/vsss-rs/issues/26), [#27](https://github.com/mikelodder7/vsss-rs/pull/27)).
 - **Breaking:** under the `zeroize` feature, `Share` and `ShareElement` now require `zeroize::Zeroize` (via the new `ShareZeroize` marker trait). Custom share or element types must implement `Zeroize`.

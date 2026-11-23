@@ -10,8 +10,14 @@ verifiable secret sharing schemes. It supports `no_std`, fixed-size storage,
 allocator-backed storage, prime fields, groups, and byte-oriented GF(16) and
 GF(256) sharing.
 
+It also provides post-quantum options: Π_LA hash-based verifiable secret
+sharing and a public hash commitment, both over any `digest::Digest`, and an
+experimental lattice-based publicly verifiable scheme.
+
 The library is production-ready and in production use. Thank you to
-LIT Protocol and Turnkey for funding security audits of this library.
+LIT Protocol and Turnkey for funding security audits of this library. The
+audits predate the `hash-commitment`, `pi-la`, and `lattice-pvss` features,
+which have not been audited.
 
 ## Schemes
 
@@ -20,9 +26,11 @@ LIT Protocol and Turnkey for funding security audits of this library.
 | Shamir | None | Secret shares |
 | Feldman | Public commitments | Secret shares and Feldman verifiers |
 | Pedersen | Hiding commitments | Secret shares, blinder shares, blinder, and verifier sets |
+| Π_LA (`pi-la`) | Hash commitments, post-quantum | Secret shares and a `PiLaProof` |
+| Lattice PVSS (`lattice-pvss`, experimental) | Public, post-quantum, ~110-bit | Encrypted shares and a `PvssProof` |
 
-Combining shares is identical across the three schemes and is provided by
-`ReadableShareSet::combine`.
+Combining shares is identical across Shamir, Feldman, Pedersen, and Π_LA and
+is provided by `ReadableShareSet::combine`.
 
 ## Quick start
 
@@ -82,6 +90,66 @@ p256 = { version = "0.14", features = ["arithmetic"] }
 
 See the [crate documentation][docs-link] for Feldman, Pedersen, K256,
 BLS12-381, Curve25519, Ed25519, Ed448, and X25519 examples.
+
+## Post-quantum sharing
+
+Feldman and Pedersen commitments rely on discrete logarithms, which a quantum
+computer can break. Π_LA verifies shares with hash commitments instead, so it
+needs only a hash. Any `digest::Digest` works: SHA-2, SHA-3, BLAKE2, or BLAKE3
+(with its `traits-preview` feature). Use a digest of at least 256 bits.
+
+```rust
+use k256::Scalar;
+use rand::{SeedableRng, rngs::StdRng};
+use sha2::Sha256;
+use vsss_rs::{IdentifierPrimeField, PrimeFieldShare, ReadableShareSet, pi_la};
+
+fn main() -> Result<(), vsss_rs::Error> {
+    let mut rng = StdRng::from_seed([3u8; 32]);
+    let secret = IdentifierPrimeField(Scalar::from(42u64));
+    let dealt = pi_la::split_secret::<Sha256, PrimeFieldShare<Scalar>, _>(
+        2, 3, &secret, &mut rng,
+    )?;
+
+    // Each participant checks its own share against the public proof.
+    for share in &dealt.shares {
+        dealt.proof.verify_share::<Sha256, _>(2, share)?;
+    }
+    assert_eq!((&dealt.shares[..2]).combine()?, secret);
+    Ok(())
+}
+```
+
+The hash commitment is also usable on its own:
+
+```rust
+use rand::{SeedableRng, rngs::StdRng};
+use sha2::Sha256;
+use vsss_rs::HashCommitment;
+
+fn main() -> Result<(), vsss_rs::Error> {
+    let mut rng = StdRng::from_seed([4u8; 32]);
+    let (commitment, opening) =
+        HashCommitment::commit::<Sha256>(b"my-app", b"message", &mut rng);
+    commitment.verify::<Sha256>(b"my-app", b"message", &opening)?;
+    Ok(())
+}
+```
+
+Both examples need:
+
+```toml
+[dependencies]
+k256 = { version = "0.14", features = ["arithmetic"] }
+sha2 = "0.11"
+vsss-rs = { version = "7", features = ["pi-la"] }
+```
+
+The `lattice-pvss` feature adds a publicly verifiable scheme where shares are
+encrypted to each receiver under an NTRU-lattice identity-based encryption. It
+is **experimental and unaudited**, is not constant-time, and has about 110-bit
+classical security (below 128). See the `lattice` module documentation before
+using it.
 
 ## Shares and identifiers
 
@@ -183,8 +251,14 @@ their zero and one values require runtime parameters.
 Share counts and identifiers are public inputs. Field and group operations used
 for secret material are designed to avoid secret-dependent control flow and
 table lookups. Applications remain responsible for authenticating transported
-shares and, when using Feldman or Pedersen, verifying shares before combining
-them.
+shares and, when using Feldman, Pedersen, or Π_LA, verifying shares before
+combining them.
+
+Feldman and Pedersen are not post-quantum. Π_LA and `HashCommitment` rely only
+on the hash, so their security follows the digest you choose. For the whole
+flow to be post-quantum, shares must also travel over post-quantum channels.
+The `lattice-pvss` feature is experimental, unaudited, not constant-time, and
+at about 110-bit classical security below the rest of the crate.
 
 Please follow the private reporting process in [SECURITY.md](SECURITY.md)
 rather than opening a public issue.
@@ -204,6 +278,8 @@ inclusion are licensed under the same terms without additional conditions.
 1. [How to Share a Secret — Adi Shamir, 1979](https://dl.acm.org/doi/10.1145/359168.359176)
 2. [A Practical Scheme for Non-interactive Verifiable Secret Sharing — Paul Feldman, 1987](https://www.cs.umd.edu/~gasarch/TOPICS/secretsharing/feldmanVSS.pdf)
 3. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing — Torben Pedersen, 1991](https://link.springer.com/chapter/10.1007/3-540-46766-1_9)
+4. [Π: A Unified Framework for Computational Verifiable Secret Sharing — Karim Baghery, PKC 2025](https://eprint.iacr.org/2023/1669)
+5. [Practical Post-Quantum Secure Publicly Verifiable Secret Sharing and Applications — Kate, Mukherjee, Saleem, Sarkar, and Sinha, 2026](https://eprint.iacr.org/2026/813)
 
 [crate-image]: https://img.shields.io/crates/v/vsss-rs.svg
 [crate-link]: https://crates.io/crates/vsss-rs
