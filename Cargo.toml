@@ -26,9 +26,10 @@ stream = ["alloc", "dep:futures-core"]
 zeroize = ["crypto-bigint?/zeroize", "dep:zeroize"]
 legacy-curve-tests = []
 pi-la = ["alloc", "curve", "dep:digest"]
+lattice-pvss = ["std", "bigint", "pi-la"]
 
 [dependencies]
-crypto-bigint = { version = "0.7", optional = true }
+crypto-bigint = { version = "0.7.11", optional = true }
 digest = { version = "0.11", default-features = false, optional = true }
 elliptic-curve = { version = "0.14.0", default-features = false, features = ["arithmetic"], optional = true }
 elliptic-curve-tools = { version = "0.3.0", default-features = false, optional = true }
@@ -66,6 +67,8 @@ serde_cbor_2 = "0.13"
 serde_json = "1.0"
 sha2 = "0.11"
 x25519-dalek = { version = "3.0.0", features = ["static_secrets"] }
+toml = "1"
+yaml_serde = "0.10"
 
 [package.metadata.cargo-udeps.ignore]
 development = ["bls12_381_plus", "ed448-goldilocks-plus", "hash2curve", "rstest"]

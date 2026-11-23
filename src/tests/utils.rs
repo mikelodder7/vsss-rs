@@ -94,3 +94,48 @@ impl TryRng for MockRng {
         self.0.try_fill_bytes(dest)
     }
 }
+
+/// Wraps a value so TOML, which needs a table at the top level, can
+/// serialize any type.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(bound(
+    serialize = "T: serde::Serialize",
+    deserialize = "T: serde::de::DeserializeOwned"
+))]
+struct TomlTable<T> {
+    value: T,
+}
+
+/// Round-trip `value` through every serde format the crate tests: json,
+/// postcard, cbor, bare, toml, and yaml.
+#[cfg(feature = "serde")]
+pub fn assert_serde_round_trip<T>(value: &T)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + core::fmt::Debug,
+{
+    let json = serde_json::to_string(value).expect("json");
+    assert_eq!(&serde_json::from_str::<T>(&json).expect("json"), value);
+
+    let bytes = postcard::to_stdvec(value).expect("postcard");
+    assert_eq!(&postcard::from_bytes::<T>(&bytes).expect("postcard"), value);
+
+    let mut cbor = std::vec::Vec::new();
+    ciborium::into_writer(value, &mut cbor).expect("cbor");
+    assert_eq!(
+        &ciborium::from_reader::<T, _>(cbor.as_slice()).expect("cbor"),
+        value
+    );
+
+    let bare = serde_bare::to_vec(value).expect("bare");
+    assert_eq!(&serde_bare::from_slice::<T>(&bare).expect("bare"), value);
+
+    let toml = toml::to_string(&TomlTable { value }).expect("toml");
+    assert_eq!(
+        &toml::from_str::<TomlTable<T>>(&toml).expect("toml").value,
+        value
+    );
+
+    let yaml = yaml_serde::to_string(value).expect("yaml");
+    assert_eq!(&yaml_serde::from_str::<T>(&yaml).expect("yaml"), value);
+}

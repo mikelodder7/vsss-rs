@@ -179,7 +179,7 @@ jobs:
           toolchain: nightly
       - uses: cargo-bins/cargo-binstall@main
       - run: cargo binstall --no-confirm cargo-outdated
-      - run: cargo outdated --root-deps-only --exit-code 1 --exclude rand_core --exclude crypto-bigint --ignore rand_core --ignore crypto-bigint
+      - run: cargo outdated --root-deps-only --exit-code 1 --exclude rand_core --ignore rand_core
 
   pants:
     runs-on: ubuntu-latest

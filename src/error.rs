@@ -37,6 +37,8 @@ pub enum Error {
     NotEnoughShareIdentifiers,
     /// Not enough shares were available when combining from a stream
     NotEnoughShares,
+    /// A lattice PVSS operation failed, with the reason
+    Lattice(&'static str),
 }
 
 impl Display for Error {
@@ -68,6 +70,7 @@ impl Display for Error {
             Error::InvalidShareElement => write!(f, "Invalid share element"),
             Error::NotEnoughShareIdentifiers => write!(f, "Not enough share identifiers available"),
             Error::NotEnoughShares => write!(f, "Not enough shares available"),
+            Error::Lattice(s) => write!(f, "Lattice PVSS operation failed: {}", s),
         }
     }
 }
@@ -127,6 +130,10 @@ mod tests {
                 "Not enough share identifiers available",
             ),
             (Error::NotEnoughShares, "Not enough shares available"),
+            (
+                Error::Lattice("bad ciphertext"),
+                "Lattice PVSS operation failed: bad ciphertext",
+            ),
         ];
 
         for (error, message) in cases {

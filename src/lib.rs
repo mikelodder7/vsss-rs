@@ -200,6 +200,8 @@ mod gf16;
 #[allow(clippy::suspicious_arithmetic_impl)]
 #[allow(clippy::suspicious_op_assign_impl)]
 mod gf256;
+#[cfg(feature = "lattice-pvss")]
+pub mod lattice;
 mod numbering;
 pub mod pedersen;
 #[cfg(feature = "pi-la")]

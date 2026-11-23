@@ -213,7 +213,7 @@ impl<F: PrimeField> PiLaProof<F> {
 
 /// The `k`-th coefficient of a polynomial stored the crate's way: the
 /// constant term in the value, every other coefficient in the identifier.
-fn coefficient<S, F>(share: &S, k: usize) -> &IdentifierPrimeField<F>
+pub(crate) fn coefficient<S, F>(share: &S, k: usize) -> &IdentifierPrimeField<F>
 where
     F: PrimeField,
     S: Share<Identifier = IdentifierPrimeField<F>, Value = IdentifierPrimeField<F>>,
@@ -226,7 +226,10 @@ where
 }
 
 /// Evaluate `z` at `x` with Horner's method.
-fn evaluate<F: PrimeField>(z: &[IdentifierPrimeField<F>], x: &IdentifierPrimeField<F>) -> F {
+pub(crate) fn evaluate<F: PrimeField>(
+    z: &[IdentifierPrimeField<F>],
+    x: &IdentifierPrimeField<F>,
+) -> F {
     z.iter().rev().fold(F::ZERO, |acc, c| acc * x.0 + c.0)
 }
 
@@ -542,24 +545,7 @@ mod tests {
     fn proof_serde_round_trips() {
         let (_, result) = deal(11);
         let proof = result.proof;
-
-        let json = serde_json::to_string(&proof).unwrap();
-        assert_eq!(serde_json::from_str::<PiLaProof<_>>(&json).unwrap(), proof);
-
-        let bytes = postcard::to_stdvec(&proof).unwrap();
-        assert_eq!(postcard::from_bytes::<PiLaProof<_>>(&bytes).unwrap(), proof);
-
-        let mut cbor = Vec::new();
-        ciborium::into_writer(&proof, &mut cbor).unwrap();
-        assert_eq!(
-            ciborium::from_reader::<PiLaProof<_>, _>(cbor.as_slice()).unwrap(),
-            proof
-        );
-
-        let bare = serde_bare::to_vec(&proof).unwrap();
-        assert_eq!(
-            serde_bare::from_slice::<PiLaProof<_>>(&bare).unwrap(),
-            proof
-        );
+        crate::tests::utils::assert_serde_round_trip(&proof);
+        crate::tests::utils::assert_serde_round_trip(&proof.commitments[0]);
     }
 }
