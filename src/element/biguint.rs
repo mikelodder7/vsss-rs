@@ -20,6 +20,17 @@ use subtle::Choice;
 #[repr(transparent)]
 pub struct IdentifierBigUint(pub BigUint);
 
+#[cfg(feature = "zeroize")]
+impl zeroize::Zeroize for IdentifierBigUint {
+    /// `num-bigint` has no `zeroize` support, so this overwrites every limb
+    /// with zero through its public API before it is trimmed. Prefer the
+    /// `crypto-bigint` identifiers where a guaranteed wipe matters.
+    fn zeroize(&mut self) {
+        let limbs = self.0.iter_u32_digits().len();
+        self.0.assign_from_slice(&vec![0u32; limbs]);
+    }
+}
+
 impl Display for IdentifierBigUint {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -202,5 +213,14 @@ mod tests {
             IdentifierBigUint(BigUint::zero()).invert(),
             Err(Error::InvalidShareElement)
         );
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn zeroize_clears_biguint_identifier() {
+        use zeroize::Zeroize;
+        let mut identifier = IdentifierBigUint(BigUint::from(u128::MAX));
+        identifier.zeroize();
+        assert!(identifier.0.is_zero());
     }
 }

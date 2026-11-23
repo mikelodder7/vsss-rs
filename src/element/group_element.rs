@@ -14,8 +14,6 @@ use elliptic_curve::{
     ops::Reduce,
 };
 use rand_core::CryptoRng;
-#[cfg(feature = "zeroize")]
-use zeroize::DefaultIsZeroes;
 
 /// A share verifier group element.
 pub type ShareVerifierGroup<G> = ValueGroup<G>;
@@ -533,7 +531,15 @@ where
 }
 
 #[cfg(feature = "zeroize")]
-impl<G: Group + GroupEncoding + Default + DefaultIsZeroes> DefaultIsZeroes for ValueGroup<G> {}
+impl<G: Group + GroupEncoding + Default> zeroize::Zeroize for ValueGroup<G> {
+    /// `G` is not required to implement `Zeroize`, so this stores the
+    /// identity and passes it through `black_box` so the store cannot be
+    /// elided.
+    fn zeroize(&mut self) {
+        self.0 = G::identity();
+        core::hint::black_box(&self.0);
+    }
+}
 
 impl<G: Group + GroupEncoding + Default> ValueGroup<G> {
     /// Create the additive identity element.
@@ -806,5 +812,14 @@ mod tests {
             assigned,
             ValueGroup(ProjectivePoint::GENERATOR * Scalar::from(64u64))
         );
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn zeroize_sets_value_group_to_identity() {
+        use zeroize::Zeroize;
+        let mut value = ValueGroup(ProjectivePoint::GENERATOR);
+        value.zeroize();
+        assert_eq!(value, ValueGroup(ProjectivePoint::IDENTITY));
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.0.0 - 2026-11-23
+
+- Split polynomials are now wiped on drop under the `zeroize` feature in every split path: Shamir, Feldman, Pedersen, GF(256), and GF(16) ([#26](https://github.com/mikelodder7/vsss-rs/issues/26), [#27](https://github.com/mikelodder7/vsss-rs/pull/27)).
+- **Breaking:** under the `zeroize` feature, `Share` and `ShareElement` now require `zeroize::Zeroize` (via the new `ShareZeroize` marker trait). Custom share or element types must implement `Zeroize`.
+- **Breaking:** `IdentifierPrimeField<F>` and `ValueGroup<G>` now implement `Zeroize` for any `F`/`G` instead of `DefaultIsZeroes` only when the inner type does.
+- `IdentifierBigUint` and `IdentifierBoxedUint` now implement `Zeroize`. The `BigUint` wipe is best-effort because `num-bigint` has no zeroize support.
+
 ## 6.0.0 - 2026-07-30
 
 - Added iterator-based APIs alongside the existing slice-based methods for Shamir, Feldman, Pedersen, and share-set workflows.

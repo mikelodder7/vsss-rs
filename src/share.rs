@@ -10,8 +10,20 @@ use elliptic_curve::{Group, PrimeField, group::GroupEncoding};
 #[cfg(feature = "zeroize")]
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+#[cfg(feature = "zeroize")]
+/// Placeholder for conditionally compiling in [`zeroize::Zeroize`].
+pub trait ShareZeroize: Zeroize {}
+#[cfg(not(feature = "zeroize"))]
+/// Placeholder for conditionally compiling in [`zeroize::Zeroize`].
+pub trait ShareZeroize {}
+
+#[cfg(feature = "zeroize")]
+impl<T: Zeroize> ShareZeroize for T {}
+#[cfg(not(feature = "zeroize"))]
+impl<T> ShareZeroize for T {}
+
 /// A share.
-pub trait Share: Sized + Debug + Eq + PartialEq + Clone + Default {
+pub trait Share: Sized + Debug + Eq + PartialEq + Clone + Default + ShareZeroize {
     /// The identifier type for the share.
     type Identifier: ShareIdentifier;
 

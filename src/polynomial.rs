@@ -130,6 +130,50 @@ impl<S: Share> Polynomial<S> for Vec<S> {
     }
 }
 
+/// Wraps a polynomial and wipes its coefficients when dropped.
+///
+/// Coefficient 0 holds the secret and the rest are enough to rebuild it, so
+/// every split path keeps its polynomial in this guard. Without the `zeroize`
+/// feature it is a plain wrapper.
+pub(crate) struct ZeroizingPolynomial<S: Share, P: Polynomial<S>> {
+    inner: P,
+    _share: core::marker::PhantomData<S>,
+}
+
+impl<S: Share, P: Polynomial<S>> Polynomial<S> for ZeroizingPolynomial<S, P> {
+    fn create(size_hint: usize) -> Self {
+        Self {
+            inner: P::create(size_hint),
+            _share: core::marker::PhantomData,
+        }
+    }
+
+    fn coefficients(&self) -> &[S] {
+        self.inner.coefficients()
+    }
+
+    fn coefficients_mut(&mut self) -> &mut [S] {
+        self.inner.coefficients_mut()
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl<S: Share, P: Polynomial<S>> zeroize::Zeroize for ZeroizingPolynomial<S, P> {
+    fn zeroize(&mut self) {
+        self.inner
+            .coefficients_mut()
+            .iter_mut()
+            .for_each(zeroize::Zeroize::zeroize);
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl<S: Share, P: Polynomial<S>> Drop for ZeroizingPolynomial<S, P> {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(self);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Polynomial;
@@ -209,5 +253,29 @@ mod tests {
         polynomial.coefficients_mut()[1] = share(11, 12);
 
         assert_eq!(polynomial.coefficients(), &[share(9, 10), share(11, 12)]);
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn zeroizing_polynomial_wipes_every_coefficient() {
+        use super::ZeroizingPolynomial;
+        use zeroize::Zeroize;
+
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed([9u8; 32]);
+        let secret = IdentifierPrimeField(Scalar::from(42u64));
+        let mut polynomial =
+            <ZeroizingPolynomial<TestShare, Vec<TestShare>> as Polynomial<TestShare>>::create(3);
+        assert_eq!(polynomial.fill(&secret, &mut rng, 3), Ok(()));
+        assert_eq!(polynomial.coefficients()[0].value(), &secret);
+
+        polynomial.zeroize();
+
+        assert_eq!(polynomial.coefficients().len(), 3);
+        assert!(
+            polynomial
+                .coefficients()
+                .iter()
+                .all(|s| s.identifier().is_zero().into() && s.value().is_zero().into())
+        );
     }
 }

@@ -55,6 +55,7 @@ pub trait ShareElement:
     + AsRef<Self::Inner>
     + AsMut<Self::Inner>
     + From<Self::Inner>
+    + ShareZeroize
 {
     /// The serialized form of the share element.
     type Serialization: AsRef<[u8]> + AsMut<[u8]> + 'static;

@@ -122,8 +122,10 @@ where
             .clone()
             .unwrap_or_else(|| S::Value::random(&mut rng));
 
-        let mut secret_polynomial = Self::InnerPolynomial::create(threshold);
-        let mut blinder_polynomial = Self::InnerPolynomial::create(threshold);
+        let mut secret_polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
+        let mut blinder_polynomial =
+            ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
         secret_polynomial.fill(options.secret, &mut rng, threshold)?;
         blinder_polynomial.fill(&blinder, &mut rng, threshold)?;
 

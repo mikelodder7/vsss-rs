@@ -70,7 +70,7 @@ where
                 "Generator cannot be the identity element",
             ));
         }
-        let mut polynomial = Self::InnerPolynomial::create(threshold);
+        let mut polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
         let verifier_set = create_feldman_verifier_set(&polynomial, threshold, g);
         let shares = create_shares_with_participant_generators(
@@ -122,7 +122,7 @@ where
                 "Generator cannot be the identity element",
             ));
         }
-        let mut polynomial = Self::InnerPolynomial::create(threshold);
+        let mut polynomial = ZeroizingPolynomial::<S, Self::InnerPolynomial>::create(threshold);
         polynomial.fill(secret, rng, threshold)?;
         let verifier_set = create_feldman_verifier_set(&polynomial, threshold, g);
         let shares = create_shares_with_participant_ids_iter(

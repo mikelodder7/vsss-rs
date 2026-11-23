@@ -31,7 +31,7 @@ Add the crate and an RNG:
 ```toml
 [dependencies]
 rand = "0.10"
-vsss-rs = "6"
+vsss-rs = "7"
 ```
 
 Split and combine a byte string with GF(256):
@@ -141,7 +141,7 @@ For a minimal GF(16)/GF(256 build:
 
 ```toml
 [dependencies]
-vsss-rs = { version = "6", default-features = false, features = ["alloc"] }
+vsss-rs = { version = "7", default-features = false, features = ["alloc"] }
 ```
 
 ## Features

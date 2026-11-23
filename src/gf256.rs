@@ -612,12 +612,7 @@ impl Gf256 {
             shares.push(inner);
         }
         check_params(threshold, limit)?;
-        let polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        // The polynomial holds a secret byte and its coefficients. Clear it on
-        // every exit, so freed memory keeps none of them.
-        #[cfg(feature = "zeroize")]
-        let polynomial = zeroize::Zeroizing::new(polynomial);
-        let mut polynomial = polynomial;
+        let mut polynomial = ZeroizingPolynomial::<GfShare, Vec<GfShare>>::create(threshold);
         for b in secret {
             let share = IdentifierGf256(Gf256(*b));
             polynomial.fill(&share, &mut rng, threshold)?;
@@ -669,12 +664,7 @@ impl Gf256 {
             shares.push(inner);
         }
 
-        let polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        // The polynomial holds a secret byte and its coefficients. Clear it on
-        // every exit, so freed memory keeps none of them.
-        #[cfg(feature = "zeroize")]
-        let polynomial = zeroize::Zeroizing::new(polynomial);
-        let mut polynomial = polynomial;
+        let mut polynomial = ZeroizingPolynomial::<GfShare, Vec<GfShare>>::create(threshold);
         for b in secret {
             let share = IdentifierGf256(Gf256(*b));
             polynomial.fill(&share, &mut rng, threshold)?;

@@ -640,16 +640,8 @@ impl Gf16 {
             shares.push(inner);
         }
         check_params(threshold, limit)?;
-        let lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        let hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        // The polynomials hold the secret nibbles and their coefficients. Clear
-        // them on every exit, so freed memory keeps none of them.
-        #[cfg(feature = "zeroize")]
-        let (lo_polynomial, hi_polynomial) = (
-            zeroize::Zeroizing::new(lo_polynomial),
-            zeroize::Zeroizing::new(hi_polynomial),
-        );
-        let (mut lo_polynomial, mut hi_polynomial) = (lo_polynomial, hi_polynomial);
+        let mut lo_polynomial = ZeroizingPolynomial::<GfShare, Vec<GfShare>>::create(threshold);
+        let mut hi_polynomial = ZeroizingPolynomial::<GfShare, Vec<GfShare>>::create(threshold);
         for b in secret {
             // Each byte is split into two nibbles and shared independently.
             // The low nibble and high nibble are each a GF(16) element (0..=15).
@@ -729,16 +721,8 @@ impl Gf16 {
             shares.push(inner);
         }
 
-        let lo_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        let hi_polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
-        // The polynomials hold the secret nibbles and their coefficients. Clear
-        // them on every exit, so freed memory keeps none of them.
-        #[cfg(feature = "zeroize")]
-        let (lo_polynomial, hi_polynomial) = (
-            zeroize::Zeroizing::new(lo_polynomial),
-            zeroize::Zeroizing::new(hi_polynomial),
-        );
-        let (mut lo_polynomial, mut hi_polynomial) = (lo_polynomial, hi_polynomial);
+        let mut lo_polynomial = ZeroizingPolynomial::<GfShare, Vec<GfShare>>::create(threshold);
+        let mut hi_polynomial = ZeroizingPolynomial::<GfShare, Vec<GfShare>>::create(threshold);
         for b in secret {
             let lo = IdentifierGf16(Gf16(*b & 0x0f));
             let hi = IdentifierGf16(Gf16((*b >> 4) & 0x0f));

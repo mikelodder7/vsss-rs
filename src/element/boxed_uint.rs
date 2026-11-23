@@ -30,6 +30,13 @@ impl<const BITS: u32> Default for IdentifierBoxedUint<BITS> {
     }
 }
 
+#[cfg(feature = "zeroize")]
+impl<const BITS: u32> zeroize::Zeroize for IdentifierBoxedUint<BITS> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 impl<const BITS: u32> Display for IdentifierBoxedUint<BITS> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:x}", self.0)
@@ -186,5 +193,14 @@ mod tests {
         identifier.inc(&Identifier::one());
         assert_eq!(*identifier, BoxedUint::from(3u8).resize(128));
         assert_eq!(Identifier::one().invert(), Ok(Identifier::one()));
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn zeroize_clears_boxed_uint_identifier() {
+        use zeroize::Zeroize;
+        let mut identifier = Identifier::from_slice(&[0xFF; 16]).unwrap();
+        identifier.zeroize();
+        assert_eq!(identifier, Identifier::zero());
     }
 }
