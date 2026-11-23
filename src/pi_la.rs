@@ -548,4 +548,25 @@ mod tests {
         crate::tests::utils::assert_serde_round_trip(&proof);
         crate::tests::utils::assert_serde_round_trip(&proof.commitments[0]);
     }
+
+    #[test]
+    fn coefficient_and_evaluate_match_their_definitions() {
+        let s = |id: u64, v: u64| {
+            K256Share::with_identifier_and_value(
+                IdentifierPrimeField(k256::Scalar::from(id)),
+                IdentifierPrimeField(k256::Scalar::from(v)),
+            )
+        };
+        // Constant term lives in the value, the rest in the identifier.
+        let poly = [s(9, 2), s(3, 9), s(5, 9)];
+        assert_eq!(coefficient(&poly[0], 0).0, k256::Scalar::from(2u64));
+        assert_eq!(coefficient(&poly[1], 1).0, k256::Scalar::from(3u64));
+        assert_eq!(coefficient(&poly[2], 2).0, k256::Scalar::from(5u64));
+
+        // z(x) = 2 + 3x + 5x^2 at x = 4 is 2 + 12 + 80 = 94.
+        let z = [2u64, 3, 5].map(|c| IdentifierPrimeField(k256::Scalar::from(c)));
+        let x = IdentifierPrimeField(k256::Scalar::from(4u64));
+        assert_eq!(evaluate(&z, &x), k256::Scalar::from(94u64));
+        assert_eq!(evaluate::<k256::Scalar>(&[], &x), k256::Scalar::ZERO);
+    }
 }

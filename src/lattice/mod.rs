@@ -152,4 +152,9 @@ mod tests {
         #[cfg(not(feature = "zeroize"))]
         assert_eq!(secret, std::vec![7u8; 4]);
     }
+
+    #[test]
+    fn lattice_error_carries_its_reason() {
+        assert_eq!(lattice_error("why"), Error::Lattice("why"));
+    }
 }

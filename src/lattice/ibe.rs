@@ -385,4 +385,15 @@ mod tests {
         let ct = encrypt::<Sha256>(mpk, b"serde", b"payload", &mut rng).expect("encrypt");
         assert_serde_round_trip(&ct);
     }
+
+    #[test]
+    fn ciphertext_u_survives_encoding_and_is_fresh_per_encryption() {
+        let (_, mpk) = &keys()[0];
+        let mut rng = StdRng::from_seed([76u8; 32]);
+        let ct = encrypt::<Sha256>(mpk, b"id", b"message", &mut rng).expect("encrypt");
+        let decoded = Ciphertext::from_bytes(&ct.to_bytes()).expect("decode");
+        assert_eq!(decoded.u(), ct.u());
+        let again = encrypt::<Sha256>(mpk, b"id", b"message", &mut rng).expect("encrypt");
+        assert_ne!(again.u(), ct.u());
+    }
 }

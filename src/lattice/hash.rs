@@ -113,4 +113,24 @@ mod tests {
             .collect();
         assert_ne!(&hash_to_mask::<Sha256>(&k, 32)[..], &ring_bytes[..]);
     }
+
+    #[test]
+    fn expand_is_deterministic_length_exact_and_domain_separated() {
+        let mut a = [0u8; 100];
+        let mut b = [0u8; 100];
+        expand::<Sha256>(b"dst", b"input", &mut a);
+        expand::<Sha256>(b"dst", b"input", &mut b);
+        assert_eq!(a, b);
+        // Spans several 32-byte blocks without repeating them.
+        assert_ne!(a[..32], a[32..64]);
+
+        let mut other_dst = [0u8; 100];
+        expand::<Sha256>(b"other", b"input", &mut other_dst);
+        assert_ne!(a, other_dst);
+
+        // The output length is bound in, so a shorter output is not a prefix.
+        let mut short = [0u8; 40];
+        expand::<Sha256>(b"dst", b"input", &mut short);
+        assert_ne!(short[..], a[..40]);
+    }
 }
