@@ -6,10 +6,10 @@
 //!
 //! One Karatsuba implementation serves `R_q` (wrapping `u32`, exact modulo
 //! `2^32` and therefore modulo `q = 2^29`), the integer ring (`i128`), and
-//! the NTRU solver (`BigInt`).
+//! the NTRU solver's fixed-width two's-complement integers, which wrap
+//! modulo `2^width` and so are exact whenever the true result fits.
 use core::ops::{Add, AddAssign, Mul, SubAssign};
-use num_bigint::BigInt;
-use num_traits::{ToPrimitive, Zero};
+use num_traits::Zero;
 use std::vec::Vec;
 
 /// Below this length Karatsuba falls back to schoolbook multiplication.
@@ -30,7 +30,9 @@ pub(crate) trait Coeff: Clone {
 }
 
 /// Every type with by-reference ring operations is a coefficient. For
-/// `i128`, callers bound the operands with [`checked_mul_i128`] first.
+/// `i128`, callers bound the operands with [`checked_mul_i128`] first. The
+/// NTRU solver's integers implement the trait directly with wrapping
+/// arithmetic.
 impl<T> Coeff for T
 where
     T: Clone + Zero + for<'a> AddAssign<&'a T> + for<'a> SubAssign<&'a T>,
@@ -141,23 +143,10 @@ pub(crate) fn checked_mul_i128(a: &[i128], b: &[i128]) -> Option<Vec<i128>> {
     fits_i128(max_bits(a), max_bits(b), a.len().max(b.len())).then(|| negacyclic_mul(a, b))
 }
 
-/// `a·b` in `Z[x]/(x^n + 1)`, using `i128` arithmetic when the operands are
-/// small enough and big integers otherwise.
-pub(crate) fn negacyclic_mul_big(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
-    let small =
-        |p: &[BigInt]| -> Option<Vec<i128>> { p.iter().map(ToPrimitive::to_i128).collect() };
-    small(a)
-        .zip(small(b))
-        .and_then(|(sa, sb)| checked_mul_i128(&sa, &sb))
-        .map_or_else(
-            || negacyclic_mul(a, b),
-            |p| p.into_iter().map(BigInt::from).collect(),
-        )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::num::Wrapping;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
 
     /// Schoolbook negacyclic product over `i128`, the reference.
@@ -186,29 +175,28 @@ mod tests {
             let expected = naive(&a, &b);
             assert_eq!(negacyclic_mul(&a, &b), expected, "i128, n = {n}");
 
-            let big = |p: &[i128]| p.iter().map(|&c| BigInt::from(c) << 70).collect::<Vec<_>>();
-            let big_expected: Vec<BigInt> =
-                expected.iter().map(|&c| BigInt::from(c) << 140).collect();
-            assert_eq!(
-                negacyclic_mul_big(&big(&a), &big(&b)),
-                big_expected,
-                "BigInt, n = {n}"
-            );
+            let wrap = |p: &[i128]| p.iter().map(|&c| Wrapping(c as u32)).collect::<Vec<_>>();
+            let wrapped: Vec<u32> = negacyclic_mul(&wrap(&a), &wrap(&b))
+                .into_iter()
+                .map(|c| c.0)
+                .collect();
+            let wrapped_expected: Vec<u32> = expected.iter().map(|&c| c as u32).collect();
+            assert_eq!(wrapped, wrapped_expected, "Wrapping<u32>, n = {n}");
         }
     }
 
     #[test]
     fn blanket_coefficient_ops_match_the_operators() {
-        let mut acc: BigInt = BigInt::from(1u64 << 63) * 4;
-        assert_eq!(acc.add_ref(&BigInt::from(2)), &acc + 2);
-        acc.add_assign_ref(&BigInt::from(2));
-        acc.sub_assign_ref(&BigInt::from(5));
-        assert_eq!(acc, BigInt::from(1u64 << 63) * 4 - 3);
-        assert_eq!(acc.mul_ref(&BigInt::from(2)), &acc * 2);
-        assert_eq!(<core::num::Wrapping<u32> as Coeff>::zero().0, 0);
+        let mut acc: i128 = (1i128 << 63) * 4;
+        assert_eq!(acc.add_ref(&2), acc + 2);
+        acc.add_assign_ref(&2);
+        acc.sub_assign_ref(&5);
+        assert_eq!(acc, (1i128 << 63) * 4 - 3);
+        assert_eq!(acc.mul_ref(&2), acc * 2);
+        assert_eq!(<Wrapping<u32> as Coeff>::zero().0, 0);
         assert_eq!(
-            core::num::Wrapping(5u32).mul_ref(&core::num::Wrapping(u32::MAX)),
-            core::num::Wrapping(5u32.wrapping_neg())
+            Wrapping(5u32).mul_ref(&Wrapping(u32::MAX)),
+            Wrapping(5u32.wrapping_neg())
         );
     }
 

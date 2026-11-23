@@ -125,6 +125,14 @@ pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
 ///
 /// About 110-bit classical security, below 128; see the
 /// [module docs](crate::lattice#security-level).
+///
+/// # Timing
+///
+/// The NTRU solver runs on fixed-width integers with public loop counts
+/// (see `ntru`). The rejection loop itself is variable-time, but each
+/// rejected `(f, g)` is an independent sample that never becomes part of
+/// the key, so the number of attempts reveals nothing about the key
+/// returned. The Gaussian sampler's timing is covered in `gaussian`.
 pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPublicKey)> {
     for _ in 0..MAX_KEYGEN_ATTEMPTS {
         let f = sample_poly(&mut rng)?;
@@ -144,12 +152,15 @@ pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPub
             f,
             g,
         };
+        // The solver's fixed widths and round-off budgets are sized for
+        // this distribution with margin; a candidate that still overruns
+        // them produces a wrong (F, G) and is discarded like a gcd failure.
         let residual = msk
             .f
             .checked_mul(&msk.big_g)?
             .checked_sub(&msk.g.checked_mul(&msk.big_f)?)?;
         if residual != PolyZ::constant(i64::from(Q))? {
-            return Err(Error::Lattice("NTRU solution failed verification"));
+            continue;
         }
         if TrapdoorSampler::new(&msk, SIGMA_EXTRACT).is_err() {
             continue;

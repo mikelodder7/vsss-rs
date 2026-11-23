@@ -56,11 +56,13 @@
 //!   relies on the compiler not reintroducing branches; `black_box` hints
 //!   discourage it but do not guarantee it.
 //! - Key generation's candidate rejection (parity, Gram–Schmidt norm,
-//!   `gcd`) is variable-time, but depends only on candidates that are
+//!   `gcd`, the solver's round-off budget) is variable-time, but depends only on candidates that are
 //!   discarded and independent of the key returned.
-//! - The NTRU solver's big-integer arithmetic (`num-bigint`) is
-//!   variable-time and its intermediates are not wiped, pending the
-//!   solver's own constant-time rework.
+//! - The NTRU solver runs on fixed-width two's-complement integers
+//!   (`crypto-bigint`) with widths and loop counts fixed per recursion level,
+//!   a Bernstein–Yang base case, and constant-time selects for every
+//!   secret-dependent quantity; see `ntru` for the width derivation. Its
+//!   intermediate integers are not wiped.
 //! - Encryption and decryption ([`encrypt`], [`decrypt`]) have their own
 //!   accounting.
 //!

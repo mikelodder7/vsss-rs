@@ -50,11 +50,11 @@ const PI_LA: &str = "d2a1eb3a48282c2ae36cf3f8d65d71c6d2e0c8ab935a3a30a609ac1c35e
 const HASH_COMMITMENT: &str = "1215b300d7509a8957b432a2fbc28d6b36a15758b61a1bcb05260c3c4b2e33d6";
 const SHAMIR_FELDMAN_PEDERSEN: &str =
     "39d0c74ecfdfae82d54adc1f7cb081677e04ff3ea969b8343a29dcbe9b13f25b";
-const KEYGEN: &str = "49c8e5d1047b780bd332cd395b54df2510dd011b2ba16aba9a02e60f09f4e1be";
+const KEYGEN: &str = "e3ba7d7275c0b8c78d3f76596462b628240517dda8b3aca7f7dc6dcd9cd3e435";
 const EXTRACT: &str = "607f18fff1a9c6a8b2cd90192c8b574f7785420d5f33e2443b0bcf99439be96c";
 const ENCRYPT: &str = "4030d9d41e217e14782d376fbe0ef5a9ec1e7e841f04efacbeaea0b150cee3b4";
 const DECRYPT: &str = "02e83d6fa03af3d466a4fec9b23a26d41b2b87620c0c10074aaac3281555e81b";
-const PVSS: &str = "f8e13f825f2ecf696ef7c5205c529c41fcaca51739af959d00de10028341ff45";
+const PVSS: &str = "49b1bef51b0ca3cd8e53140a5d5dd28b88d5c1ae1241912fc7dc1bd202ea325c";
 
 #[test]
 fn pi_la_split_is_unchanged() {
