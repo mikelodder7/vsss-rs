@@ -46,6 +46,7 @@ subtle = { version = "2.6" }
 sha3 = { version = "0.12", default-features = false, optional = true }
 shake = { version = "0.1", default-features = false, optional = true }
 zeroize = { version = "1", features = ["zeroize_derive"], optional = true }
+thiserror = { version = "2", default-features = false }
 
 [dev-dependencies]
 bls12_381_plus = { version = "0.10", features = ["expose-fields"] }
