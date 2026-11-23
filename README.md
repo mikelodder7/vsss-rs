@@ -156,6 +156,7 @@ vsss-rs = { version = "7", default-features = false, features = ["alloc"] }
 | `curve-serde` | Yes | `curve`, Serde, and curve serialization helpers |
 | `random-participant-ids` | Yes | SHAKE-based random participant identifiers |
 | `serde` | Through `curve-serde` | Serialization for supported types |
+| `pi-la` | No | Π_LA hash-based, post-quantum verifiable secret sharing over any `digest::Digest`; implies `alloc` and `curve` |
 | `stream` | No | Async identifier splitting and exact-count share combination; implies `alloc` |
 | `zeroize` | Yes | Zeroization for supported share elements |
 | `legacy-curve-tests` | No | Compatibility-only tests for older curve combinations |

@@ -202,6 +202,8 @@ mod gf16;
 mod gf256;
 mod numbering;
 pub mod pedersen;
+#[cfg(feature = "pi-la")]
+pub mod pi_la;
 mod polynomial;
 #[cfg(feature = "primitive")]
 mod primitive;
