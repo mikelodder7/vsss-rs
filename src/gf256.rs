@@ -612,7 +612,12 @@ impl Gf256 {
             shares.push(inner);
         }
         check_params(threshold, limit)?;
-        let mut polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        // The polynomial holds a secret byte and its coefficients. Clear it on
+        // every exit, so freed memory keeps none of them.
+        #[cfg(feature = "zeroize")]
+        let polynomial = zeroize::Zeroizing::new(polynomial);
+        let mut polynomial = polynomial;
         for b in secret {
             let share = IdentifierGf256(Gf256(*b));
             polynomial.fill(&share, &mut rng, threshold)?;
@@ -664,7 +669,12 @@ impl Gf256 {
             shares.push(inner);
         }
 
-        let mut polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        let polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(threshold);
+        // The polynomial holds a secret byte and its coefficients. Clear it on
+        // every exit, so freed memory keeps none of them.
+        #[cfg(feature = "zeroize")]
+        let polynomial = zeroize::Zeroizing::new(polynomial);
+        let mut polynomial = polynomial;
         for b in secret {
             let share = IdentifierGf256(Gf256(*b));
             polynomial.fill(&share, &mut rng, threshold)?;
@@ -1574,6 +1584,29 @@ mod tests {
             ),
             Err(Error::SharingInvalidIdentifier)
         );
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn split_polynomial_zeroizes() {
+        use zeroize::Zeroize;
+        let mut rng = ChaCha8Rng::from_seed([0x5Au8; 32]);
+        let mut polynomial = <Vec<GfShare> as Polynomial<GfShare>>::create(3);
+        polynomial
+            .fill(&IdentifierGf256(Gf256(0x42)), &mut rng, 3)
+            .expect("fill");
+        assert!(
+            polynomial
+                .iter()
+                .any(|s| s.value != IdentifierGf256::default())
+        );
+
+        polynomial.iter_mut().for_each(Zeroize::zeroize);
+
+        assert_eq!(polynomial.len(), 3);
+        assert!(polynomial.iter().all(|s| {
+            s.identifier == IdentifierGf256::default() && s.value == IdentifierGf256::default()
+        }));
     }
 }
 
