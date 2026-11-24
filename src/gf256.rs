@@ -7,7 +7,7 @@
 //! 2. Ensure code access patterns are independent of secret data.
 //! 3. Ensure data access patterns are independent of secret data.
 
-use crate::util::{CtIsNotZero, field_bounded_add, uniform_nonzero_u8};
+use crate::util::{field_bounded_add, uniform_nonzero_u8};
 use crate::*;
 use core::borrow::Borrow;
 use core::{
@@ -15,13 +15,12 @@ use core::{
     iter::{Product, Sum},
     ops::{
         Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Deref,
-        DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
+        DerefMut, Mul, MulAssign, Neg, Sub, SubAssign,
     },
 };
-use ctutils::{CtAssign, CtEq, CtSelect};
+use ctutils::{Choice, CtEq};
 use ff::{Field, PrimeField};
-use rand_core::TryRng;
-use subtle::{Choice, CtOption};
+use subtle::{Choice as FfChoice, CtOption as FfCtOption};
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 use crate::ParticipantIdGenerator;
@@ -62,18 +61,6 @@ impl UpperHex for Gf256 {
 impl Binary for Gf256 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:08b}", self.0)
-    }
-}
-
-impl subtle::ConditionallySelectable for Gf256 {
-    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Gf256(a.0.ct_select(&b.0, choice.into()))
-    }
-}
-
-impl subtle::ConstantTimeEq for Gf256 {
-    fn ct_eq(&self, other: &Self) -> Choice {
-        CtEq::ct_eq(&self.0, &other.0).into()
     }
 }
 
@@ -209,50 +196,7 @@ impl MulAssign<&Gf256> for Gf256 {
     }
 }
 
-/// Division by zero yields zero; use [`Field::invert`] to detect a zero divisor.
-impl Div for Gf256 {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        self * rhs.inverse_or_zero()
-    }
-}
-
-impl Div<&Gf256> for Gf256 {
-    type Output = Gf256;
-
-    fn div(self, rhs: &Gf256) -> Gf256 {
-        self / *rhs
-    }
-}
-
-impl Div<Gf256> for &Gf256 {
-    type Output = Gf256;
-
-    fn div(self, rhs: Gf256) -> Gf256 {
-        *self / rhs
-    }
-}
-
-impl Div<&Gf256> for &Gf256 {
-    type Output = Gf256;
-
-    fn div(self, rhs: &Gf256) -> Gf256 {
-        *self / *rhs
-    }
-}
-
-impl DivAssign for Gf256 {
-    fn div_assign(&mut self, rhs: Self) {
-        *self *= rhs.inverse_or_zero();
-    }
-}
-
-impl DivAssign<&Gf256> for Gf256 {
-    fn div_assign(&mut self, rhs: &Gf256) {
-        *self *= rhs.inverse_or_zero();
-    }
-}
+binary_field!(Gf256, gf256_mul, 8, 0xFF);
 
 impl Neg for Gf256 {
     type Output = Self;
@@ -406,39 +350,6 @@ impl<T: Borrow<Gf256>> Product<T> for Gf256 {
     }
 }
 
-impl Field for Gf256 {
-    const ZERO: Self = Self(0);
-    const ONE: Self = Self(1);
-
-    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
-        // Uniform over the full field {0, 1, ..., 255}. The prior
-        // `(b & 0xFE) + 1` forced the low bit, producing only odd bytes
-        // and leaking entropy out of polynomial coefficients used by
-        // Shamir secret sharing (audit finding #1).
-        rng.try_next_u32().map(|v| Self(v as u8))
-    }
-
-    fn square(&self) -> Self {
-        self * self
-    }
-
-    fn double(&self) -> Self {
-        self + self
-    }
-
-    fn invert(&self) -> CtOption<Self> {
-        CtOption::new(self.inverse_or_zero(), self.0.ct_is_not_zero().into())
-    }
-
-    /// Every element of GF(2^8) is a square, with `sqrt(x) = x^128`.
-    fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
-        let ratio = *num * div.inverse_or_zero();
-        let root = Self(gf256_pow(ratio.0, 128));
-        let defined = num.0.ct_eq(&0) | div.0.ct_ne(&0);
-        (defined.into(), root)
-    }
-}
-
 impl From<u8> for Gf256 {
     fn from(val: u8) -> Self {
         Gf256(val)
@@ -502,15 +413,15 @@ impl From<Gf256> for u128 {
 impl PrimeField for Gf256 {
     type Repr = [u8; 1];
 
-    fn from_repr(repr: Self::Repr) -> CtOption<Self> {
-        CtOption::new(Self(repr[0]), Choice::from(1u8))
+    fn from_repr(repr: Self::Repr) -> FfCtOption<Self> {
+        FfCtOption::new(Self(repr[0]), FfChoice::from(1u8))
     }
 
     fn to_repr(&self) -> Self::Repr {
         [self.0]
     }
 
-    fn is_odd(&self) -> Choice {
+    fn is_odd(&self) -> FfChoice {
         (self.0 & 1).ct_eq(&1).into()
     }
 
@@ -526,22 +437,6 @@ impl PrimeField for Gf256 {
 }
 
 impl Gf256 {
-    /// The multiplicative inverse, or zero for zero (`a^254`). Runs in
-    /// constant time; [`Field::invert`] reports the zero case.
-    fn inverse_or_zero(self) -> Self {
-        let mut z = self.0;
-        for _ in 0..6 {
-            z = gf256_mul(z, z);
-            z = gf256_mul(z, self.0);
-        }
-        Self(gf256_mul(z, z))
-    }
-
-    /// Raise the element to the power of `exp`.
-    pub fn pow(&self, exp: u8) -> Self {
-        Self(gf256_pow(self.0, exp))
-    }
-
     #[cfg(any(feature = "alloc", feature = "std"))]
     /// Split bytes into shares.
     pub fn split_bytes<B: AsRef<[u8]>>(
@@ -833,18 +728,6 @@ fn lagrange_coefficients(shares: &[Vec<u8>]) -> VsssResult<Vec<IdentifierGf256>>
     Ok(coefficients)
 }
 
-fn gf256_pow(base: u8, exp: u8) -> u8 {
-    let mut result = 1u8;
-    // Square-and-multiply from the most significant bit, in constant time.
-    for i in (0..8).rev() {
-        result = gf256_mul(result, result);
-        let tmp = gf256_mul(result, base);
-        let allow = ((exp >> i) & 1).ct_eq(&1);
-        result.ct_assign(&tmp, allow);
-    }
-    result
-}
-
 fn gf256_mul(a: u8, b: u8) -> u8 {
     let mut a = a as i8;
     let mut b = b as i8;
@@ -943,8 +826,8 @@ impl ShareElement for IdentifierGf256 {
         Self(Gf256::ONE)
     }
 
-    fn is_zero(&self) -> ctutils::Choice {
-        self.0.is_zero().into()
+    fn is_zero(&self) -> Choice {
+        self.0.ct_eq(&Gf256::ZERO)
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -1011,7 +894,7 @@ mod tests {
         for base in 0..=255u8 {
             let mut expected = 1u8;
             for exp in 0..=255u8 {
-                assert_eq!(gf256_pow(base, exp), expected, "{base}^{exp}");
+                assert_eq!(Gf256(base).pow(exp).0, expected, "{base}^{exp}");
                 expected = gf256_mul(expected, base);
             }
         }
@@ -1034,6 +917,49 @@ mod tests {
         let (ok, root) = <Gf256 as Field>::sqrt_ratio(&Gf256(3), &Gf256(5));
         assert!(bool::from(ok));
         assert_eq!(root * root * Gf256(5), Gf256(3));
+    }
+
+    #[test]
+    fn generated_field_ops_match_exhaustive_references() {
+        let all = || (0..=255u8).map(Gf256);
+        // The inverse is the unique y with x·y = 1, or zero for zero.
+        let inverses: Vec<Gf256> = all()
+            .map(|x| all().find(|&y| x * y == Gf256(1)).unwrap_or(Gf256(0)))
+            .collect();
+        for x in all() {
+            assert_eq!(x.inverse_or_zero(), inverses[usize::from(x.0)], "{x:?}");
+            // The square root is the unique r with r² = x.
+            let root = all()
+                .find(|&r| r * r == x)
+                .expect("every element is a square");
+            assert_eq!(x.frobenius_root(), root, "{x:?}");
+            assert_eq!(x.pow(2), x * x);
+            for d in all() {
+                let quotient = x * inverses[usize::from(d.0)];
+                assert_eq!(x / d, quotient);
+                let (ok, r) = <Gf256 as Field>::sqrt_ratio(&x, &d);
+                assert_eq!(bool::from(ok), x.0 == 0 || d.0 != 0);
+                assert_eq!(r * r, quotient);
+            }
+        }
+    }
+
+    #[test]
+    fn native_ctutils_traits_match_the_subtle_bridges() {
+        use ctutils::{CtEq, CtSelect};
+        use subtle::{ConditionallySelectable, ConstantTimeEq};
+        for a in (0..=255u8).step_by(5).map(Gf256) {
+            for b in (0..=255u8).step_by(7).map(Gf256) {
+                assert_eq!(CtEq::ct_eq(&a, &b).to_bool(), a == b);
+                assert_eq!(bool::from(ConstantTimeEq::ct_eq(&a, &b)), a == b);
+                assert_eq!(a.ct_select(&b, Choice::FALSE), a);
+                assert_eq!(a.ct_select(&b, Choice::TRUE), b);
+                assert_eq!(Gf256::conditional_select(&a, &b, FfChoice::from(1)), b);
+                assert_eq!(Gf256::conditional_select(&a, &b, FfChoice::from(0)), a);
+            }
+        }
+        assert!(IdentifierGf256::ZERO.is_zero().to_bool());
+        assert!(!IdentifierGf256::ONE.is_zero().to_bool());
     }
 
     #[test]
@@ -1451,7 +1377,7 @@ mod tests {
             Gf256::conditional_select(&Gf256(1), &Gf256(2), Choice::from(1)),
             Gf256(2)
         );
-        assert_eq!(Gf256(7).ct_eq(&Gf256(7)).unwrap_u8(), 1);
+        assert_eq!(ConstantTimeEq::ct_eq(&Gf256(7), &Gf256(7)).unwrap_u8(), 1);
 
         assert_eq!(u8::from(Gf256::from(0x12u8)), 0x12);
         assert_eq!(u16::from(Gf256::from(0x12u16)), 0x12);

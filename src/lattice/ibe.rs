@@ -11,8 +11,7 @@
 use super::hash::{hash_to_mask, hash_to_ring};
 use super::keygen::{MasterPublicKey, MasterSecretKey};
 use super::ring::PolyQ;
-use super::sampler::TrapdoorSampler;
-use super::{B_X, GAMMA_KEY, N, Q, ROUNDING_BITS, SIGMA_EXTRACT};
+use super::{B_X, GAMMA_KEY, N, Q, ROUNDING_BITS};
 use crate::secret::Secret;
 use crate::{Error, VsssResult};
 use core::fmt::{self, Debug, Formatter};
@@ -57,6 +56,11 @@ impl IdentitySecretKey {
     /// The key polynomial `s2`.
     pub fn s2(&self) -> &PolyQ {
         &self.s2
+    }
+
+    /// `p·s2`, guarded so the product is wiped on drop.
+    pub(crate) fn mul_s2(&self, p: &PolyQ) -> Secret<PolyQ> {
+        Secret::new(p * &self.s2)
     }
 
     /// The `4·N`-byte encoding of `s2`.
@@ -139,7 +143,7 @@ pub fn extract<D: Digest>(
     id: &[u8],
     mut rng: impl CryptoRng,
 ) -> VsssResult<IdentitySecretKey> {
-    let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT)?;
+    let sampler = msk.sampler();
     let t = hash_to_ring::<D>(id);
     for _ in 0..MAX_EXTRACT_ATTEMPTS {
         let s2 = Secret::new(sampler.sample_key(&t, &mut rng)?);
@@ -160,7 +164,7 @@ pub fn verify_key<D: Digest>(mpk: &MasterPublicKey, id: &[u8], key: &IdentitySec
 /// [`verify_key`] for an identity already hashed to `t = H(ID)`. Each norm
 /// is below `2^68`, so their sum cannot overflow.
 fn verify_key_with_t(mpk: &MasterPublicKey, t: &PolyQ, key: &IdentitySecretKey) -> bool {
-    let s1 = t - &(key.s2() * mpk.h());
+    let s1 = Secret::new(t - &*key.mul_s2(mpk.h()));
     let norm_sq = s1.centered_norm_sq() + key.s2().centered_norm_sq();
     (!norm_sq.ct_gt(&u128::from(GAMMA_KEY).pow(2))).to_bool()
 }
@@ -205,7 +209,7 @@ pub fn encrypt<D: Digest>(
 /// otherwise, then `m = c' ⊕ H'(k)`. A malformed ciphertext cannot reach
 /// this point: [`Ciphertext::from_bytes`] and deserialization reject it.
 pub fn decrypt<D: Digest>(key: &IdentitySecretKey, ciphertext: &Ciphertext) -> Vec<u8> {
-    let w = Secret::new(ciphertext.v() - &(ciphertext.u() * key.s2()));
+    let w = Secret::new(ciphertext.v() - &*key.mul_s2(ciphertext.u()));
     let k = Secret::new(
         w.coeffs()
             .chunks(8)

@@ -4,7 +4,7 @@
 */
 //! NTRU trapdoor generation (the IBE `KeyGen`, App. B.3 of ePrint 2026/813).
 use super::fft::{fft_of, pair_norm_sq};
-use super::gaussian::sample_poly;
+use super::gaussian::{sample_poly, skip_poly};
 use super::ring::{PolyQ, PolyZ};
 use super::sampler::TrapdoorSampler;
 use super::{GS_NORM_BOUND, Q, SIGMA_EXTRACT, ntru};
@@ -21,7 +21,8 @@ const MAX_KEYGEN_ATTEMPTS: usize = 10_000;
 
 /// The master secret key: the NTRU trapdoor basis
 /// `B = [[A(g), −A(f)], [A(G), −A(F)]]`, stored as `f, g, F, G` with
-/// `f·G − g·F = q` over `Z[x]/(x^N + 1)`.
+/// `f·G − g·F = q` over `Z[x]/(x^N + 1)`, together with the extraction
+/// sampler built from them.
 #[derive(Clone)]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 pub struct MasterSecretKey {
@@ -29,6 +30,9 @@ pub struct MasterSecretKey {
     g: PolyZ,
     big_f: PolyZ,
     big_g: PolyZ,
+    /// The extraction sampler at width [`SIGMA_EXTRACT`], built once by
+    /// [`keygen`] and wiped with the key.
+    sampler: TrapdoorSampler,
 }
 
 impl Debug for MasterSecretKey {
@@ -56,6 +60,11 @@ impl MasterSecretKey {
     /// The trapdoor polynomial `G`.
     pub fn big_g(&self) -> &PolyZ {
         &self.big_g
+    }
+
+    /// The extraction sampler, precomputed at [`SIGMA_EXTRACT`].
+    pub(crate) fn sampler(&self) -> &TrapdoorSampler {
+        &self.sampler
     }
 
     /// The matching public key `h = g·f⁻¹ mod q`.
@@ -115,56 +124,50 @@ pub fn gram_schmidt_norm(f: &PolyZ, g: &PolyZ) -> VsssResult<f64> {
 ///
 /// # Timing
 ///
-/// `f` and `g` come from the isochronous [`sample_poly`](super::sample_poly).
-/// The candidate count, `f(1)`'s parity, the Gram–Schmidt norm, and the
-/// NTRU solver are variable-time; the first three depend only on rejected
-/// candidates, which are independent of the key returned, and the solver's
-/// big-integer arithmetic is tracked separately.
+/// `f` and `g` come from the isochronous [`sample_poly`](super::sample_poly);
+/// its timing is covered in `gaussian`. The NTRU solver runs on
+/// fixed-width integers with public loop counts (see `ntru`). The rejection
+/// loop itself is variable-time: the candidate count, `f(1)`'s parity, the
+/// Gram–Schmidt norm, the solver's success, and the leaf-width check decide
+/// whether a candidate is kept, but each rejected `(f, g)` is an
+/// independent sample that never becomes part of the key, so they reveal
+/// nothing about the key returned.
 ///
 /// # Security
 ///
 /// About 110-bit classical security, below 128; see the
 /// [module docs](crate::lattice#security-level).
-///
-/// # Timing
-///
-/// The NTRU solver runs on fixed-width integers with public loop counts
-/// (see `ntru`). The rejection loop itself is variable-time, but each
-/// rejected `(f, g)` is an independent sample that never becomes part of
-/// the key, so the number of attempts reveals nothing about the key
-/// returned. The Gaussian sampler's timing is covered in `gaussian`.
 pub fn keygen(mut rng: impl CryptoRng) -> VsssResult<(MasterSecretKey, MasterPublicKey)> {
     for _ in 0..MAX_KEYGEN_ATTEMPTS {
         let f = sample_poly(&mut rng)?;
-        let g = sample_poly(&mut rng)?;
-        // gcd(R_f, 2^29) = 1 ⇔ R_f odd ⇔ f(1) odd. Checked first because it
-        // is the cheapest test; the order of rejection tests does not change
-        // the output distribution.
-        if f.eval_at_one() % 2 == 0 || gram_schmidt_norm(&f, &g)? > GS_NORM_BOUND {
+        // gcd(R_f, 2^29) = 1 ⇔ R_f odd ⇔ f(1) odd. Checked before `g` is
+        // drawn because it is the cheapest test; a rejected `f` still
+        // advances the RNG past `g`'s draws, so the stream, and the key, are
+        // the same as testing after both are sampled.
+        if f.eval_at_one() % 2 == 0 {
+            skip_poly(&mut rng);
             continue;
         }
-        let Some((big_f, big_g)) = ntru::solve(f.coeffs(), g.coeffs(), Q) else {
+        let g = sample_poly(&mut rng)?;
+        if gram_schmidt_norm(&f, &g)? > GS_NORM_BOUND {
+            continue;
+        }
+        // `Some` guarantees f·G − g·F = q.
+        let Some((mut big_f, mut big_g)) = ntru::solve(f.coeffs(), g.coeffs(), Q) else {
+            continue;
+        };
+        let big_f = PolyZ::from_coeffs(core::mem::take(&mut *big_f))?;
+        let big_g = PolyZ::from_coeffs(core::mem::take(&mut *big_g))?;
+        let Ok(sampler) = TrapdoorSampler::new(&f, &g, &big_f, &big_g, SIGMA_EXTRACT) else {
             continue;
         };
         let msk = MasterSecretKey {
-            big_f: PolyZ::from_coeffs(big_f)?,
-            big_g: PolyZ::from_coeffs(big_g)?,
             f,
             g,
+            big_f,
+            big_g,
+            sampler,
         };
-        // The solver's fixed widths and round-off budgets are sized for
-        // this distribution with margin; a candidate that still overruns
-        // them produces a wrong (F, G) and is discarded like a gcd failure.
-        let residual = msk
-            .f
-            .checked_mul(&msk.big_g)?
-            .checked_sub(&msk.g.checked_mul(&msk.big_f)?)?;
-        if residual != PolyZ::constant(i64::from(Q))? {
-            continue;
-        }
-        if TrapdoorSampler::new(&msk, SIGMA_EXTRACT).is_err() {
-            continue;
-        }
         let mpk = msk.public_key()?;
         return Ok((msk, mpk));
     }
@@ -195,7 +198,9 @@ mod tests {
         let norm = gram_schmidt_norm(msk.f(), msk.g()).expect("finite");
         assert!(norm <= GS_NORM_BOUND, "norm {norm}");
         assert_eq!(msk.f().eval_at_one().rem_euclid(2), 1);
-        assert!(TrapdoorSampler::new(&msk, SIGMA_EXTRACT).is_ok());
+        assert!(
+            TrapdoorSampler::new(msk.f(), msk.g(), msk.big_f(), msk.big_g(), SIGMA_EXTRACT).is_ok()
+        );
 
         // F, G are size-reduced: comparable to the Gram–Schmidt bound, far
         // below q.

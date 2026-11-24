@@ -103,21 +103,19 @@
 //!
 //! # Residual assumptions
 //!
-//! `f64` add, mul, compare, `floor`, `min`/`max`, and `f64 → u64`
-//! conversion are assumed constant-time for normal operands, as on x86-64
-//! (SSE2) and aarch64. No value here can be subnormal: every intermediate
-//! is zero or has magnitude above `2^-110` (differences of doubles in
-//! `[2^-54, 2^53]`, and products of at most three of them), and subnormals
-//! start at `2^-1022`. `u64 × u64 → u128` and variable `u128` shifts are
-//! assumed constant-time, as they are on 64-bit targets. The rejection loop
-//! exits on a secret-independent coin, and the comparisons use masks with
-//! [`core::hint::black_box`] to discourage the compiler from reintroducing
-//! branches.
+//! The floating-point assumptions, and the bound that keeps every value
+//! here away from subnormals, are stated once in the `fft` module's Timing
+//! section. `u64 × u64 → u128` and variable `u128` shifts are assumed
+//! constant-time, as they are on 64-bit targets. The rejection loop exits
+//! on a secret-independent coin; the table scans are full-length borrow
+//! sums ([`cdt_count`]) and the remaining compares, selects, and the sign
+//! use `ctutils`, so no comparison is a branch.
 use super::N;
 use super::ring::PolyZ;
 use crate::{Error, VsssResult};
 use core::f64::consts::{LN_2, LOG2_E};
 use core::hint::black_box;
+use ctutils::{Choice, CtNeg};
 use rand_core::CryptoRng;
 use std::vec::Vec;
 
@@ -334,6 +332,7 @@ const EXP_COEFFS: [u64; 19] = [
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize))]
 pub struct SamplerZ {
     /// The width `σ'`.
+    #[cfg(test)]
     sigma: f64,
     /// `1/(2σ'²)`.
     inv_two_sigma_sq: f64,
@@ -349,6 +348,7 @@ impl SamplerZ {
             return Err(Error::Lattice("Gaussian width outside [σ_min, σ_max]"));
         }
         Ok(Self {
+            #[cfg(test)]
             sigma,
             inv_two_sigma_sq: 1.0 / (2.0 * sigma * sigma),
             // In (0.71, 1]; at exactly 1 the conversion yields 2^63, which
@@ -358,7 +358,8 @@ impl SamplerZ {
     }
 
     /// The width `σ'`.
-    pub fn sigma(&self) -> f64 {
+    #[cfg(test)]
+    pub(crate) fn sigma(&self) -> f64 {
         self.sigma
     }
 
@@ -379,7 +380,7 @@ impl SamplerZ {
             let z0f = z0 as f64;
             // Non-negative up to rounding; clamp so the shift stays valid.
             let x = (dz * dz * self.inv_two_sigma_sq - z0f * z0f * INV_TWO_SIGMA_MAX_SQ).max(0.0);
-            if bernoulli_exp(x, self.ccs, rng) != 0 {
+            if bernoulli_exp(x, self.ccs, rng).to_bool() {
                 return Ok(floor as i64 + z);
             }
         }
@@ -390,16 +391,12 @@ impl SamplerZ {
 /// `z0 ← D⁺_{σ_max}` by a full, branch-free scan of [`RCDT_EXTRACT`]:
 /// `z0 = #{j : u < T[j]}` for `u` uniform on `[0, 2^127)`.
 fn half_gaussian<R: CryptoRng + ?Sized>(rng: &mut R) -> i64 {
-    let u = uniform_127(rng);
-    let count = RCDT_EXTRACT
-        .iter()
-        .fold(0u64, |acc, &t| acc + (ct_lt_u128(u, t) & 1));
-    count as i64
+    cdt_count(uniform_127(rng), &RCDT_EXTRACT) as i64
 }
 
 /// A Bernoulli trial with probability `ccs·exp(−x)` for `x ≥ 0`, `ccs` in
-/// `2^63` fixed point: all ones on success, zero otherwise.
-fn bernoulli_exp<R: CryptoRng + ?Sized>(x: f64, ccs: u64, rng: &mut R) -> u64 {
+/// `2^63` fixed point.
+fn bernoulli_exp<R: CryptoRng + ?Sized>(x: f64, ccs: u64, rng: &mut R) -> Choice {
     // x = s·ln 2 + r with r ∈ [0, ln 2); s saturates at 127, past which
     // the probability is below 2^-127 anyway.
     let s = (x * LOG2_E).floor().min(MAX_SHIFT);
@@ -409,7 +406,7 @@ fn bernoulli_exp<R: CryptoRng + ?Sized>(x: f64, ccs: u64, rng: &mut R) -> u64 {
     let y = exp_fixed((r * TWO_POW_64) as u64);
     let scaled = ((u128::from(y) * u128::from(ccs)) >> 63) as u64;
     let threshold = (u128::from(scaled) << 64) >> (s as u32);
-    ct_lt_u128(uniform_127(rng), threshold)
+    Choice::from_u128_lt(uniform_127(rng), threshold)
 }
 
 /// `2^63·exp(−x)` for `x = x_fixed/2^64 ∈ [0, 1)`, by Horner's rule over
@@ -432,53 +429,61 @@ fn uniform_127<R: CryptoRng + ?Sized>(rng: &mut R) -> u128 {
     (hi << 64) | u128::from(rng.next_u64())
 }
 
-/// All ones if `a < b`, else zero, without a branch: the borrow out of
-/// `a − b` (Hacker's Delight, §2-12).
-fn ct_lt_u64(a: u64, b: u64) -> u64 {
-    let borrow = ((!a & b) | (!(a ^ b) & a.wrapping_sub(b))) >> 63;
-    black_box(0u64.wrapping_sub(borrow))
+/// `#{j : u < table[j]}` by a full scan of `table`, without a branch.
+///
+/// Requires `u < 2^127` and every entry below `2^127`: then `u − t` wraps
+/// exactly when `u < t`, and its top bit is that borrow. Both tables and
+/// both `u` meet this ([`RCDT_EXTRACT`] and [`uniform_127`] by
+/// construction, [`CDT_KEYGEN`] and a `u64` draw because they are below
+/// `2^64`).
+///
+/// The rows are not compared with `ctutils` one at a time: its per-row
+/// optimization barrier keeps the scan from vectorizing, which measured
+/// 4.4× slower on [`sample_poly`]. The plain borrow sum leaves no branch to
+/// reintroduce, and one [`black_box`] on the count keeps the compiler from
+/// reasoning about the result.
+fn cdt_count<T: Copy + Into<u128>>(u: u128, table: &[T]) -> u64 {
+    let count = table.iter().fold(0u64, |acc, &t| {
+        acc + (u.wrapping_sub(t.into()) >> (u128::BITS - 1)) as u64
+    });
+    black_box(count)
 }
 
-/// All ones if `a == b`, else zero, without a branch.
-fn ct_eq_u64(a: u64, b: u64) -> u64 {
-    let x = a ^ b;
-    // The top bit of `x | −x` is set exactly when `x ≠ 0`.
-    let nonzero = (x | x.wrapping_neg()) >> 63;
-    black_box(0u64.wrapping_sub(nonzero ^ 1))
-}
-
-/// All ones if `a < b`, else zero, without a branch.
-fn ct_lt_u128(a: u128, b: u128) -> u64 {
-    let (ah, al) = ((a >> 64) as u64, a as u64);
-    let (bh, bl) = ((b >> 64) as u64, b as u64);
-    ct_lt_u64(ah, bh) | (ct_eq_u64(ah, bh) & ct_lt_u64(al, bl))
-}
+/// `next_u64` draws one [`keygen_base`] makes.
+const DRAWS_PER_BASE: usize = 2;
+/// [`keygen_base`] calls one [`sample_keygen_z`] makes.
+const BASES_PER_COEFF: usize = 4;
+/// `next_u64` draws one [`sample_poly`] makes; it is fixed.
+const DRAWS_PER_POLY: usize = N * BASES_PER_COEFF * DRAWS_PER_BASE;
 
 /// One draw from `D_{Z,σ₁}` by a full scan of [`CDT_KEYGEN`] and a masked
 /// sign.
 fn keygen_base<R: CryptoRng + ?Sized>(rng: &mut R) -> i64 {
-    let u = rng.next_u64();
-    let magnitude = CDT_KEYGEN
-        .iter()
-        .fold(0u64, |acc, &t| acc + (ct_lt_u64(u, t) & 1));
-    let sign = 0u64.wrapping_sub(rng.next_u64() & 1);
-    // Negate under the mask: (m ^ s) − s is −m when s is all ones.
-    (magnitude ^ sign).wrapping_sub(sign) as i64
+    let magnitude = cdt_count(u128::from(rng.next_u64()), &CDT_KEYGEN) as i64;
+    magnitude.ct_neg(Choice::from_u64_lsb(rng.next_u64()))
 }
 
 /// Draw `z ← D_{Z,σ_f}` centered at zero, as the convolution
 /// `(a + 4b) + 18·(c + 4d)` of four draws from the fixed `D_{Z,σ₁}` table;
 /// see the module docs.
-pub fn sample_keygen_z<R: CryptoRng + ?Sized>(rng: &mut R) -> i64 {
+fn sample_keygen_z<R: CryptoRng + ?Sized>(rng: &mut R) -> i64 {
     let inner = |rng: &mut R| keygen_base(rng) + KEYGEN_K1 * keygen_base(rng);
     inner(rng) + KEYGEN_K2 * inner(rng)
 }
 
 /// Sample a polynomial from `D_{N,σ_f}`: every coefficient independently
-/// from [`sample_keygen_z`].
+/// from the convolution sampler described in the module docs.
 pub fn sample_poly<R: CryptoRng + ?Sized>(rng: &mut R) -> VsssResult<PolyZ> {
     let coeffs = (0..N).map(|_| sample_keygen_z(rng)).collect::<Vec<_>>();
     PolyZ::from_coeffs(coeffs)
+}
+
+/// Advance `rng` exactly as far as [`sample_poly`] would, without sampling:
+/// the draws are discarded, so the stream that follows is the same.
+pub(crate) fn skip_poly<R: CryptoRng + ?Sized>(rng: &mut R) {
+    (0..DRAWS_PER_POLY).for_each(|_| {
+        rng.next_u64();
+    });
 }
 
 #[cfg(test)]
@@ -702,7 +707,7 @@ mod tests {
         ] {
             let ccs_fixed = (ccs * TWO_POW_63) as u64;
             let hits = (0..trials)
-                .filter(|_| bernoulli_exp(x, ccs_fixed, &mut rng) != 0)
+                .filter(|_| bernoulli_exp(x, ccs_fixed, &mut rng).to_bool())
                 .count() as f64;
             let p = ccs * (-x).exp();
             let tolerance = 5.0 * (p * (1.0 - p) / trials as f64).sqrt() + 1e-9;
@@ -711,50 +716,49 @@ mod tests {
                 "x = {x}, ccs = {ccs}: {hits} hits"
             );
         }
-        // A success mask is all ones, a failure is zero.
-        let mask = bernoulli_exp(0.0, u64::MAX, &mut rng);
-        assert_eq!(mask, u64::MAX);
+        // Probability one always succeeds.
+        assert!(bernoulli_exp(0.0, u64::MAX, &mut rng).to_bool());
     }
 
     #[test]
-    fn constant_time_comparisons_match_the_operators() {
+    fn cdt_count_matches_a_plain_count_within_its_precondition() {
         let mut rng = StdRng::from_seed([26u8; 32]);
-        let edge = [0u64, 1, 1 << 63, (1 << 63) - 1, u64::MAX - 1, u64::MAX];
-        let mut pairs: Vec<(u64, u64)> = edge
-            .iter()
-            .flat_map(|&a| edge.iter().map(move |&b| (a, b)))
-            .collect();
-        pairs.extend((0..10_000).map(|_| (rng.random::<u64>(), rng.random::<u64>())));
-        pairs.extend((0..1000).map(|_| {
-            let a = rng.random::<u64>();
-            (a, a)
-        }));
-        for &(a, b) in &pairs {
+        let top = (1u128 << 127) - 1;
+        let reference = |u: u128, table: &[u128]| table.iter().filter(|&&t| u < t).count() as u64;
+        // Edge values of u and t below 2^127, including equality.
+        let edge = [0u128, 1, 1 << 64, (1 << 64) - 1, 1 << 126, top - 1, top];
+        for &u in &edge {
+            assert_eq!(cdt_count(u, &edge), reference(u, &edge), "u = {u}");
             assert_eq!(
-                ct_lt_u64(a, b),
-                if a < b { u64::MAX } else { 0 },
-                "{a} < {b}"
+                cdt_count(u, &RCDT_EXTRACT),
+                reference(u, &RCDT_EXTRACT),
+                "u = {u}"
             );
-            assert_eq!(
-                ct_eq_u64(a, b),
-                if a == b { u64::MAX } else { 0 },
-                "{a} == {b}"
-            );
-            for &(c, d) in &[(a, b), (b, a), (a, a)] {
-                let x = (u128::from(c) << 64) | u128::from(d);
-                let y = (u128::from(d) << 64) | u128::from(c);
-                assert_eq!(ct_lt_u128(x, y), if x < y { u64::MAX } else { 0 });
-                let same_hi = (u128::from(c) << 64) | u128::from(c);
-                assert_eq!(
-                    ct_lt_u128(x, same_hi),
-                    if x < same_hi { u64::MAX } else { 0 }
-                );
-            }
         }
-        for _ in 0..1000 {
+        for _ in 0..10_000 {
             let u = uniform_127(&mut rng);
             assert!(u < 1u128 << 127);
+            assert_eq!(cdt_count(u, &RCDT_EXTRACT), reference(u, &RCDT_EXTRACT));
+            // A u64 draw against the u64 table, widened.
+            let v = rng.random::<u64>();
+            let wide: Vec<u128> = CDT_KEYGEN.iter().map(|&t| u128::from(t)).collect();
+            assert_eq!(
+                cdt_count(u128::from(v), &CDT_KEYGEN),
+                reference(u128::from(v), &wide)
+            );
         }
+        // The table entries themselves meet the precondition.
+        assert!(RCDT_EXTRACT.iter().all(|&t| t <= top));
+        assert!(CDT_KEYGEN.iter().all(|&t| u128::from(t) <= top));
+    }
+
+    #[test]
+    fn skip_poly_advances_the_rng_like_sample_poly() {
+        let mut sampled = StdRng::from_seed([30u8; 32]);
+        let mut skipped = StdRng::from_seed([30u8; 32]);
+        sample_poly(&mut sampled).expect("valid");
+        skip_poly(&mut skipped);
+        assert_eq!(sampled.random::<[u64; 4]>(), skipped.random::<[u64; 4]>());
     }
 
     #[test]

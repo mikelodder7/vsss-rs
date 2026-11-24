@@ -30,7 +30,6 @@ use super::fft::{
     Complex, fft_of, integer_poly, merge_fft, pair_norm_sq, roots_for, split_fft, split_roots,
 };
 use super::gaussian::SamplerZ;
-use super::keygen::MasterSecretKey;
 use super::ring::{PolyQ, PolyZ};
 use crate::secret::Secret;
 use crate::{Error, VsssResult};
@@ -40,6 +39,7 @@ use std::vec::Vec;
 
 /// The ffLDL tree of a `2×2` Gram matrix over `R[x]/(x^n + 1)`, stored in
 /// the FFT domain.
+#[derive(Clone)]
 #[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
 enum LdlTree {
     /// The `n = 1` base case.
@@ -203,22 +203,34 @@ struct Workspace<'a> {
 /// Klein/GPV sampling for one master secret key, with the ffLDL tree, the
 /// split roots, and the FFT images of the trapdoor precomputed. Everything
 /// derived from the key is wiped on drop.
-pub(crate) struct TrapdoorSampler<'a> {
-    msk: &'a MasterSecretKey,
-    f: Secret<Vec<Complex>>,
-    big_f: Secret<Vec<Complex>>,
+#[derive(Clone)]
+#[cfg_attr(feature = "zeroize", derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop))]
+pub(crate) struct TrapdoorSampler {
+    /// `f̂`, the FFT image of `f`.
+    f: Vec<Complex>,
+    /// `F̂`, the FFT image of `F`.
+    big_f: Vec<Complex>,
+    /// The [`split_roots`] table for the tree's splits.
     roots: Vec<Complex>,
+    /// The ffLDL tree of the basis' Gram matrix.
     tree: LdlTree,
 }
 
-impl<'a> TrapdoorSampler<'a> {
-    /// Precompute sampling at width `sigma` for `msk`. Fails if the
-    /// trapdoor is degenerate or a leaf width leaves `[σ_min, σ_max]`.
-    pub(crate) fn new(msk: &'a MasterSecretKey, sigma: f64) -> VsssResult<Self> {
-        let g = Secret::new(fft_of(msk.g())?);
-        let f = Secret::new(fft_of(msk.f())?);
-        let big_g = Secret::new(fft_of(msk.big_g())?);
-        let big_f = Secret::new(fft_of(msk.big_f())?);
+impl TrapdoorSampler {
+    /// Precompute sampling at width `sigma` for the trapdoor basis
+    /// `[[g, −f], [G, −F]]`. Fails if the trapdoor is degenerate or a leaf
+    /// width leaves `[σ_min, σ_max]`.
+    pub(crate) fn new(
+        f: &PolyZ,
+        g: &PolyZ,
+        big_f: &PolyZ,
+        big_g: &PolyZ,
+        sigma: f64,
+    ) -> VsssResult<Self> {
+        let g = Secret::new(fft_of(g)?);
+        let f = fft_of(f)?;
+        let big_g = Secret::new(fft_of(big_g)?);
+        let big_f = fft_of(big_f)?;
         let roots = split_roots(f.len());
         // Gram matrix of the rows (g, −f) and (G, −F).
         let g00 = Secret::new(pair_norm_sq(&g, &f));
@@ -232,7 +244,6 @@ impl<'a> TrapdoorSampler<'a> {
         let g11 = Secret::new(pair_norm_sq(&big_g, &big_f));
         let tree = LdlTree::new(&g00, &g01, &g11, sigma, &roots)?;
         Ok(Self {
-            msk,
             f,
             big_f,
             roots,
@@ -240,14 +251,14 @@ impl<'a> TrapdoorSampler<'a> {
         })
     }
 
-    /// Sample `(s1, s2) = (t, 0) − v` where `v = (v1, v2) ∈ L(B)` is drawn
-    /// from the discrete Gaussian of width `σ` centered at `(t, 0)`, and
-    /// return the identity key `s2 = −v2`. Then `s1 = t − s2·h (mod q)`.
-    pub(crate) fn sample_key<R: CryptoRng + ?Sized>(
+    /// Sample the lattice coordinates `(z0, z1)` of `v = z0·(g, −f) +
+    /// z1·(G, −F)`, drawn from the discrete Gaussian of width `σ` centered
+    /// at `(t, 0)`, as FFT images: `z0` then `z1`, `N` slots each.
+    fn sample_coordinates<R: CryptoRng + ?Sized>(
         &self,
         t: &PolyQ,
         rng: &mut R,
-    ) -> VsssResult<PolyZ> {
+    ) -> VsssResult<Secret<Vec<Complex>>> {
         let t_fft = fft_of(&PolyZ::from_coeffs(t.centered())?)?;
         let n = t_fft.len();
         // (τ0, τ1) = (t, 0)·B⁻¹ = (−t·F/q, t·f/q).
@@ -276,28 +287,98 @@ impl<'a> TrapdoorSampler<'a> {
         };
         self.tree
             .sample((&mut tau0, &tau1), (z0, z1), &mut work, rng)?;
-        let z0 = Secret::new(integer_poly(z0)?);
-        let z1 = Secret::new(integer_poly(z1)?);
-        // v = z0·(g, −f) + z1·(G, −F), so −v2 = z0·f + z1·F.
-        let z0_f = Secret::new(z0.checked_mul(self.msk.f())?);
-        let z1_big_f = Secret::new(z1.checked_mul(self.msk.big_f())?);
-        z0_f.checked_add(&z1_big_f)
+        buffer.truncate(2 * n);
+        Ok(buffer)
+    }
+
+    /// Sample `(s1, s2) = (t, 0) − v` where `v = (v1, v2) ∈ L(B)` is drawn
+    /// from the discrete Gaussian of width `σ` centered at `(t, 0)`, and
+    /// return the identity key `s2 = −v2`. Then `s1 = t − s2·h (mod q)`.
+    ///
+    /// `−v2 = z0·f + z1·F` is formed pointwise in the FFT domain from the
+    /// cached `f̂, F̂` and rounded once by [`integer_poly`]: one inverse
+    /// transform instead of two plus two exact integer products. It equals
+    /// rounding `z0, z1` first and multiplying exactly whenever every
+    /// coefficient's floating-point error is below `1/2`; the error is
+    /// estimated at about `2^-13` and measured at `2^-19` (see the
+    /// `pointwise_key_matches_the_exact_integer_product` test), so the
+    /// margin is at least twelve bits.
+    pub(crate) fn sample_key<R: CryptoRng + ?Sized>(
+        &self,
+        t: &PolyQ,
+        rng: &mut R,
+    ) -> VsssResult<PolyZ> {
+        let z = self.sample_coordinates(t, rng)?;
+        let (z0, z1) = z.split_at(z.len() / 2);
+        let product = Secret::new(
+            z0.iter()
+                .zip(z1)
+                .zip(self.f.iter().zip(&self.big_f))
+                .map(|((&a, &b), (&f, &big_f))| a * f + b * big_f)
+                .collect::<Vec<_>>(),
+        );
+        integer_poly(&product)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lattice::MasterSecretKey;
+    use crate::lattice::fft::ifft;
     use crate::lattice::gaussian::{SIGMA_MAX, SIGMA_MIN};
     use crate::lattice::test_support::keys;
     use crate::lattice::{GS_NORM_BOUND, N, SIGMA_EXTRACT, hash_to_ring};
     use rand::{SeedableRng, rngs::StdRng};
     use sha2::Sha256;
 
+    /// A fresh sampler for `msk` at width `sigma`.
+    fn sampler_at(msk: &MasterSecretKey, sigma: f64) -> VsssResult<TrapdoorSampler> {
+        TrapdoorSampler::new(msk.f(), msk.g(), msk.big_f(), msk.big_g(), sigma)
+    }
+
+    /// The FFT-domain `z0·f + z1·F` that [`TrapdoorSampler::sample_key`]
+    /// rounds once equals rounding `z0, z1` first and multiplying exactly
+    /// over the integers, with a wide margin on the round-off.
+    #[test]
+    fn pointwise_key_matches_the_exact_integer_product() {
+        let mut rng = StdRng::from_seed([64u8; 32]);
+        let mut worst = 0.0f64;
+        for (i, (msk, _)) in keys().iter().enumerate() {
+            let sampler = msk.sampler();
+            for j in 0..64u8 {
+                let t = hash_to_ring::<Sha256>(&[i as u8, j]);
+                let z = sampler.sample_coordinates(&t, &mut rng).expect("sample");
+                let (z0, z1) = z.split_at(N);
+                let exact = integer_poly(z0)
+                    .and_then(|z0| z0.checked_mul(msk.f()))
+                    .and_then(|a| a.checked_add(&integer_poly(z1)?.checked_mul(msk.big_f())?))
+                    .expect("small");
+                let pointwise: Vec<Complex> = z0
+                    .iter()
+                    .zip(z1)
+                    .zip(sampler.f.iter().zip(&sampler.big_f))
+                    .map(|((&a, &b), (&f, &big_f))| a * f + b * big_f)
+                    .collect();
+                assert_eq!(integer_poly(&pointwise).expect("integer"), exact);
+                worst = ifft(&pointwise)
+                    .expect("power of two")
+                    .iter()
+                    .zip(exact.coeffs())
+                    .fold(worst, |w, (&x, &e)| w.max((x - e as f64).abs()));
+            }
+        }
+        std::println!(
+            "pointwise key round-off: max {worst:e} = 2^{:.1}",
+            worst.log2()
+        );
+        assert!(worst < 1.0 / 256.0, "round-off {worst}");
+    }
+
     #[test]
     fn tree_leaves_are_the_gram_schmidt_norms_of_the_basis() {
         for (msk, _) in keys() {
-            let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT).expect("sampler");
+            let sampler = msk.sampler();
             let sigmas = sampler.tree.leaf_sigmas();
             assert_eq!(sigmas.len(), 2 * N);
             // The leaves are σ/‖b̃_i‖, and Π‖b̃_i‖ = det B = q^N.
@@ -329,15 +410,15 @@ mod tests {
     fn leaf_widths_outside_the_sampler_range_are_rejected() {
         let (msk, _) = &keys()[0];
         // Scaling σ scales every leaf width with it.
-        assert!(TrapdoorSampler::new(msk, 1.0).is_err());
-        assert!(TrapdoorSampler::new(msk, SIGMA_EXTRACT * 1.5).is_err());
-        assert!(TrapdoorSampler::new(msk, SIGMA_EXTRACT).is_ok());
+        assert!(sampler_at(msk, 1.0).is_err());
+        assert!(sampler_at(msk, SIGMA_EXTRACT * 1.5).is_err());
+        assert!(sampler_at(msk, SIGMA_EXTRACT).is_ok());
     }
 
     #[test]
     fn sampled_keys_are_short_and_hit_the_target() {
         let (msk, mpk) = &keys()[1];
-        let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT).expect("sampler");
+        let sampler = msk.sampler();
         let mut rng = StdRng::from_seed([61u8; 32]);
         let expected = SIGMA_EXTRACT * (2.0 * N as f64).sqrt();
         for id in [b"alpha".as_slice(), b"beta"] {
@@ -407,7 +488,7 @@ mod tests {
             let start = Instant::now();
             let (msk, mpk) = keygen(StdRng::from_seed([i as u8; 32])).expect("keygen");
             keygen_total += start.elapsed().as_secs_f64();
-            let sampler = TrapdoorSampler::new(&msk, SIGMA_EXTRACT).expect("sampler");
+            let sampler = msk.sampler();
             for s in sampler.tree.leaf_sigmas() {
                 lo = lo.min(s);
                 hi = hi.max(s);
@@ -438,7 +519,7 @@ mod tests {
     #[test]
     fn a_short_workspace_is_an_error() {
         let (msk, _) = &keys()[0];
-        let sampler = TrapdoorSampler::new(msk, SIGMA_EXTRACT).expect("sampler");
+        let sampler = msk.sampler();
         let t = std::vec![Complex::default(); N];
         let mut z = std::vec![Complex::default(); N];
         let mut work = Workspace {

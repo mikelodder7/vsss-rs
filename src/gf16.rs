@@ -7,7 +7,7 @@
 //! 2. Ensure code access patterns are independent of secret data.
 //! 3. Ensure data access patterns are independent of secret data.
 
-use crate::util::{CtIsNotZero, field_bounded_add, uniform_nonzero_u8};
+use crate::util::{field_bounded_add, uniform_nonzero_u8};
 use crate::*;
 use core::borrow::Borrow;
 use core::{
@@ -15,13 +15,12 @@ use core::{
     iter::{Product, Sum},
     ops::{
         Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Deref,
-        DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
+        DerefMut, Mul, MulAssign, Neg, Sub, SubAssign,
     },
 };
-use ctutils::{CtAssign, CtEq, CtSelect};
+use ctutils::{Choice, CtEq};
 use ff::{Field, PrimeField};
-use rand_core::TryRng;
-use subtle::{Choice, CtOption};
+use subtle::{Choice as FfChoice, CtOption as FfCtOption};
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 use crate::ParticipantIdGenerator;
@@ -64,18 +63,6 @@ impl UpperHex for Gf16 {
 impl Binary for Gf16 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:04b}", self.0)
-    }
-}
-
-impl subtle::ConditionallySelectable for Gf16 {
-    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Gf16(a.0.ct_select(&b.0, choice.into()))
-    }
-}
-
-impl subtle::ConstantTimeEq for Gf16 {
-    fn ct_eq(&self, other: &Self) -> Choice {
-        CtEq::ct_eq(&self.0, &other.0).into()
     }
 }
 
@@ -211,50 +198,7 @@ impl MulAssign<&Gf16> for Gf16 {
     }
 }
 
-/// Division by zero yields zero; use [`Field::invert`] to detect a zero divisor.
-impl Div for Gf16 {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        self * rhs.inverse_or_zero()
-    }
-}
-
-impl Div<&Gf16> for Gf16 {
-    type Output = Gf16;
-
-    fn div(self, rhs: &Gf16) -> Gf16 {
-        self / *rhs
-    }
-}
-
-impl Div<Gf16> for &Gf16 {
-    type Output = Gf16;
-
-    fn div(self, rhs: Gf16) -> Gf16 {
-        *self / rhs
-    }
-}
-
-impl Div<&Gf16> for &Gf16 {
-    type Output = Gf16;
-
-    fn div(self, rhs: &Gf16) -> Gf16 {
-        *self / *rhs
-    }
-}
-
-impl DivAssign for Gf16 {
-    fn div_assign(&mut self, rhs: Self) {
-        *self *= rhs.inverse_or_zero();
-    }
-}
-
-impl DivAssign<&Gf16> for Gf16 {
-    fn div_assign(&mut self, rhs: &Gf16) {
-        *self *= rhs.inverse_or_zero();
-    }
-}
+binary_field!(Gf16, gf16_mul, 4, 0x0F);
 
 impl Neg for Gf16 {
     type Output = Self;
@@ -408,39 +352,6 @@ impl<T: Borrow<Gf16>> Product<T> for Gf16 {
     }
 }
 
-impl Field for Gf16 {
-    const ZERO: Self = Self(0);
-    const ONE: Self = Self(1);
-
-    fn try_random<R: TryRng + ?Sized>(rng: &mut R) -> Result<Self, R::Error> {
-        // Uniform over the full field {0, 1, ..., 15}. The prior
-        // `(b & 0x0E) + 1` forced the low bit and yielded only odd
-        // nibbles {1,3,...,15}; that bias leaks into polynomial
-        // coefficients used by Shamir secret sharing (audit finding #1).
-        rng.try_next_u32().map(|v| Self(v as u8 & 0x0F))
-    }
-
-    fn square(&self) -> Self {
-        self * self
-    }
-
-    fn double(&self) -> Self {
-        self + self
-    }
-
-    fn invert(&self) -> CtOption<Self> {
-        CtOption::new(self.inverse_or_zero(), self.0.ct_is_not_zero().into())
-    }
-
-    /// Every element of GF(2^4) is a square, with `sqrt(x) = x^8`.
-    fn sqrt_ratio(num: &Self, div: &Self) -> (Choice, Self) {
-        let ratio = *num * div.inverse_or_zero();
-        let root = Self(gf16_pow(ratio.0, 8));
-        let defined = num.0.ct_eq(&0) | div.0.ct_ne(&0);
-        (defined.into(), root)
-    }
-}
-
 impl From<u8> for Gf16 {
     fn from(val: u8) -> Self {
         Gf16(val)
@@ -504,15 +415,15 @@ impl From<Gf16> for u128 {
 impl PrimeField for Gf16 {
     type Repr = [u8; 1];
 
-    fn from_repr(repr: Self::Repr) -> CtOption<Self> {
-        CtOption::new(Self(repr[0]), Choice::from(1u8))
+    fn from_repr(repr: Self::Repr) -> FfCtOption<Self> {
+        FfCtOption::new(Self(repr[0]), FfChoice::from(1u8))
     }
 
     fn to_repr(&self) -> Self::Repr {
         [self.0]
     }
 
-    fn is_odd(&self) -> Choice {
+    fn is_odd(&self) -> FfChoice {
         (self.0 & 1).ct_eq(&1).into()
     }
 
@@ -533,22 +444,6 @@ impl PrimeField for Gf16 {
 }
 
 impl Gf16 {
-    /// The multiplicative inverse, or zero for zero (`a^14`). Runs in
-    /// constant time; [`Field::invert`] reports the zero case.
-    fn inverse_or_zero(self) -> Self {
-        let mut z = self.0;
-        for _ in 0..2 {
-            z = gf16_mul(z, z);
-            z = gf16_mul(z, self.0);
-        }
-        Self(gf16_mul(z, z))
-    }
-
-    /// Raise the element to the power of `exp` in GF(2^4).
-    pub fn pow(&self, exp: u8) -> Self {
-        Self(gf16_pow(self.0, exp))
-    }
-
     #[cfg(any(feature = "alloc", feature = "std"))]
     /// Split a byte array into shares using GF(2^4) arithmetic.
     ///
@@ -895,23 +790,6 @@ fn gf16_mul(a: u8, b: u8) -> u8 {
     (r & 0x0f) as u8
 }
 
-/// Constant-time exponentiation in GF(2^4).
-///
-/// Computes `base^exp` using the left-to-right binary (MSB-first) square-and-multiply
-/// method, processing the 4 significant bits of the exponent.
-fn gf16_pow(base: u8, exp: u8) -> u8 {
-    let mut result = 1u8;
-    let base = base & 0x0f;
-    // Square-and-multiply over all 8 exponent bits, MSB first, in constant time.
-    for i in (0..8).rev() {
-        result = gf16_mul(result, result);
-        let tmp = gf16_mul(result, base);
-        let allow = ((exp >> i) & 1).ct_eq(&1);
-        result.ct_assign(&tmp, allow);
-    }
-    result
-}
-
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
@@ -996,8 +874,8 @@ impl ShareElement for IdentifierGf16 {
         Self(Gf16::ONE)
     }
 
-    fn is_zero(&self) -> ctutils::Choice {
-        self.0.is_zero().into()
+    fn is_zero(&self) -> Choice {
+        self.0.ct_eq(&Gf16::ZERO)
     }
 
     fn serialize(&self) -> Self::Serialization {
@@ -1065,7 +943,7 @@ mod tests {
         for base in 0..=15u8 {
             let mut expected = 1u8;
             for exp in 0..=255u8 {
-                assert_eq!(gf16_pow(base, exp), expected, "{base}^{exp}");
+                assert_eq!(Gf16(base).pow(exp).0, expected, "{base}^{exp}");
                 expected = gf16_mul(expected, base);
             }
         }
@@ -1088,6 +966,49 @@ mod tests {
         let (ok, root) = <Gf16 as Field>::sqrt_ratio(&Gf16(3), &Gf16(5));
         assert!(bool::from(ok));
         assert_eq!(root * root * Gf16(5), Gf16(3));
+    }
+
+    #[test]
+    fn generated_field_ops_match_exhaustive_references() {
+        let all = || (0..=15u8).map(Gf16);
+        // The inverse is the unique y with x·y = 1, or zero for zero.
+        let inverses: Vec<Gf16> = all()
+            .map(|x| all().find(|&y| x * y == Gf16(1)).unwrap_or(Gf16(0)))
+            .collect();
+        for x in all() {
+            assert_eq!(x.inverse_or_zero(), inverses[usize::from(x.0)], "{x:?}");
+            // The square root is the unique r with r² = x.
+            let root = all()
+                .find(|&r| r * r == x)
+                .expect("every element is a square");
+            assert_eq!(x.frobenius_root(), root, "{x:?}");
+            assert_eq!(x.pow(2), x * x);
+            for d in all() {
+                let quotient = x * inverses[usize::from(d.0)];
+                assert_eq!(x / d, quotient);
+                let (ok, r) = <Gf16 as Field>::sqrt_ratio(&x, &d);
+                assert_eq!(bool::from(ok), x.0 == 0 || d.0 != 0);
+                assert_eq!(r * r, quotient);
+            }
+        }
+    }
+
+    #[test]
+    fn native_ctutils_traits_match_the_subtle_bridges() {
+        use ctutils::{CtEq, CtSelect};
+        use subtle::{ConditionallySelectable, ConstantTimeEq};
+        for a in (0..=15u8).step_by(5).map(Gf16) {
+            for b in (0..=15u8).step_by(7).map(Gf16) {
+                assert_eq!(CtEq::ct_eq(&a, &b).to_bool(), a == b);
+                assert_eq!(bool::from(ConstantTimeEq::ct_eq(&a, &b)), a == b);
+                assert_eq!(a.ct_select(&b, Choice::FALSE), a);
+                assert_eq!(a.ct_select(&b, Choice::TRUE), b);
+                assert_eq!(Gf16::conditional_select(&a, &b, FfChoice::from(1)), b);
+                assert_eq!(Gf16::conditional_select(&a, &b, FfChoice::from(0)), a);
+            }
+        }
+        assert!(IdentifierGf16::ZERO.is_zero().to_bool());
+        assert!(!IdentifierGf16::ONE.is_zero().to_bool());
     }
 
     #[test]
@@ -1505,7 +1426,7 @@ mod tests {
             Gf16::conditional_select(&Gf16(1), &Gf16(2), Choice::from(1)),
             Gf16(2)
         );
-        assert_eq!(Gf16(7).ct_eq(&Gf16(7)).unwrap_u8(), 1);
+        assert_eq!(ConstantTimeEq::ct_eq(&Gf16(7), &Gf16(7)).unwrap_u8(), 1);
 
         assert_eq!(u8::from(Gf16::from(0x12u8)), 0x12);
         assert_eq!(u16::from(Gf16::from(0x12u16)), 0x12);

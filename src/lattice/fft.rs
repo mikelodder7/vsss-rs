@@ -10,26 +10,33 @@
 //!
 //! # Timing
 //!
+//! This is the crate's one statement of the floating-point assumptions;
+//! the sampler, Gaussian, and NTRU modules refer here.
+//!
 //! On secret data these routines only add, subtract, and multiply `f64`s,
 //! round ([`integer_poly`]), and compare against fixed bounds whose outcome
 //! is the same for every honest input. Reciprocals (`1/n`, `0.5`) and the
-//! twiddles (`cos`/`sin` of public angles) never depend on a secret. The
-//! residual assumption is that `f64` add, mul, and round are constant-time
-//! for normal operands, which holds on x86-64 (SSE2) and aarch64.
+//! twiddles (`cos`/`sin` of public angles, tabulated once per size) never
+//! depend on a secret. The residual assumption is that `f64` add, mul,
+//! compare, `floor`/`round`, `min`/`max`, and `f64 → integer` conversion are
+//! constant-time for normal operands, which holds on x86-64 (SSE2) and
+//! aarch64.
 //!
-//! Subnormals, the usual exception, cannot occur: inputs are integers of
+//! Subnormals, the usual exception, cannot occur. Inputs are integers of
 //! magnitude at most `2^52` and twiddle components are zero or at least
 //! `2^-54` in magnitude (`|sin(π/2^11)| > 2^-11`, and `cos` near `π/2`
-//! bottoms out at `6·10^-17`). Through the ten butterfly stages and the
-//! splits and merges of the sampler, every value is a sum or difference of
-//! such terms, or a product of at most three of them; a difference of two
-//! doubles of magnitude in `[2^-54, 2^60]` is zero or at least `2^-106`,
-//! and a product of three such is at least `2^-318`, far above the
-//! subnormal threshold `2^-1022`.
+//! bottoms out at `6·10^-17`). Through the ten butterfly stages, the
+//! sampler's splits, merges, and Klein updates, and the leaf sampler's
+//! exponent, every value is a sum or difference of such terms, or a product
+//! of at most three of them. A difference of two doubles of magnitude in
+//! `[2^-54, 2^60]` is zero or at least `2^-106`, so a product of three such
+//! is zero or at least `2^-318`: that is the floor for every value on these
+//! paths, far above the subnormal threshold `2^-1022`.
 use super::ring::PolyZ;
 use crate::{Error, VsssResult};
 use core::f64::consts::PI;
 use core::ops::{Add, Mul, Sub};
+use std::sync::OnceLock;
 use std::vec::Vec;
 
 /// The error for an FFT input whose length is not a power of two.
@@ -114,9 +121,56 @@ pub(crate) fn pair_norm_sq(a: &[Complex], b: &[Complex]) -> Vec<f64> {
         .collect()
 }
 
-/// In-place radix-2 transform `A_j = Σ_k a_k e^(sign·2πi·jk/n)`.
-/// `a.len()` must be a power of two.
-fn transform(a: &mut [Complex], sign: f64) {
+/// The constant tables of one transform size `n`, built once.
+struct Tables {
+    /// Butterfly twiddles for each sign (`[+1, −1]`): stage `len` uses
+    /// slots `len/2 .. len`, `e^(sign·2πi·k/len)` for `k < len/2`.
+    twiddles: [Vec<Complex>; 2],
+    /// [`fft`]'s input twist `e^(iπk/n)` and [`ifft`]'s output twist
+    /// `e^(−iπk/n)`, for `k < n`.
+    twists: [Vec<Complex>; 2],
+}
+
+impl Tables {
+    /// The tables for `n`, with the same expressions the transforms used
+    /// inline, so every bit is the same.
+    fn new(n: usize) -> Self {
+        let twiddles = |sign: f64| {
+            let mut table = std::vec![Complex::default(); n];
+            let mut len = 2;
+            while len <= n {
+                let step = sign * 2.0 * PI / len as f64;
+                for (k, w) in table[len / 2..len].iter_mut().enumerate() {
+                    *w = Complex::from_angle(step * k as f64);
+                }
+                len <<= 1;
+            }
+            table
+        };
+        let twists = |twist: f64| {
+            (0..n)
+                .map(|k| Complex::from_angle(twist * k as f64))
+                .collect()
+        };
+        Self {
+            twiddles: [twiddles(1.0), twiddles(-1.0)],
+            twists: [twists(PI / n as f64), twists(-PI / n as f64)],
+        }
+    }
+
+    /// The cached tables for a power of two `n`.
+    fn get(n: usize) -> &'static Self {
+        /// One slot per power of two a `usize` can hold.
+        static CACHE: [OnceLock<Tables>; usize::BITS as usize] =
+            [const { OnceLock::new() }; usize::BITS as usize];
+        CACHE[n.trailing_zeros() as usize].get_or_init(|| Self::new(n))
+    }
+}
+
+/// In-place radix-2 transform `A_j = Σ_k a_k w^(jk)` with the given
+/// [`Tables::twiddles`]: `e^(2πi/n)` powers for the forward table and
+/// `e^(−2πi/n)` powers for the inverse. `a.len()` must be a power of two.
+fn transform(a: &mut [Complex], twiddles: &[Complex]) {
     let n = a.len();
     let mut j = 0usize;
     for i in 1..n {
@@ -130,16 +184,12 @@ fn transform(a: &mut [Complex], sign: f64) {
             a.swap(i, j);
         }
     }
-    // Each stage's twiddles, computed once and shared by all its chunks.
-    let mut twiddles = Vec::with_capacity(n / 2);
     let mut len = 2;
     while len <= n {
-        let step = sign * 2.0 * PI / len as f64;
-        twiddles.clear();
-        twiddles.extend((0..len / 2).map(|k| Complex::from_angle(step * k as f64)));
+        let stage = &twiddles[len / 2..len];
         for chunk in a.chunks_mut(len) {
             let (lo, hi) = chunk.split_at_mut(len / 2);
-            for ((u, v), &w) in lo.iter_mut().zip(hi.iter_mut()).zip(&twiddles) {
+            for ((u, v), &w) in lo.iter_mut().zip(hi.iter_mut()).zip(stage) {
                 let t = *v * w;
                 let s = *u;
                 *u = s + t;
@@ -157,13 +207,13 @@ pub(crate) fn fft(a: &[f64]) -> VsssResult<Vec<Complex>> {
     if !n.is_power_of_two() {
         return Err(FFT_LENGTH);
     }
-    let twist = PI / n as f64;
+    let tables = Tables::get(n);
     let mut out: Vec<Complex> = a
         .iter()
-        .enumerate()
-        .map(|(k, &c)| Complex::from_angle(twist * k as f64).scale(c))
+        .zip(&tables.twists[0])
+        .map(|(&c, &w)| w.scale(c))
         .collect();
-    transform(&mut out, 1.0);
+    transform(&mut out, &tables.twiddles[0]);
     Ok(out)
 }
 
@@ -174,14 +224,14 @@ pub(crate) fn ifft(a: &[Complex]) -> VsssResult<Vec<f64>> {
     if !n.is_power_of_two() {
         return Err(FFT_LENGTH);
     }
+    let tables = Tables::get(n);
     let mut buf = a.to_vec();
-    transform(&mut buf, -1.0);
-    let twist = -PI / n as f64;
+    transform(&mut buf, &tables.twiddles[1]);
     let inv_n = 1.0 / n as f64;
     Ok(buf
         .iter()
-        .enumerate()
-        .map(|(k, &c)| (c * Complex::from_angle(twist * k as f64)).re * inv_n)
+        .zip(&tables.twists[1])
+        .map(|(&c, &w)| (c * w).re * inv_n)
         .collect())
 }
 
@@ -286,6 +336,35 @@ mod tests {
         let expected = negacyclic_mul(&a, &b);
         for (x, y) in ifft(&prod).expect("power of two").iter().zip(&expected) {
             assert!((x - *y as f64).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn cached_tables_are_built_once_from_the_inline_formulas() {
+        for n in [1usize, 2, 16, 1024] {
+            let tables = Tables::get(n);
+            assert!(core::ptr::eq(tables, Tables::get(n)));
+            for (sign, twiddles) in [1.0, -1.0].into_iter().zip(&tables.twiddles) {
+                let mut len = 2;
+                while len <= n {
+                    let step = sign * 2.0 * PI / len as f64;
+                    for k in 0..len / 2 {
+                        assert_eq!(twiddles[len / 2 + k], Complex::from_angle(step * k as f64));
+                    }
+                    len <<= 1;
+                }
+            }
+            for k in 0..n {
+                let angle = k as f64;
+                assert_eq!(
+                    tables.twists[0][k],
+                    Complex::from_angle(PI / n as f64 * angle)
+                );
+                assert_eq!(
+                    tables.twists[1][k],
+                    Complex::from_angle(-PI / n as f64 * angle)
+                );
+            }
         }
     }
 

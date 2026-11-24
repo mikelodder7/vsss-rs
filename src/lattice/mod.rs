@@ -48,26 +48,25 @@
 //! or variable-time:
 //!
 //! - `f64` add, mul, compare, `floor`/`round`, `min`/`max`, and `f64 → u64`
-//!   conversion are taken to be constant-time for normal operands, as on
-//!   x86-64 (SSE2) and aarch64; subnormals cannot arise (the `fft` module
-//!   docs and [`SamplerZ`] give the magnitude bounds). `u64 × u64
+//!   conversion are taken to be constant-time for normal operands, and
+//!   subnormals cannot arise; the `fft` module's Timing section is the one
+//!   statement of these assumptions and of the magnitude bounds. `u64 × u64
 //!   → u128` multiplication and variable `u128` shifts are taken to be
 //!   constant-time, as they are on 64-bit targets. Mask-based selection
 //!   relies on the compiler not reintroducing branches; `black_box` hints
 //!   discourage it but do not guarantee it.
-//! - Key generation's candidate rejection (parity, Gram–Schmidt norm,
-//!   `gcd`, the solver's round-off budget) is variable-time, but depends only on candidates that are
-//!   discarded and independent of the key returned.
-//! - The NTRU solver runs on fixed-width two's-complement integers
-//!   (`crypto-bigint`) with widths and loop counts fixed per recursion level,
-//!   a Bernstein–Yang base case, and constant-time selects for every
-//!   secret-dependent quantity; see `ntru` for the width derivation. Its
-//!   intermediate integers are not wiped.
+//! - Key generation's candidate rejection (parity, Gram–Schmidt norm, the
+//!   solver's success, the leaf widths) is variable-time, but depends only
+//!   on candidates that are discarded and independent of the key returned.
+//! - The NTRU solver runs on fixed-width integers with public loop counts
+//!   and wipes its per-level intermediates; the `ntru` module's Timing
+//!   section is the one statement of what it does and does not hide.
 //! - Encryption and decryption ([`encrypt`], [`decrypt`]) have their own
 //!   accounting.
 //!
-//! The sampling tree and workspace, the encryption randomness, the identity
-//! keys, and the PVSS secrets are wiped on drop.
+//! The master secret key with its cached sampling tree, the sampling
+//! workspace, the solver's intermediates, the encryption randomness, the
+//! identity keys, and the PVSS secrets are wiped on drop (with `zeroize`).
 //!
 //! The one-dimensional samplers are within a relative `2^-43` of the ideal
 //! distribution, which supports about `2^53` extractions at a loss under one
@@ -84,7 +83,7 @@ pub mod pvss;
 mod ring;
 mod sampler;
 
-pub use gaussian::{SIGMA_MAX, SIGMA_MIN, SamplerZ, sample_keygen_z, sample_poly};
+pub use gaussian::{SIGMA_MAX, SIGMA_MIN, SamplerZ, sample_poly};
 pub use hash::{hash_to_mask, hash_to_ring};
 pub use ibe::{Ciphertext, IdentitySecretKey, decrypt, encrypt, extract, verify_key};
 pub use keygen::{MasterPublicKey, MasterSecretKey, gram_schmidt_norm, keygen};

@@ -31,11 +31,18 @@
 //! - Babai's round-off runs a fixed, public number of iterations per level
 //!   ([`Level::REDUCE_ITERATIONS`]). The bit lengths and shifts it needs are
 //!   computed with constant-time selects, and every shift is constant-time
-//!   in the shift amount.
+//!   in the shift amount;
+//! - the final `f·G − g·F = q` check is an exact `i128` product whose
+//!   outcome is the public success flag.
 //!
 //! What remains observable is whether the solve succeeded (a public
 //! rejection in key generation) and the floating-point FFT, which only sees
-//! normal numbers; the sampler and FFT modules cover their own timing.
+//! normal numbers (see [`super::fft`](super::fft#timing)).
+//!
+//! With the `zeroize` feature every per-level vector (the inputs, field
+//! norms, lifted and reduced `F, G`, the round-off's floating-point images,
+//! quotients, and `k`) is wiped on drop; Karatsuba's internal scratch
+//! buffers are not.
 //!
 //! # Widths
 //!
@@ -47,10 +54,11 @@
 //! `f, g` width at degree `n` is therefore
 //!
 //! ```text
-//! S(n) = ⌈14 170/n + 8·35/√n + 32⌉₆₄   (n ≤ 512; S(1024) = 64, the i64 input)
+//! S(n) = ⌈⌈14 170/n⌉ + ⌈8·35/√n⌉ + 32⌉₆₄
 //! ```
 //!
-//! eight standard deviations plus sign and slack, rounded up to 64 bits.
+//! eight standard deviations plus sign and slack, rounded up to 64 bits
+//! (`S(1024) = 64`, the `i64` input).
 //! A reduced `F` at degree `n` has at most `R(n) = S(n) + log₂(n) + 2` bits
 //! (Babai leaves `|F_i| ≤ (n/2)·max|f_j|`), or `S(1) + log₂(q)` at the base,
 //! and the lifted `F` at degree `n` has at most
@@ -60,14 +68,15 @@
 //! ```
 //!
 //! bits; `F, G` live in `L(n)` from the lift through the round-off. The
-//! tables are [`SMALL_BITS`], [`reduced_bits`], and [`large_bits`]; the
+//! widths are [`small_bits`], [`reduced_bits`], and [`large_bits`]; the
 //! largest measured sizes sit 52–284 bits under them. Exceeding a width
-//! yields a wrong `(F, G)`, which key generation's `f·G − g·F = q` check
-//! turns into an error.
+//! yields a wrong `(F, G)`, which [`solve`]'s final `f·G − g·F = q` check
+//! turns into `None`.
 use super::LOG_Q;
 use super::fft::{Complex, fft, ifft, pair_norm_sq};
-use super::poly::{Coeff, negacyclic_mul};
-use crypto_bigint::{Choice, CtEq, CtOption, CtSelect, Int, Limb, Odd, U64, Uint, nlimbs};
+use super::poly::{Coeff, checked_mul_i128, negacyclic_mul};
+use crate::secret::Secret;
+use crypto_bigint::{Choice, CtEq, CtOption, CtSelect, Int, Limb, Odd, Uint, nlimbs};
 use std::vec::Vec;
 
 /// Bits of precision the floating-point round-off works with.
@@ -79,16 +88,36 @@ const QUOTIENT_LIMIT: i32 = 60;
 /// Largest round-off coefficient accepted from the FFT, `2^62`.
 const MAX_ROUNDOFF: f64 = (1u64 << 62) as f64;
 
-/// Width in bits of `f, g` at degree `2^i`, indexed by `i`: see the module
-/// docs. Measured maxima over 60 solves: 14 244, 7 122, 3 570, 1 795, 900,
-/// 455, 229, 113, 56, 26, 12.
-const SMALL_BITS: [u32; 11] = [
-    14_528, 7_360, 3_776, 1_920, 1_024, 576, 320, 192, 128, 128, 64,
-];
+/// Mean bit length of the degree-1 resultant, measured over 60 solves.
+const RESULTANT_BITS: u32 = 14_170;
+/// Standard deviation of that bit length.
+const RESULTANT_SD: u32 = 35;
+/// Standard deviations of headroom in [`small_bits`].
+const SIGMAS: u32 = 8;
+/// Bits for the sign and slack in [`small_bits`].
+const SLACK: u32 = 32;
+/// Bits the `f·k` products of the round-off need above `f`'s width; see
+/// [`Level::Product`].
+const PRODUCT_HEADROOM: u32 = 128;
 
-/// Width in bits of `f, g` at degree `2^log_n`.
+/// `⌈√x⌉`, by counting up: only evaluated at compile time, on small `x`.
+const fn ceil_sqrt(x: u32) -> u32 {
+    let mut r = 0;
+    while r * r < x {
+        r += 1;
+    }
+    r
+}
+
+/// Width in bits of `f, g` at degree `n = 2^log_n`: the module docs'
+/// `S(n) = ⌈⌈14 170/n⌉ + ⌈8·35/√n⌉ + 32⌉₆₄`, with `⌈8·35/√n⌉` computed as
+/// `⌈√⌈(8·35)²/n⌉⌉`. Measured maxima over 60 solves: 14 244, 7 122, 3 570,
+/// 1 795, 900, 455, 229, 113, 56, 26, 12 for `n = 1 … 1024`.
 const fn small_bits(log_n: usize) -> u32 {
-    SMALL_BITS[log_n]
+    let n = 1u32 << log_n;
+    let spread = SIGMAS * RESULTANT_SD;
+    let raw = RESULTANT_BITS.div_ceil(n) + ceil_sqrt((spread * spread).div_ceil(n)) + SLACK;
+    raw.next_multiple_of(64)
 }
 
 /// Bits a reduced `F` or `G` at degree `2^log_n` occupies.
@@ -111,10 +140,26 @@ const fn large_bits(log_n: usize) -> u32 {
     (raw + 32).next_multiple_of(64)
 }
 
+/// What [`Secret`] needs to wipe a value: `Zeroize` with the `zeroize`
+/// feature, nothing without it.
+#[cfg(feature = "zeroize")]
+trait Wipe: zeroize::Zeroize {}
+#[cfg(feature = "zeroize")]
+impl<T: zeroize::Zeroize> Wipe for T {}
+/// What [`Secret`] needs to wipe a value: `Zeroize` with the `zeroize`
+/// feature, nothing without it.
+#[cfg(not(feature = "zeroize"))]
+trait Wipe {}
+#[cfg(not(feature = "zeroize"))]
+impl<T> Wipe for T {}
+
+/// A polynomial of a recursion level, wiped on drop.
+type Poly<W> = Secret<Vec<W>>;
+
 /// A fixed-width two's-complement integer: the coefficient type of one
 /// recursion level. Ring arithmetic wraps modulo `2^BITS`, which is exact
 /// whenever the true value fits.
-trait FixedInt: Coeff + Copy {
+trait FixedInt: Coeff + Copy + Wipe {
     /// `v`, sign-extended.
     fn from_i64(v: i64) -> Self;
     /// `self` as an `i64`, with whether it fit.
@@ -127,11 +172,11 @@ trait FixedInt: Coeff + Copy {
     fn is_negative(&self) -> Choice;
     /// `−self`.
     fn neg(&self) -> Self;
-    /// The bit length of `|self|`, in constant time.
-    fn magnitude_bits(&self) -> u32;
-    /// `self >> shift` as a float, exact when the result has at most 53
-    /// bits. Constant-time in both `self` and `shift`.
-    fn shifted_to_f64(&self, shift: u32) -> f64;
+    /// `|self|`, whose limbs are to be read as unsigned (so `|MIN|` is
+    /// right too), in constant time.
+    fn abs(&self) -> Self;
+    /// The bit length of `self` read as unsigned, in constant time.
+    fn unsigned_bits(&self) -> u32;
     /// `self << shift`, wrapping. Constant-time in both `self` and `shift`.
     fn shl(&self, shift: u32) -> Self;
     /// `self · k`.
@@ -152,6 +197,10 @@ struct Bezout<W> {
 }
 
 /// An [`Int`] with the wrapping ring operations Karatsuba needs.
+///
+/// A local newtype rather than `crypto_bigint::Wrapping<Int<L>>`: the
+/// solver wipes its intermediates, which needs `Zeroize` on the coefficient
+/// type, and neither crate implements it for `Wrapping<Int<L>>`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Wide<const L: usize>(Int<L>);
 
@@ -173,27 +222,28 @@ impl<const L: usize> Coeff for Wide<L> {
     }
 }
 
+#[cfg(feature = "zeroize")]
+impl<const L: usize> zeroize::Zeroize for Wide<L> {
+    fn zeroize(&mut self) {
+        self.0.as_mut_limbs().zeroize();
+    }
+}
+
 /// Limbs holding 64 bits.
 const I64_LIMBS: usize = nlimbs(64);
 
-/// The low 64 bits of `x`.
-fn low_u64<const L: usize>(x: &Uint<L>) -> u64 {
-    let narrow: U64 = x.resize();
-    u64::from_le_bytes(narrow.to_le_bytes().into())
-}
-
 /// The `(F, G)` of a level, or `None` when no solution exists.
-type Solution<L> = Option<(Vec<<L as Level>::Large>, Vec<<L as Level>::Large>)>;
+type Solution<L> = Option<(Poly<<L as Level>::Large>, Poly<<L as Level>::Large>)>;
 
 impl<const L: usize> FixedInt for Wide<L> {
     fn from_i64(v: i64) -> Self {
-        Self(Int::from_i64(v))
+        Self(Int::from(v))
     }
 
     fn to_i64(&self) -> (i64, Choice) {
         let narrow: Int<I64_LIMBS> = self.0.resize();
         let round_trip: Int<L> = narrow.resize();
-        (low_u64(narrow.as_uint()) as i64, round_trip.ct_eq(&self.0))
+        (i64::from(narrow), round_trip.ct_eq(&self.0))
     }
 
     fn resize_from<W: FixedInt>(w: &W) -> Self {
@@ -218,15 +268,12 @@ impl<const L: usize> FixedInt for Wide<L> {
         Self(self.0.wrapping_neg())
     }
 
-    fn magnitude_bits(&self) -> u32 {
-        self.0.abs().bit_width()
+    fn abs(&self) -> Self {
+        Self(*self.0.abs().as_int())
     }
 
-    fn shifted_to_f64(&self, shift: u32) -> f64 {
-        let (magnitude, negative) = self.0.abs_sign();
-        let top = magnitude.overflowing_shr(shift).unwrap_or(Uint::ZERO);
-        let sign = 1.0 - 2.0 * f64::from(negative.to_u8());
-        sign * low_u64(&top) as f64
+    fn unsigned_bits(&self) -> u32 {
+        self.0.as_uint().bit_width()
     }
 
     fn shl(&self, shift: u32) -> Self {
@@ -234,7 +281,7 @@ impl<const L: usize> FixedInt for Wide<L> {
     }
 
     fn mul_i64(&self, k: i64) -> Self {
-        Self(self.0.wrapping_mul(&Int::<I64_LIMBS>::from_i64(k)))
+        Self(self.0.wrapping_mul(&Int::<I64_LIMBS>::from(k)))
     }
 
     fn bezout(a: &Self, b: &Self) -> CtOption<Bezout<Self>> {
@@ -275,13 +322,19 @@ trait Level {
     /// max) 1/1/1, 2/2/2, 3/3/3, 5/6/6, 11/12/12, 22/26/29, 45/70/101,
     /// 93/222/482, 167/1293/3091, 268/274/275 for `n = 1024 … 2`. The table
     /// covers all but 0.5% of those pairs; a pair that misses yields a wrong
-    /// `(F, G)`, which key generation detects and rejects like a gcd
-    /// failure. Deep levels are cheap, so the budget there is generous.
+    /// `(F, G)`, which [`solve`]'s final check rejects like a gcd failure.
+    /// Deep levels are cheap, so the budget there is generous.
     const REDUCE_ITERATIONS: usize;
     /// The width of `f, g` and of the field norms arriving from above.
     type Small: FixedInt;
     /// The width of `F, G` from the lift through the round-off.
     type Large: FixedInt;
+    /// The width of the round-off's `f·k` products before they are shifted
+    /// into [`Self::Large`]: `S(n) + 128` bits. With `|f_j| < 2^(S−1)` and
+    /// `|k_i| ≤ 2^62`, every coefficient of `f·k` in `Z[x]/(x^n + 1)` has
+    /// `|Σ_j f_j·k_{i−j}| < 2^(S+62+log₂ n+1)`, which with its sign fits in
+    /// `S + 74` bits for `n ≤ 1024`, so the products are exact here.
+    type Product: FixedInt;
     /// The level of half the degree.
     type Next: Level;
 }
@@ -294,6 +347,7 @@ macro_rules! levels {
             const REDUCE_ITERATIONS: usize = $iterations;
             type Small = Wide<{ nlimbs(small_bits($log_n)) }>;
             type Large = Wide<{ nlimbs(large_bits($log_n)) }>;
+            type Product = Wide<{ nlimbs(small_bits($log_n) + PRODUCT_HEADROOM) }>;
             type Next = $next;
         }
     )*};
@@ -315,36 +369,38 @@ levels! {
 
 /// Solve `f·G − g·F = q` over `Z[x]/(x^n + 1)`, `n = f.len()` a power of
 /// two at most `N`. Returns `(F, G)` reduced against `(f, g)`, or `None` if
-/// no solution exists (`gcd(R_f, R_g) ≠ 1` or `R_f` even) or the reduced
-/// solution does not fit `i64`.
+/// no solution exists (`gcd(R_f, R_g) ≠ 1` or `R_f` even), the reduced
+/// solution does not fit `i64`, or it fails the equation. `Some` therefore
+/// guarantees `f·G − g·F = q` exactly.
 ///
 /// The widths are sized for key generation's distribution of `f, g` at each
 /// depth; a degree-`n` call treats its inputs as the field norms of such a
 /// pair, so smaller inputs are always safe.
-pub(crate) fn solve(f: &[i64], g: &[i64], q: u32) -> Option<(Vec<i64>, Vec<i64>)> {
+pub(crate) fn solve(f: &[i64], g: &[i64], q: u32) -> Option<(Poly<i64>, Poly<i64>)> {
     if f.len() != g.len() {
         return None;
     }
-    match f.len() {
-        1024 => solve_level::<L1024>(f, g, q),
-        512 => solve_level::<L512>(f, g, q),
-        256 => solve_level::<L256>(f, g, q),
-        128 => solve_level::<L128>(f, g, q),
-        64 => solve_level::<L64>(f, g, q),
-        32 => solve_level::<L32>(f, g, q),
-        16 => solve_level::<L16>(f, g, q),
-        8 => solve_level::<L8>(f, g, q),
-        4 => solve_level::<L4>(f, g, q),
-        2 => solve_level::<L2>(f, g, q),
-        1 => solve_level::<L1>(f, g, q),
-        _ => None,
+    solve_degree::<L1024>(f, g, q)
+}
+
+/// [`solve_level`] at the level whose degree is `f.len()`, searched from
+/// `L` downwards; `None` if no level has that degree.
+fn solve_degree<L: Level>(f: &[i64], g: &[i64], q: u32) -> Option<(Poly<i64>, Poly<i64>)> {
+    if f.len() == 1 << L::LOG_N {
+        solve_level::<L>(f, g, q)
+    } else if L::LOG_N == 0 {
+        None
+    } else {
+        solve_degree::<L::Next>(f, g, q)
     }
 }
 
-/// [`solve`] at a given level: widen the inputs, solve, and narrow the
-/// result to `i64`.
-fn solve_level<L: Level>(f: &[i64], g: &[i64], q: u32) -> Option<(Vec<i64>, Vec<i64>)> {
-    let widen = |p: &[i64]| p.iter().map(|&c| L::Small::from_i64(c)).collect::<Vec<_>>();
+/// [`solve`] at a given level: widen the inputs, solve, narrow the result
+/// to `i64`, and check it.
+fn solve_level<L: Level>(f: &[i64], g: &[i64], q: u32) -> Option<(Poly<i64>, Poly<i64>)> {
+    let widen = |p: &[i64]| -> Poly<L::Small> {
+        Secret::new(p.iter().map(|&c| L::Small::from_i64(c)).collect())
+    };
     let (big_f, big_g) = solve_in::<L>(&widen(f), &widen(g), q)?;
     let narrow = |p: &[L::Large]| {
         let mut fits = Choice::TRUE;
@@ -356,9 +412,25 @@ fn solve_level<L: Level>(f: &[i64], g: &[i64], q: u32) -> Option<(Vec<i64>, Vec<
                 v
             })
             .collect();
+        let out = Secret::new(out);
         fits.to_bool().then_some(out)
     };
-    Some((narrow(&big_f)?, narrow(&big_g)?))
+    let (big_f, big_g) = (narrow(&big_f)?, narrow(&big_g)?);
+    satisfies_ntru(f, g, (&big_f, &big_g), q).then_some((big_f, big_g))
+}
+
+/// Whether `f·G − g·F = q` holds exactly over `Z[x]/(x^n + 1)`, computed
+/// in `i128`; `false` if the operands are too large for that.
+fn satisfies_ntru(f: &[i64], g: &[i64], (big_f, big_g): (&[i64], &[i64]), q: u32) -> bool {
+    let wide = |p: &[i64]| Secret::new(p.iter().map(|&c| i128::from(c)).collect::<Vec<_>>());
+    let product = |a: &[i64], b: &[i64]| checked_mul_i128(&wide(a), &wide(b)).map(Secret::new);
+    let (Some(fg), Some(gf)) = (product(f, big_g), product(g, big_f)) else {
+        return false;
+    };
+    let mut expected = core::iter::once(i128::from(q)).chain(core::iter::repeat(0));
+    fg.iter()
+        .zip(gf.iter())
+        .all(|(a, b)| expected.next() == Some(a.wrapping_sub(*b)))
 }
 
 /// The recursion: `(F, G)` in the level's large width.
@@ -380,35 +452,34 @@ fn base_case<L: Level>(f0: &L::Small, g0: &L::Small, q: u32) -> Solution<L> {
     let b = L::Large::resize_from(g0);
     let Bezout { u, v } = L::Large::bezout(&a, &b).into_option()?;
     let q = i64::from(q);
-    Some((std::vec![v.mul_i64(-q)], std::vec![u.mul_i64(q)]))
+    Some((
+        Secret::new(std::vec![v.mul_i64(-q)]),
+        Secret::new(std::vec![u.mul_i64(q)]),
+    ))
 }
 
 /// The halves `(f0, f1)` of `f = f0(x²) + x·f1(x²)`, converted to `T`.
-fn halves<S: FixedInt, T: FixedInt>(f: &[S]) -> (Vec<T>, Vec<T>) {
+fn halves<S: FixedInt, T: FixedInt>(f: &[S]) -> (Poly<T>, Poly<T>) {
     let even = f.iter().step_by(2).map(T::resize_from).collect();
     let odd = f.iter().skip(1).step_by(2).map(T::resize_from).collect();
-    (even, odd)
+    (Secret::new(even), Secret::new(odd))
 }
 
 /// `N(f) = f0² − x·f1²` in `Z[x]/(x^(n/2) + 1)`, where
 /// `f = f0(x²) + x·f1(x²)`, in the next level's small width.
-fn field_norm<L: Level>(f: &[L::Small]) -> Vec<<L::Next as Level>::Small> {
+fn field_norm<L: Level>(f: &[L::Small]) -> Poly<<L::Next as Level>::Small> {
     let (even, odd) = halves::<_, <L::Next as Level>::Small>(f);
-    let even_sq = negacyclic_mul(&even, &even);
-    let mut shifted = negacyclic_mul(&odd, &odd);
+    let mut norm = Secret::new(negacyclic_mul(&even, &even));
+    let mut shifted = Secret::new(negacyclic_mul(&odd, &odd));
     // x·p wraps the top coefficient to the bottom with a sign flip.
     shifted.rotate_right(1);
     if let Some(bottom) = shifted.first_mut() {
         *bottom = bottom.neg();
     }
-    even_sq
-        .into_iter()
-        .zip(shifted)
-        .map(|(mut e, s)| {
-            e.sub_assign_ref(&s);
-            e
-        })
-        .collect()
+    norm.iter_mut()
+        .zip(shifted.iter())
+        .for_each(|(e, s)| e.sub_assign_ref(s));
+    norm
 }
 
 /// `p(x²)·q(−x)` in `Z[x]/(x^n + 1)`, for `p` the reduced solution of the
@@ -420,14 +491,17 @@ fn field_norm<L: Level>(f: &[L::Small]) -> Vec<<L::Next as Level>::Small> {
 fn lift_times_conjugate<L: Level>(
     p: &[<L::Next as Level>::Large],
     q: &[L::Small],
-) -> Vec<L::Large> {
-    let p: Vec<L::Large> = p.iter().map(L::Large::resize_from).collect();
+) -> Poly<L::Large> {
+    let p: Poly<L::Large> = Secret::new(p.iter().map(L::Large::resize_from).collect());
     let (q0, q1) = halves::<_, L::Large>(q);
-    negacyclic_mul(&p, &q0)
-        .into_iter()
-        .zip(negacyclic_mul(&p, &q1))
-        .flat_map(|(even, odd)| [even, odd.neg()])
-        .collect()
+    let even = Secret::new(negacyclic_mul(&p, &q0));
+    let odd = Secret::new(negacyclic_mul(&p, &q1));
+    Secret::new(
+        even.iter()
+            .zip(odd.iter())
+            .flat_map(|(&even, odd)| [even, odd.neg()])
+            .collect(),
+    )
 }
 
 /// `max(a, b)` in constant time.
@@ -440,14 +514,72 @@ fn ct_min(a: u32, b: u32) -> u32 {
     Choice::from_u32_lt(a, b).select_u32(b, a)
 }
 
-/// The largest bit length of `|c|` over `p`, in constant time.
-fn max_magnitude_bits<W: FixedInt>(p: &[W]) -> u32 {
-    p.iter().fold(0, |m, c| ct_max(m, c.magnitude_bits()))
+/// Limbs a 64-bit window of an integer can straddle.
+const WINDOW_LIMBS: usize = 64 / Limb::BITS as usize + 1;
+
+/// Bits `shift .. shift + 64` of the unsigned integer `limbs`, zero past
+/// the top. One constant-time select pass over the limbs gathers the
+/// limbs the window touches (from `shift / Limb::BITS` on), and a shift by
+/// `shift % Limb::BITS` aligns them, so the cost is independent of both
+/// the value and `shift`.
+fn window_u64(limbs: &[Limb], shift: u32) -> u64 {
+    let first = shift / Limb::BITS;
+    let mut window = [Limb::ZERO; WINDOW_LIMBS];
+    for (j, limb) in limbs.iter().enumerate() {
+        for (k, w) in window.iter_mut().enumerate() {
+            let hit = Choice::from_u32_eq(j as u32, first.wrapping_add(k as u32));
+            *w = w.ct_select(limb, hit);
+        }
+    }
+    let joined = window
+        .iter()
+        .rev()
+        .fold(0u128, |acc, w| (acc << Limb::BITS) | u128::from(w.0));
+    (joined >> (shift % Limb::BITS)) as u64
 }
 
-/// Each coefficient as `(c >> shift)` in floating point.
-fn shifted_to_f64<W: FixedInt>(p: &[W], shift: u32) -> Vec<f64> {
-    p.iter().map(|c| c.shifted_to_f64(shift)).collect()
+/// `±(magnitude >> shift)` as a float, negative when `negative`: exact when
+/// the result has at most 53 bits. Constant-time in every input.
+fn shifted_to_f64<W: FixedInt>(magnitude: &W, negative: Choice, shift: u32) -> f64 {
+    let sign = 1.0 - 2.0 * f64::from(negative.to_u8());
+    sign * window_u64(magnitude.limbs(), shift) as f64
+}
+
+/// Two polynomials' coefficients `c >> shift` in floating point, with one
+/// shift for both.
+struct TopBits {
+    /// The first polynomial's.
+    a: Poly<f64>,
+    /// The second polynomial's.
+    b: Poly<f64>,
+    /// The shift: the smallest that leaves every coefficient of both within
+    /// [`PRECISION`] bits, but at least `floor − PRECISION`.
+    shift: u32,
+}
+
+/// [`TopBits`] of `a` and `b`. Each magnitude and sign is computed once and
+/// serves both the bit length and the conversion.
+fn top_bits<W: FixedInt>(a: &[W], b: &[W], floor: u32) -> TopBits {
+    let magnitudes = |p: &[W]| Secret::new(p.iter().map(W::abs).collect::<Vec<_>>());
+    let (abs_a, abs_b) = (magnitudes(a), magnitudes(b));
+    let bits = abs_a
+        .iter()
+        .chain(abs_b.iter())
+        .fold(0, |m, c| ct_max(m, c.unsigned_bits()));
+    let shift = ct_max(bits, floor) - PRECISION;
+    let floats = |p: &[W], abs: &[W]| {
+        Secret::new(
+            p.iter()
+                .zip(abs)
+                .map(|(c, m)| shifted_to_f64(m, c.is_negative(), shift))
+                .collect(),
+        )
+    };
+    TopBits {
+        a: floats(a, &abs_a),
+        b: floats(b, &abs_b),
+        shift,
+    }
 }
 
 /// `2^e` as a float for `e < 1024`, built from its bit pattern.
@@ -456,10 +588,13 @@ fn pow2(e: u32) -> f64 {
 }
 
 /// `acc −= (f·k) << scale` in `Z[x]/(x^n + 1)`, schoolbook with a small
-/// multiplier: `n²` word-by-limb products rather than wide ones.
-fn sub_scaled<W: FixedInt>(acc: &mut [W], f: &[W], k: &[i64], scale: u32) {
+/// multiplier: `n²` word-by-limb products rather than wide ones. The
+/// products accumulate in `f`'s width `P`, which [`Level::Product`] makes
+/// wide enough to hold them exactly, and each coefficient is widened to
+/// `W` and shifted once.
+fn sub_scaled<W: FixedInt, P: FixedInt>(acc: &mut [W], f: &[P], k: &[i64], scale: u32) {
     let n = f.len();
-    let mut product = std::vec![W::zero(); n];
+    let mut product = Secret::new(std::vec![P::zero(); n]);
     for (j, fj) in f.iter().enumerate() {
         let (plain, wrapped) = k.split_at(n - j);
         for (t, &ki) in product[j..].iter_mut().zip(plain) {
@@ -469,8 +604,8 @@ fn sub_scaled<W: FixedInt>(acc: &mut [W], f: &[W], k: &[i64], scale: u32) {
             t.sub_assign_ref(&fj.mul_i64(ki));
         }
     }
-    for (a, p) in acc.iter_mut().zip(&product) {
-        a.sub_assign_ref(&p.shl(scale));
+    for (a, p) in acc.iter_mut().zip(product.iter()) {
+        a.sub_assign_ref(&W::resize_from(p).shl(scale));
     }
 }
 
@@ -499,44 +634,54 @@ fn reduce<L: Level>(
     big_f: &mut [L::Large],
     big_g: &mut [L::Large],
 ) -> Option<()> {
-    let size = ct_max(max_magnitude_bits(f), max_magnitude_bits(g));
-    let small_shift = ct_max(size, PRECISION) - PRECISION;
-    let fa = fft(&shifted_to_f64(f, small_shift)).ok()?;
-    let ga = fft(&shifted_to_f64(g, small_shift)).ok()?;
-    let den = pair_norm_sq(&fa, &ga);
-    let f_large: Vec<L::Large> = f.iter().map(L::Large::resize_from).collect();
-    let g_large: Vec<L::Large> = g.iter().map(L::Large::resize_from).collect();
+    let small = top_bits(f, g, PRECISION);
+    let fa = Secret::new(fft(&small.a).ok()?);
+    let ga = Secret::new(fft(&small.b).ok()?);
+    // The pass below multiplies by `1/d`, so computing it once gives the
+    // same bits as computing it every pass.
+    let inv_den = Secret::new(
+        pair_norm_sq(&fa, &ga)
+            .into_iter()
+            .map(|d| 1.0 / d)
+            .collect::<Vec<_>>(),
+    );
+    let product = |p: &[L::Small]| -> Poly<L::Product> {
+        Secret::new(p.iter().map(L::Product::resize_from).collect())
+    };
+    let (f_wide, g_wide) = (product(f), product(g));
 
     for _ in 0..L::REDUCE_ITERATIONS {
-        let big_size = ct_max(max_magnitude_bits(big_f), max_magnitude_bits(big_g));
-        let big_shift = ct_max(ct_max(big_size, size), PRECISION) - PRECISION;
-        let gap = big_shift - small_shift;
-        let big_fa = fft(&shifted_to_f64(big_f, big_shift)).ok()?;
-        let big_ga = fft(&shifted_to_f64(big_g, big_shift)).ok()?;
-        let quotient: Vec<Complex> = big_fa
-            .iter()
-            .zip(&big_ga)
-            .zip(fa.iter().zip(&ga))
-            .zip(&den)
-            .map(|(((&bf, &bg), (sf, sg)), d)| (bf * sf.conj() + bg * sg.conj()).scale(1.0 / d))
-            .collect();
-        // |k̂| ≤ |re| + |im|; `max` and `clamp` compile to selects.
+        let big = top_bits(big_f, big_g, small.shift + PRECISION);
+        let gap = big.shift - small.shift;
+        let big_fa = Secret::new(fft(&big.a).ok()?);
+        let big_ga = Secret::new(fft(&big.b).ok()?);
+        let quotient = Secret::new(
+            big_fa
+                .iter()
+                .zip(big_ga.iter())
+                .zip(fa.iter().zip(ga.iter()))
+                .zip(inv_den.iter())
+                .map(|(((&bf, &bg), (sf, sg)), &inv)| (bf * sf.conj() + bg * sg.conj()).scale(inv))
+                .collect::<Vec<Complex>>(),
+        );
+        // |k̂| ≤ |re| + |im|; `max` compiles to a select.
         let largest = quotient
             .iter()
             .fold(0.0_f64, |m, c| m.max(c.re.abs() + c.im.abs()));
-        let boost = (QUOTIENT_LIMIT - exponent(largest)).clamp(0, i32::MAX) as u32;
+        let boost = (QUOTIENT_LIMIT - exponent(largest)).max(0) as u32;
         let boost = ct_min(gap, boost);
         let scale = gap - boost;
         let mult = pow2(boost);
         // Saturating conversion: a non-finite quotient clamps instead of
         // branching and surfaces in the final check.
-        let k: Vec<i64> = ifft(&quotient)
-            .ok()?
-            .into_iter()
-            .map(|c| (c * mult).round().clamp(-MAX_ROUNDOFF, MAX_ROUNDOFF) as i64)
-            .collect();
-        sub_scaled(big_f, &f_large, &k, scale);
-        sub_scaled(big_g, &g_large, &k, scale);
+        let k = Secret::new(
+            Secret::new(ifft(&quotient).ok()?)
+                .iter()
+                .map(|&c| (c * mult).round().clamp(-MAX_ROUNDOFF, MAX_ROUNDOFF) as i64)
+                .collect::<Vec<i64>>(),
+        );
+        sub_scaled(big_f, &f_wide, &k, scale);
+        sub_scaled(big_g, &g_wide, &k, scale);
     }
     Some(())
 }
@@ -544,7 +689,6 @@ fn reduce<L: Level>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lattice::poly::checked_mul_i128;
     use crate::lattice::{GS_NORM_BOUND, gram_schmidt_norm, sample_poly};
     use rand::{RngExt, SeedableRng, rngs::StdRng};
 
@@ -556,23 +700,12 @@ mod tests {
     }
 
     fn to_i128(w: &W128) -> i128 {
-        let limbs = w.limbs();
-        let low = u128::from(low_u64(&Uint::<{ nlimbs(128) }>::new(
-            core::array::from_fn(|i| limbs[i]),
-        )));
-        let high: Vec<Limb> = limbs.iter().skip(I64_LIMBS).copied().collect();
-        let high = u128::from(low_u64(&Uint::<{ nlimbs(128) }>::new(
-            core::array::from_fn(|i| high.get(i).copied().unwrap_or(Limb::ZERO)),
-        )));
-        ((high << 64) | low) as i128
+        i128::from(w.0)
     }
 
-    /// `f·G − g·F` over `i128`.
-    fn residual(f: &[i64], g: &[i64], big_f: &[i64], big_g: &[i64]) -> Vec<i128> {
-        let wide = |p: &[i64]| p.iter().map(|&c| i128::from(c)).collect::<Vec<_>>();
-        let fg = checked_mul_i128(&wide(f), &wide(big_g)).expect("small");
-        let gf = checked_mul_i128(&wide(g), &wide(big_f)).expect("small");
-        fg.iter().zip(&gf).map(|(a, b)| a - b).collect()
+    /// The largest bit length of `|c|` over `p`.
+    fn max_magnitude_bits<W: FixedInt>(p: &[W]) -> u32 {
+        p.iter().fold(0, |m, c| ct_max(m, c.abs().unsigned_bits()))
     }
 
     /// The textbook extended Euclidean algorithm over `i128`.
@@ -587,6 +720,21 @@ mod tests {
             (t0, t1) = (t1, t0 - quot * t1);
         }
         (r0, s0, t0)
+    }
+
+    #[test]
+    fn small_bits_reproduces_the_measured_table() {
+        // The table the formula replaced, for n = 1 … 1024.
+        const TABLE: [u32; 11] = [
+            14_528, 7_360, 3_776, 1_920, 1_024, 576, 320, 192, 128, 128, 64,
+        ];
+        for (log_n, &bits) in TABLE.iter().enumerate() {
+            assert_eq!(small_bits(log_n), bits, "degree 2^{log_n}");
+        }
+        assert_eq!(
+            [0, 1, 2, 3, 4, 9, 10, 78_400].map(ceil_sqrt),
+            [0, 1, 2, 2, 2, 3, 4, 280]
+        );
     }
 
     #[test]
@@ -655,14 +803,21 @@ mod tests {
         assert_eq!(to_i128(&minus_five), -5);
         assert!(minus_five.is_negative().to_bool());
         assert_eq!(minus_five.neg(), w128(5));
-        assert_eq!(minus_five.magnitude_bits(), 3);
-        assert_eq!(W128::zero().magnitude_bits(), 0);
+        assert_eq!(minus_five.abs(), w128(5));
+        assert_eq!(minus_five.abs().unsigned_bits(), 3);
+        assert_eq!(W128::zero().unsigned_bits(), 0);
+        // |MIN| read as unsigned is 2^127.
+        assert_eq!(w128(i128::MIN).abs().unsigned_bits(), 128);
         assert_eq!(minus_five.mul_i64(-7), w128(35));
         assert_eq!(w128(1 << 70).mul_i64(3), w128(3 << 70));
         assert_eq!(minus_five.shl(70), w128(-5 << 70));
-        assert_eq!(w128(-(1 << 70)).shifted_to_f64(60), -1024.0);
-        assert_eq!(w128(3 << 20).shifted_to_f64(10), 3072.0);
-        assert_eq!(w128(3).shifted_to_f64(10), 0.0);
+        let to_f64 = |v: i128, shift| {
+            let w = w128(v);
+            shifted_to_f64(&w.abs(), w.is_negative(), shift)
+        };
+        assert_eq!(to_f64(-(1 << 70), 60), -1024.0);
+        assert_eq!(to_f64(3 << 20, 10), 3072.0);
+        assert_eq!(to_f64(3, 10), 0.0);
 
         // Sign-extending resize both ways.
         let wide = W256::resize_from(&minus_five);
@@ -687,10 +842,61 @@ mod tests {
             (9, 9, 3, 3)
         );
         assert_eq!(max_magnitude_bits(&[w128(0), w128(-9), w128(3)]), 4);
-        assert_eq!(
-            shifted_to_f64(&[w128(1 << 20), w128(-(1 << 21))], 10),
-            [1024.0, -2048.0]
-        );
+    }
+
+    #[cfg(feature = "zeroize")]
+    #[test]
+    fn wide_integers_zeroize() {
+        use zeroize::Zeroize;
+        let mut w = w128(-(1 << 100));
+        w.zeroize();
+        assert_eq!(w, W128::zero());
+    }
+
+    #[test]
+    fn window_u64_matches_a_full_width_shift() {
+        let mut rng = StdRng::from_seed([22u8; 32]);
+        for _ in 0..200 {
+            let x =
+                Wide::<{ nlimbs(256) }>(Int::from_words(core::array::from_fn(|_| rng.random())));
+            let wide = x.0.as_uint();
+            for shift in [0, 1, 63, 64, 65, 127, 128, 191, 192, 193, 255, 256, 300] {
+                let expected = u64::from(wide.unbounded_shr(shift).resize::<I64_LIMBS>());
+                assert_eq!(window_u64(x.limbs(), shift), expected, "shift {shift}");
+            }
+            let shift = rng.random_range(0..256);
+            let expected = u64::from(wide.unbounded_shr(shift).resize::<I64_LIMBS>());
+            assert_eq!(window_u64(x.limbs(), shift), expected, "shift {shift}");
+        }
+    }
+
+    #[test]
+    fn top_bits_shares_one_shift_between_both_polynomials() {
+        let a = [w128(1 << 20), w128(-(1 << 21))];
+        let b = [w128(-(1 << 62)), w128(3)];
+        // b's 63-bit coefficient sets the shift for both: 63 − 53 = 10.
+        let top = top_bits(&a, &b, PRECISION);
+        assert_eq!(top.shift, 10);
+        assert_eq!(*top.a, [1024.0, -2048.0]);
+        assert_eq!(*top.b, [-4_503_599_627_370_496.0, 0.0]);
+        // A floor above the sizes wins.
+        assert_eq!(top_bits(&a, &b, 80).shift, 27);
+        assert_eq!(top_bits(&[w128(5)], &[w128(-1)], PRECISION).shift, 0);
+    }
+
+    #[test]
+    fn satisfies_ntru_checks_the_equation_exactly() {
+        // 3·(−7) − 2·(−14) = 7 at degree 1.
+        assert!(satisfies_ntru(&[3], &[2], (&[-14], &[-7]), 7));
+        assert!(!satisfies_ntru(&[3], &[2], (&[-14], &[-7]), 8));
+        assert!(!satisfies_ntru(&[3], &[2], (&[-13], &[-7]), 7));
+        // At degree 2 the x coefficient must vanish too: f = 1 + x, g = 0,
+        // G = 1 gives f·G = 1 + x ≠ 1.
+        assert!(!satisfies_ntru(&[1, 1], &[0, 0], (&[0, 0], &[1, 0]), 1));
+        assert!(satisfies_ntru(&[1, 0], &[0, 0], (&[0, 0], &[1, 0]), 1));
+        // Operands too large for exact i128 products are refused.
+        let big = [i64::MAX; 4];
+        assert!(!satisfies_ntru(&big, &big, (&big, &big), 1));
     }
 
     /// `p(x) ↦ p(x²)`, doubling the degree.
@@ -745,28 +951,45 @@ mod tests {
         assert_eq!(lift(&norm), rhs);
         let (even, odd) = halves::<_, W256>(&f);
         assert_eq!(
-            (even, odd),
+            (even.to_vec(), odd.to_vec()),
             (to_w256(&[3, 4, -5, 2]), to_w256(&[-1, 1, 9, -6]))
         );
     }
 
     #[test]
     fn sub_scaled_matches_the_negacyclic_product() {
-        let f = to_w256(&[3, -1, 4, 1]);
-        let k = [2i64, -7, 5, 11];
+        // f in a narrow product width, the accumulator wider: the products
+        // are widened and shifted once, as reduce does.
+        let f: Vec<W128> = [3i128, -1, 4, 1].map(w128).to_vec();
+        let k = [2i64, -7, 5, i64::MIN / 2];
         let mut acc = to_w256(&[100, 200, 300, 400]);
-        sub_scaled(&mut acc, &f, &k, 3);
+        sub_scaled(&mut acc, &f, &k, 70);
+        let fw: Vec<W256> = f.iter().map(W256::resize_from).collect();
         let kw: Vec<W256> = k.iter().map(|&v| W256::from_i64(v)).collect();
         let expected: Vec<W256> = to_w256(&[100, 200, 300, 400])
             .iter()
-            .zip(negacyclic_mul(&f, &kw))
+            .zip(negacyclic_mul(&fw, &kw))
             .map(|(a, p)| {
                 let mut a = *a;
-                a.sub_assign_ref(&p.shl(3));
+                a.sub_assign_ref(&p.shl(70));
                 a
             })
             .collect();
         assert_eq!(acc, expected);
+    }
+
+    #[test]
+    fn product_width_holds_the_round_off_bound_at_every_level() {
+        // |Σ f·k| < 2^(S + 62 + log₂ n + 1), plus a sign bit.
+        fn check<L: Level>() {
+            let needed = small_bits(L::LOG_N) + 62 + L::LOG_N as u32 + 2;
+            let have = <L::Product as Coeff>::zero().limbs().len() as u32 * Limb::BITS;
+            assert!(needed <= have, "degree 2^{}", L::LOG_N);
+            if L::LOG_N > 1 {
+                check::<L::Next>();
+            }
+        }
+        check::<L1024>();
     }
 
     #[test]
@@ -782,14 +1005,12 @@ mod tests {
                 .map(|_| i64::from(rng.random::<i8>() >> 4))
                 .collect();
             if let Some((big_f, big_g)) = solve(&f, &g, q) {
-                let mut expected = std::vec![0i128; 64];
-                expected[0] = i128::from(q);
-                assert_eq!(residual(&f, &g, &big_f, &big_g), expected);
+                assert!(satisfies_ntru(&f, &g, (&big_f, &big_g), q));
                 // Reduced: no coefficient is wildly larger than q.
                 assert!(
                     big_f
                         .iter()
-                        .chain(&big_g)
+                        .chain(big_g.iter())
                         .all(|c| c.unsigned_abs() < 1 << 20)
                 );
                 solved += 1;
@@ -806,7 +1027,11 @@ mod tests {
         assert!(solve(&f, &f, 12_289).is_none());
         // f = 3, g = 6 at degree 1: odd R_f but gcd ≠ 1.
         assert!(solve(&[3], &[6], 12_289).is_none());
-        assert_eq!(solve(&[3], &[2], 7), Some((std::vec![-14], std::vec![-7])));
+        let (big_f, big_g) = solve(&[3], &[2], 7).expect("coprime");
+        assert_eq!(
+            (big_f.as_slice(), big_g.as_slice()),
+            (&[-14][..], &[-7][..])
+        );
         // Not a power of two, mismatched lengths, too long.
         assert!(solve(&f[..3], &f[..3], 12_289).is_none());
         assert!(solve(&f[..4], &f[..2], 12_289).is_none());
